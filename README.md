@@ -3,6 +3,7 @@
 Application locale Node.js / Express pour rechercher des medias publics, organiser les resultats et separer deux usages :
 
 - Media Finder : recherche generale de photos, videos, archives et sources publiques.
+- Mode NSFW public : 22 adaptateurs par source, extraction des medias originaux et miniatures, diagnostic direct et fallbacks de decouverte par domaine.
 - Person Finder : recherche centree sur une personne publique ou consentie, avec alias, comptes publics, score, validation et timeline.
 
 ## Lancement

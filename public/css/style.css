@@ -1214,7 +1214,12 @@ body {
 .source-badge.pornzog,
 .source-badge.onlyfans,
 .source-badge.fansly,
-.source-badge.mym { border-left: 2px solid #f43f5e; }
+.source-badge.mym,
+.source-badge.pornhub,
+.source-badge.youporn,
+.source-badge.tube8,
+.source-badge.tnaflix,
+.source-badge.motherless { border-left: 2px solid #f43f5e; }
 
 /* Play duration for videos */
 .duration-badge {
@@ -2049,7 +2054,12 @@ body {
 .stat-bar-fill.pornzog,
 .stat-bar-fill.onlyfans,
 .stat-bar-fill.fansly,
-.stat-bar-fill.mym { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
+.stat-bar-fill.mym,
+.stat-bar-fill.pornhub,
+.stat-bar-fill.youporn,
+.stat-bar-fill.tube8,
+.stat-bar-fill.tnaflix,
+.stat-bar-fill.motherless { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
 
 .accounts-list {
   display: grid;

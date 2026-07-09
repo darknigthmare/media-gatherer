@@ -20,23 +20,76 @@ const SOURCE_IDS = [
   'duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'reddit', 'telegram',
   'instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'wayback', 'vimeo', 'dailymotion',
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang'
+  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
+  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
 ];
 
 const NSFW_SOURCES = new Set([
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang'
+  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
+  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
 ]);
+
+const SOURCE_LABELS = {
+  duckduckgo: 'DuckDuckGo',
+  redgifs: 'RedGIFs',
+  imagebam: 'ImageBam',
+  imagefap: 'ImageFap',
+  pornpics: 'PornPics',
+  babepedia: 'BabePedia',
+  camwhores: 'CamWhores',
+  pornzog: 'PornZog',
+  freeones: 'FreeOnes',
+  freeonesforum: 'FreeOnes Forum',
+  babesource: 'BabeSource',
+  onlyfans: 'OnlyFans public',
+  fansly: 'Fansly public',
+  mym: 'MYM public',
+  xhamster: 'xHamster',
+  xvideos: 'XVideos',
+  spankbang: 'SpankBang',
+  pornhub: 'Pornhub',
+  youporn: 'YouPorn',
+  tube8: 'Tube8',
+  tnaflix: 'TNAFlix',
+  motherless: 'Motherless'
+};
+
+const NSFW_ADAPTERS = {
+  freeones: { domains: ['freeones.com'], pagePatterns: [/\/html\//i, /\/forums\//i], media: ['image', 'page'] },
+  freeonesforum: { domains: ['freeones.com'], pagePatterns: [/\/forums\//i, /\/threads\//i], media: ['image', 'page'] },
+  babesource: { domains: ['babesource.com'], pagePatterns: [/\/(?:model|babe|gallery|video)\//i], media: ['image', 'video'] },
+  erome: { domains: ['erome.com'], pagePatterns: [/\/a\//i, /\/i\//i], media: ['image', 'video'], crawlLimit: 8 },
+  redgifs: { domains: ['redgifs.com'], pagePatterns: [/\/watch\//i, /\/gifs\//i], media: ['video'], crawlLimit: 8 },
+  imagebam: { domains: ['imagebam.com'], pagePatterns: [/\/(?:gallery|image)\//i], media: ['image'], crawlLimit: 8 },
+  imagefap: { domains: ['imagefap.com'], pagePatterns: [/\/(?:gallery|photo|pictures)\//i], media: ['image'], crawlLimit: 8 },
+  pornpics: { domains: ['pornpics.com'], pagePatterns: [/\/(?:galleries|gallery|photos?)\//i], media: ['image'], crawlLimit: 8 },
+  babepedia: { domains: ['babepedia.com'], pagePatterns: [/\/babe\//i, /\/gallery\//i], media: ['image'], crawlLimit: 8 },
+  camwhores: { domains: ['camwhores.tv'], pagePatterns: [/\/(?:videos?|models?|tags?)\//i], media: ['image', 'video'], crawlLimit: 6 },
+  pornzog: { domains: ['pornzog.com'], pagePatterns: [/\/(?:video|watch)\//i], media: ['video'], crawlLimit: 6 },
+  onlyfans: { domains: ['onlyfans.com'], pagePatterns: [/\/[^/?#]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
+  fansly: { domains: ['fansly.com'], pagePatterns: [/\/(?:creator|profile)\//i, /^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
+  mym: { domains: ['mym.fans'], pagePatterns: [/\/[^/?#]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
+  xhamster: { domains: ['xhamster.com'], pagePatterns: [/\/videos\//i, /\/users\//i], media: ['video'], crawlLimit: 6 },
+  xvideos: { domains: ['xvideos.com'], pagePatterns: [/\/video[^/]*\//i, /\/profiles?\//i], media: ['video'], crawlLimit: 6 },
+  spankbang: { domains: ['spankbang.com'], pagePatterns: [/\/video\//i, /\/profile\//i], media: ['video'], crawlLimit: 6 },
+  pornhub: { domains: ['pornhub.com'], pagePatterns: [/\/view_video\.php/i, /\/(?:model|pornstar|users?)\//i], media: ['video'], crawlLimit: 6 },
+  youporn: { domains: ['youporn.com'], pagePatterns: [/\/watch\//i, /\/(?:porntags|pornstar)\//i], media: ['video'], crawlLimit: 6 },
+  tube8: { domains: ['tube8.com'], pagePatterns: [/\/(?:porn-video|video|pornstar)\//i, /\/[^/]+\/[^/]+\/\d+/i], media: ['video'], crawlLimit: 6 },
+  tnaflix: { domains: ['tnaflix.com'], pagePatterns: [/\/(?:hd-videos?|videos?|profile)\//i], media: ['video'], crawlLimit: 6 },
+  motherless: { domains: ['motherless.com'], pagePatterns: [/\/(?:G|GI|GV|term|m)\//i], media: ['image', 'video'], crawlLimit: 6 }
+};
 
 const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
   const nsfw = NSFW_SOURCES.has(id);
   map[id] = {
     id,
-    label: id.replace(/\b\w/g, char => char.toUpperCase()),
+    label: SOURCE_LABELS[id] || id.replace(/\b\w/g, char => char.toUpperCase()),
     category: nsfw ? 'nsfw' : (['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest'].includes(id) ? 'social' : 'normal'),
     nsfw,
     enabled: true,
-    supports: id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page'],
+    supports: NSFW_ADAPTERS[id]?.media || (id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page']),
+    adapter: NSFW_ADAPTERS[id] ? 'source-crawl' : 'generic-public',
     publicOnly: true
   };
   return map;
@@ -94,6 +147,16 @@ function normalizeSearchTerm(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function textMatchesQuery(value, query) {
+  const haystack = normalizeSearchTerm(value);
+  const needle = normalizeSearchTerm(query);
+  if (!needle) return true;
+  if (haystack.includes(needle)) return true;
+  const compactHaystack = haystack.replace(/[^a-z0-9]+/g, '');
+  const compactNeedle = needle.replace(/[^a-z0-9]+/g, '');
+  return compactNeedle.length >= 3 && compactHaystack.includes(compactNeedle);
+}
+
 function uniq(items) {
   return [...new Set((items || []).map(item => String(item || '').trim()).filter(Boolean))];
 }
@@ -127,9 +190,27 @@ function sourceDomain(sourceId) {
     babesource: 'babesource.com',
     onlyfans: 'onlyfans.com',
     fansly: 'fansly.com',
-    mym: 'mym.fans'
+    mym: 'mym.fans',
+    pornhub: 'pornhub.com',
+    youporn: 'youporn.com',
+    tube8: 'tube8.com',
+    tnaflix: 'tnaflix.com',
+    motherless: 'motherless.com'
   };
   return domains[sourceId] || `${sourceId}.com`;
+}
+
+function sourceDomains(sourceId) {
+  return NSFW_ADAPTERS[sourceId]?.domains || [sourceDomain(sourceId)];
+}
+
+function hostMatchesSource(rawUrl, sourceId) {
+  try {
+    const host = new URL(rawUrl).hostname.replace(/^www\./, '').toLowerCase();
+    return sourceDomains(sourceId).some(domain => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 }
 
 function inferMediaType(item) {
@@ -243,11 +324,39 @@ function bestMediaCandidate(values = []) {
     .filter(Boolean)
     .filter(value => !/^data:/i.test(value))
     .sort((a, b) => {
-      const aScore = (looksLikeImage(a) || looksLikeVideo(a) ? 2 : 0) + (/thumb|small|placeholder|blank/i.test(a) ? -1 : 0);
-      const bScore = (looksLikeImage(b) || looksLikeVideo(b) ? 2 : 0) + (/thumb|small|placeholder|blank/i.test(b) ? -1 : 0);
+      const qualityScore = value =>
+        (looksLikeImage(value) || looksLikeVideo(value) ? 4 : 0) +
+        (/original|full|large|master|source|1080|2160|4k/i.test(value) ? 3 : 0) +
+        (/thumb|small|tiny|preview|placeholder|blank|sprite|logo|avatar/i.test(value) ? -3 : 0);
+      const aScore = qualityScore(a);
+      const bScore = qualityScore(b);
       return bScore - aScore;
     });
   return candidates[0] || '';
+}
+
+function unwrapSearchResultUrl(candidate, baseUrl) {
+  const absolute = absolutize(candidate, baseUrl);
+  if (!absolute) return '';
+  try {
+    const parsed = new URL(absolute);
+    const direct = parsed.searchParams.get('uddg') || parsed.searchParams.get('q') || parsed.searchParams.get('url');
+    if (direct && /^https?:\/\//i.test(direct)) return direct;
+    const bing = parsed.searchParams.get('u');
+    if (bing?.startsWith('a1')) {
+      const decoded = Buffer.from(bing.slice(2), 'base64').toString('utf8');
+      if (/^https?:\/\//i.test(decoded)) return decoded;
+    }
+  } catch {
+    return absolute;
+  }
+  return absolute;
+}
+
+function pageMatchesAdapter(url, sourceId) {
+  const adapter = NSFW_ADAPTERS[sourceId];
+  if (!adapter || !hostMatchesSource(url, sourceId)) return false;
+  return !adapter.pagePatterns?.length || adapter.pagePatterns.some(pattern => pattern.test(new URL(url).pathname + new URL(url).search));
 }
 
 function absolutize(candidate, baseUrl) {
@@ -370,16 +479,99 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20) {
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
 
+function extractStructuredMedia(html, baseUrl, query, sourceId) {
+  const $ = cheerio.load(html || '');
+  const images = [];
+  const videos = [];
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const raw = JSON.parse($(el).text());
+      const queue = Array.isArray(raw) ? [...raw] : [raw];
+      while (queue.length) {
+        const node = queue.shift();
+        if (!node || typeof node !== 'object') continue;
+        if (Array.isArray(node['@graph'])) queue.push(...node['@graph']);
+        const title = node.name || node.headline || $('title').text().trim() || `${sourceLabel(sourceId)} media`;
+        const thumbnail = absolutize(Array.isArray(node.thumbnailUrl) ? node.thumbnailUrl[0] : node.thumbnailUrl, baseUrl);
+        const imageUrl = absolutize(typeof node.image === 'object' ? (node.image.contentUrl || node.image.url) : (Array.isArray(node.image) ? node.image[0] : node.image), baseUrl);
+        const videoUrl = absolutize(node.contentUrl || node.embedUrl, baseUrl);
+        const type = String(node['@type'] || '').toLowerCase();
+        if (imageUrl && (type.includes('image') || !videoUrl)) {
+          images.push(enrichMedia({ url: imageUrl, thumbnail: thumbnail || imageUrl, link: baseUrl, title, width: node.width, height: node.height }, query, sourceId, 'image'));
+        }
+        if (videoUrl && (type.includes('video') || looksLikeVideo(videoUrl))) {
+          videos.push(enrichMedia({ url: videoUrl, thumbnail, link: baseUrl, title, duration: node.duration || 'Media public' }, query, sourceId, 'video'));
+        }
+      }
+    } catch {
+      // Invalid JSON-LD is common on legacy pages; HTML extraction remains available.
+    }
+  });
+  return { images, videos };
+}
+
+function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20) {
+  const $ = cheerio.load(html || '');
+  const rows = [];
+  const needle = normalizeSearchTerm(query);
+  $('a[href]').each((_, el) => {
+    const url = unwrapSearchResultUrl($(el).attr('href'), baseUrl);
+    if (!pageMatchesAdapter(url, sourceId)) return;
+    const card = $(el).closest('article, li, figure, [class*="item"], [class*="card"], [class*="thumb"], [class*="result"]');
+    const context = [$(el).attr('title'), $(el).text(), card.text(), url].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (needle && !textMatchesQuery(context, needle)) return;
+    const image = card.find('img').first();
+    const thumbnail = absolutize(bestMediaCandidate([
+      image.attr('data-full'), image.attr('data-large'), image.attr('data-src'), image.attr('data-original'),
+      image.attr('data-lazy-src'), image.attr('srcset'), image.attr('data-srcset'), image.attr('src')
+    ]), baseUrl);
+    rows.push({ url, title: ($(el).attr('title') || $(el).text() || card.text()).replace(/\s+/g, ' ').trim(), thumbnail });
+  });
+  return dedupeBy(rows, item => item.url).slice(0, limit);
+}
+
+function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {}) {
+  const $ = cheerio.load(html || '');
+  const pageTitle = $('meta[property="og:title"]').attr('content') || $('title').text().trim() || pageMeta.title || `${sourceLabel(sourceId)} media`;
+  const poster = absolutize(bestMediaCandidate([
+    $('meta[property="og:image"]').attr('content'),
+    $('meta[name="twitter:image"]').attr('content'),
+    $('video[poster]').first().attr('poster'),
+    pageMeta.thumbnail
+  ]), pageUrl);
+  const structured = extractStructuredMedia(html, pageUrl, query, sourceId);
+  const rawImages = extractImagesFromHtml(html, pageUrl, query, sourceId, 80)
+    .filter(item => !/\/(?:logo|icon|avatar|sprite|favicon)[^/]*\.(?:png|jpe?g|webp|gif)/i.test(item.url))
+    .filter(item => !/\.(?:svg|ico)(?:[?#]|$)/i.test(item.url));
+  const rawVideos = extractLinksAsVideos(html, pageUrl, query, sourceId, 50)
+    .filter(item => /\.(?:mp4|webm|m3u8|mov)(?:[?#]|$)/i.test(item.url) || /\/(?:embed|player)\//i.test(item.url));
+  const rescore = (item, kind, thumbnail) => {
+    const candidate = { ...item, title: pageTitle, link: pageUrl, thumbnail };
+    delete candidate.confidenceScore;
+    delete candidate.confidenceLabel;
+    delete candidate.matchReasons;
+    return enrichMedia(candidate, query, sourceId, kind);
+  };
+  const images = rawImages.map(item => rescore(item, 'image', item.thumbnail || poster || item.url));
+  const videos = rawVideos.map(item => rescore(item, 'video', poster || item.thumbnail || pageMeta.thumbnail));
+  const adapter = NSFW_ADAPTERS[sourceId];
+  const adapterImages = adapter?.media.includes('image') ? [...structured.images, ...images] : [];
+  const adapterVideos = adapter?.media.includes('video') ? [...structured.videos, ...videos] : [];
+  return {
+    images: dedupeBy(adapterImages, item => item.url),
+    videos: dedupeBy(adapterVideos, item => item.url)
+  };
+}
+
 function extractSearchResultPages(html, baseUrl, query, sourceId, limit = 20) {
   const $ = cheerio.load(html || '');
   const rows = [];
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     const text = $(el).text().replace(/\s+/g, ' ').trim();
-    const url = absolutize(href, baseUrl);
+    const url = unwrapSearchResultUrl(href, baseUrl);
     if (!/^https?:\/\//.test(url)) return;
-    const host = new URL(url).hostname.replace(/^www\./, '');
-    if (!host.endsWith(sourceDomain(sourceId).replace(/^www\./, ''))) return;
+    if (!hostMatchesSource(url, sourceId)) return;
     if (!mediaText({ title: text, url }).includes(normalizeSearchTerm(query))) return;
     const type = looksLikeVideo(url) ? 'video' : 'page';
     rows.push(enrichMedia({ url, link: url, title: text || `${sourceLabel(sourceId)} page publique`, thumbnail: '' }, query, sourceId, type));
@@ -389,6 +581,7 @@ function extractSearchResultPages(html, baseUrl, query, sourceId, limit = 20) {
 
 function sourceSearchUrls(sourceId, query) {
   const encoded = encodeURIComponent(query);
+  const username = /^@?[a-z0-9._-]+$/i.test(query) ? encodeURIComponent(query.replace(/^@/, '')) : '';
   const direct = {
     duckduckgo: `https://duckduckgo.com/html/?q=${encoded}`,
     bing: `https://www.bing.com/images/search?q=${encoded}`,
@@ -400,25 +593,108 @@ function sourceSearchUrls(sourceId, query) {
     reddit: `https://www.reddit.com/search/?q=${encoded}&type=media`,
     vimeo: `https://vimeo.com/search?q=${encoded}`,
     dailymotion: `https://www.dailymotion.com/search/${encoded}/videos`,
+    freeones: `https://www.freeones.com/search?q=${encoded}`,
+    freeonesforum: `https://www.freeones.com/forums/search/?q=${encoded}`,
+    babesource: `https://www.babesource.com/search?q=${encoded}`,
     erome: `https://fr.erome.com/search?q=${encoded}`,
-    redgifs: `https://www.redgifs.com/search?query=${encoded}`,
+    redgifs: `https://www.redgifs.com/browse?query=${encoded}`,
     imagebam: `https://www.imagebam.com/search/${encoded}`,
     imagefap: `https://www.imagefap.com/search/${encoded}`,
     pornpics: `https://www.pornpics.com/?q=${encoded}`,
     babepedia: `https://www.babepedia.com/search/${encoded}`,
     camwhores: `https://www.camwhores.tv/tags/${encoded}/`,
     pornzog: `https://pornzog.com/search/${encoded}`,
+    onlyfans: username ? `https://onlyfans.com/${username}` : `https://onlyfans.com/`,
+    fansly: username ? `https://fansly.com/${username}` : `https://fansly.com/`,
+    mym: username ? `https://mym.fans/${username}` : `https://mym.fans/`,
     xhamster: `https://xhamster.com/search/${encoded}`,
     xvideos: `https://www.xvideos.com/?k=${encoded}`,
-    spankbang: `https://spankbang.com/s/${encoded}/`
+    spankbang: `https://spankbang.com/s/${encoded}/`,
+    pornhub: `https://www.pornhub.com/video/search?search=${encoded}`,
+    youporn: `https://www.youporn.com/search/?query=${encoded}`,
+    tube8: `https://www.tube8.com/search.html?q=${encoded}`,
+    tnaflix: `https://www.tnaflix.com/search?what=${encoded}`,
+    motherless: `https://motherless.com/term/${encoded}`
   };
   const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
   if (NSFW_SOURCES.has(sourceId)) {
     const domain = sourceDomain(sourceId);
     urls.push(`https://duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
     urls.push(`https://www.bing.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
+    urls.push(`https://search.brave.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
   }
   return uniq(urls);
+}
+
+async function scrapeNsfwSource(sourceId, query, options = {}) {
+  const adapter = NSFW_ADAPTERS[sourceId];
+  const images = [];
+  const videos = [];
+  const discoveredPages = [];
+  const notes = [];
+  const searchUrls = sourceSearchUrls(sourceId, query);
+
+  for (const searchUrl of searchUrls) {
+    try {
+      const page = await fetchPage(searchUrl, { timeout: options.timeout || 14000 });
+      const searchHost = new URL(searchUrl).hostname;
+      notes.push(`${searchHost}: HTTP ${page.statusCode}`);
+      if (page.statusCode >= 400) continue;
+
+      const pageLinks = extractAdapterPageLinks(page.html, page.finalUrl, query, sourceId, 24);
+      discoveredPages.push(...pageLinks);
+
+      if (pageMatchesAdapter(page.finalUrl, sourceId)) {
+        const directMedia = extractMediaFromSourcePage(page.html, page.finalUrl, query, sourceId, {
+          title: `${sourceLabel(sourceId)} recherche ${query}`
+        });
+        images.push(...directMedia.images);
+        videos.push(...directMedia.videos);
+      }
+    } catch (error) {
+      notes.push(`${new URL(searchUrl).hostname}: ${error.code || error.message}`);
+    }
+  }
+
+  const uniquePages = dedupeBy(discoveredPages, item => item.url).slice(0, adapter.crawlLimit || 6);
+  let crawled = 0;
+  for (const pageMeta of uniquePages) {
+    try {
+      const page = await fetchPage(pageMeta.url, { timeout: options.timeout || 14000 });
+      if (page.statusCode >= 400 || !hostMatchesSource(page.finalUrl, sourceId)) {
+        notes.push(`detail ${new URL(pageMeta.url).hostname}: HTTP ${page.statusCode}`);
+        continue;
+      }
+      const media = extractMediaFromSourcePage(page.html, page.finalUrl, query, sourceId, pageMeta);
+      images.push(...media.images);
+      videos.push(...media.videos);
+      crawled += 1;
+    } catch (error) {
+      notes.push(`detail: ${error.message}`);
+    }
+  }
+
+  const imageLimit = options.imageLimit || 35;
+  const videoLimit = options.videoLimit || 20;
+  const uniqueImages = dedupeBy(images, item => item.visualSignature || item.url).slice(0, imageLimit);
+  const uniqueVideos = dedupeBy(videos, item => item.visualSignature || item.url).slice(0, videoLimit);
+  const total = uniqueImages.length + uniqueVideos.length;
+  const zeroReason = total ? '' : (uniquePages.length ? 'detail_pages_without_public_media' : 'no_matching_public_pages');
+  const profileNote = adapter.publicProfileOnly ? '; profils publics uniquement' : '';
+  return {
+    images: uniqueImages,
+    videos: uniqueVideos,
+    status: {
+      success: true,
+      adapter: 'source-crawl',
+      note: `${uniquePages.length} pages correspondantes; ${crawled} ouvertes; ${notes.join('; ')}${profileNote}`,
+      imagesCount: uniqueImages.length,
+      videosCount: uniqueVideos.length,
+      pagesDiscovered: uniquePages.length,
+      pagesCrawled: crawled,
+      zeroReason
+    }
+  };
 }
 
 async function scrapeGenericSource(sourceId, query, options = {}) {
@@ -464,7 +740,9 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
       return;
     }
     try {
-      const result = await scrapeGenericSource(sourceId, query, options);
+      const result = NSFW_ADAPTERS[sourceId]
+        ? await scrapeNsfwSource(sourceId, query, options)
+        : await scrapeGenericSource(sourceId, query, options);
       images.push(...result.images);
       videos.push(...result.videos);
       status[sourceId] = result.status;
@@ -815,7 +1093,51 @@ app.delete('/api/collection/:id', (req, res) => { const store = readStore(); sto
 
 app.get('/api/sources', (req, res) => res.json({ sources: Object.values(SOURCE_META) }));
 app.get('/api/sources/diagnostics', (req, res) => res.json({ sources: Object.values(SOURCE_META).map(source => ({ ...source, status: 'configured', lastTest: null })) }));
-app.get('/api/sources/adapters', (req, res) => res.json({ adapters: Object.values(SOURCE_META).map(source => ({ id: source.id, supports: source.supports, mode: 'public-html-or-api' })) }));
+app.get('/api/sources/adapters', (req, res) => res.json({
+  adapters: Object.values(SOURCE_META).map(source => {
+    const adapter = NSFW_ADAPTERS[source.id];
+    return {
+      id: source.id,
+      label: source.label,
+      category: source.category,
+      supports: source.supports,
+      mode: adapter ? 'source-crawl' : 'public-html-or-api',
+      domains: adapter?.domains || [sourceDomain(source.id)],
+      crawlLimit: adapter?.crawlLimit || 0,
+      publicProfileOnly: Boolean(adapter?.publicProfileOnly),
+      fallbacks: source.nsfw ? ['direct', 'duckduckgo-site', 'bing-site', 'brave-site'] : ['direct']
+    };
+  })
+}));
+app.get('/api/sources/:id/test', async (req, res) => {
+  const sourceId = String(req.params.id || '').toLowerCase();
+  const query = String(req.query.q || '').trim();
+  if (!SOURCE_META[sourceId]) return res.status(404).json({ error: 'source inconnue' });
+  if (!query) return res.status(400).json({ error: 'parametre q requis' });
+  if (SOURCE_META[sourceId].nsfw && String(req.query.safe || 'true') !== 'false') {
+    return res.status(400).json({ error: 'safe=false requis pour tester une source NSFW publique' });
+  }
+  try {
+    const result = NSFW_ADAPTERS[sourceId]
+      ? await scrapeNsfwSource(sourceId, query, { imageLimit: 5, videoLimit: 5 })
+      : await scrapeGenericSource(sourceId, query, { imageLimit: 5, videoLimit: 5 });
+    res.json({
+      source: SOURCE_META[sourceId],
+      query,
+      status: result.status,
+      samples: [...result.images, ...result.videos].slice(0, 10).map(item => ({
+        type: item.type,
+        title: item.title,
+        url: item.url,
+        thumbnail: item.thumbnail,
+        link: item.link,
+        confidenceScore: item.confidenceScore
+      }))
+    });
+  } catch (error) {
+    res.status(502).json({ error: error.message, sourceId });
+  }
+});
 
 app.get('/api/cache/status', (req, res) => {
   const cache = readStore().cache || {};

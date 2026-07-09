@@ -37,7 +37,8 @@ const SOURCE_GROUPS = {
     icon: 'badge-alert',
     sources: [
       'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-      'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang'
+      'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
+      'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
     ]
   }
 };
@@ -799,10 +800,13 @@ function updateSourceDiagnostics(data) {
     sourceDiagnostics[source] = {
       success: Boolean(status.success),
       skipped: Boolean(status.skipped),
+      adapter: status.adapter || '',
       note: status.note || status.error || '',
       zeroReason: status.zeroReason || '',
       imagesCount: status.imagesCount || 0,
       videosCount: status.videosCount || 0,
+      pagesDiscovered: status.pagesDiscovered || 0,
+      pagesCrawled: status.pagesCrawled || 0,
       updatedAt: new Date().toISOString()
     };
   });
@@ -869,6 +873,7 @@ function renderInsights() {
         <div class="diagnostic-row ${item.success ? 'ok' : 'fail'} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}">
           <strong>${escapeHtml(source)}</strong>
           <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
+          ${item.adapter === 'source-crawl' ? `<small>Adaptateur source · ${item.pagesCrawled}/${item.pagesDiscovered} pages ouvertes</small>` : ''}
           <small>${escapeHtml(item.skipped ? 'Bloqué par SafeSearch' : (item.note || item.zeroReason || (item.success ? 'OK' : 'Indisponible')))}</small>
         </div>
       `).join('')
@@ -1046,7 +1051,7 @@ function logSourceStatus(source, status) {
     const logType = isZero ? 'warning' : 'success';
     if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
-    } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang') {
+    } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
     } else {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${noteSuffix}`, logType);
@@ -1087,7 +1092,7 @@ function classifyDetectedTarget(url) {
     return { type: 'cdn', canScrape: false };
   }
 
-  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans'];
+  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'pornhub.com', 'youporn.com', 'tube8.com', 'tnaflix.com', 'motherless.com'];
   if (accountHosts.some(accountHost => host === accountHost || host.endsWith(`.${accountHost}`))) {
     return { type: 'account', canScrape: true };
   }
@@ -2508,7 +2513,7 @@ function activateNsfwPreset() {
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
   setNsfwVisibility();
-  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang']);
+  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless']);
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
     if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
   });

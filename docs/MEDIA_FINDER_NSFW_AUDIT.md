@@ -30,11 +30,24 @@ Le mode NSFW reste volontairement limite a:
 5. SafeSearch masquait les sources NSFW sans action rapide claire pour le mode adulte public.
    Correction: bouton `Mode NSFW public`, drawer NSFW rose, note explicite, selection de sources adultes publiques prioritaires.
 
+6. Le fallback moteur pouvait compter les miniatures ou logos du moteur comme medias de la source demandee.
+   Correction: pipeline en deux etapes. L'adaptateur decouvre d'abord une page appartenant au domaine cible et contenant le terme, puis ouvre cette page avant d'extraire le media, sa miniature et sa provenance.
+
+7. Toutes les sources adultes utilisaient auparavant le meme extracteur generique.
+   Correction: registre de 22 adaptateurs NSFW avec domaines, chemins de resultats, types supportes et limite de pages. Ajout de Pornhub, YouPorn, Tube8, TNAFlix et Motherless.
+
+8. Les pages video pouvaient remonter leurs icones, SVG et videos connexes comme resultats.
+   Correction: une source video ne retourne plus d'images autonomes; les images servent de miniatures. Seuls les lecteurs, embeds, URLs video directes et donnees structurees de la page cible deviennent des videos.
+
+9. Le diagnostic d'une source exigeait une recherche complete.
+   Correction: `GET /api/sources/:id/test?q=...&safe=false` retourne le mode d'adaptateur, les pages decouvertes/ouvertes, la raison d'un zero et dix echantillons maximum.
+
 ## Verification
 
 - `npm run check`: OK.
 - `/api/health`: OK.
-- `/api/search?q=sxysindy&sources=erome,redgifs,babepedia&safe=false&media=both&fresh=1`: 40 images, 3 videos sur l'environnement de test.
+- `/api/sources/adapters`: 39 sources, dont 22 adaptateurs NSFW `source-crawl`.
+- `/api/search?q=mia%20khalifa&sources=tnaflix&safe=false&media=both&fresh=1`: 6 videos, 6 miniatures, aucune image parasite sur l'environnement de test.
 - `/api/search?q=sxysindy&sources=erome&safe=true&media=both&fresh=1`: source ignoree par SafeSearch.
 - `/api/proxy` sur image publique: OK.
 - `/api/proxy` vers `127.0.0.1`: bloque.
@@ -45,3 +58,8 @@ La capture via navigateur integre Codex a echoue avec une erreur d'outil: `faile
 
 L'audit visuel complet avec captures doit etre relance quand le navigateur integre est disponible.
 
+## Limites reelles
+
+- Un adaptateur ne garantit pas un resultat quand le site renvoie une page vide, impose JavaScript, bloque la region ou refuse les robots.
+- `OnlyFans`, `Fansly` et `MYM` restent limites aux profils et apercus publics; aucun contenu connecte ou payant n'est aspire.
+- Les fallbacks DuckDuckGo, Bing et Brave servent uniquement a decouvrir une URL du domaine cible. Leurs propres images ne sont plus retournees comme medias de la source.
