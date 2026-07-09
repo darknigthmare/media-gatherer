@@ -1,0 +1,911 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroGatherer - Aspirateur de MÃ©dias Web</title>
+  <!-- Google Fonts: Outfit (main) & JetBrains Mono (console) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- JSZip & FileSaver.js for bulk ZIP download -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css?v=20260630-workflows-1">
+</head>
+<body>
+  
+  <!-- Background Glow FX -->
+  <div class="glow-bg">
+    <div class="glow-sphere sphere-1"></div>
+    <div class="glow-sphere sphere-2"></div>
+  </div>
+
+  <div class="app-container">
+    
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="logo-area">
+        <i data-lucide="wind" class="logo-icon"></i>
+        <h1>Aero<span>Gatherer</span></h1>
+      </div>
+      <p class="tagline">Aspirateur web de photos et vidÃ©os en temps rÃ©el</p>
+    </header>
+
+    <nav class="app-tabs" aria-label="Navigation principale">
+      <button class="app-tab active" data-tab="search">
+        <i data-lucide="search"></i>
+        <span>Recherche</span>
+      </button>
+      <button class="app-tab" data-tab="connections">
+        <i data-lucide="key-round"></i>
+        <span>Connexions API</span>
+      </button>
+      <button class="app-tab" data-tab="reverse">
+        <i data-lucide="scan-search"></i>
+        <span>Recherche inversÃ©e</span>
+      </button>
+      <button class="app-tab" data-tab="persons">
+        <i data-lucide="user-search"></i>
+        <span>Person Finder</span>
+      </button>
+    </nav>
+
+    <section class="connections-section hidden" id="connections-section">
+      <div class="dashboard-header">
+        <i data-lucide="key-round" class="dashboard-icon"></i>
+        <h3>Connexions API</h3>
+      </div>
+      <p class="connections-note">Les identifiants sont gardes en memoire par le serveur local pendant cette session. YouTube et Flickr utilisent deja ces cles si elles sont configurees; les autres sources sont preparees pour OAuth/session.</p>
+      <div class="connections-grid" id="connections-grid"></div>
+    </section>
+
+    <section class="reverse-section hidden" id="reverse-section">
+      <div class="dashboard-header">
+        <i data-lucide="scan-search" class="dashboard-icon"></i>
+        <h3>Recherche inversÃ©e</h3>
+      </div>
+      <div class="reverse-tool">
+        <input type="url" id="reverse-image-url" placeholder="URL de l'image Ã  rechercher...">
+        <button id="btn-reverse-google" class="btn btn-primary"><i data-lucide="search"></i><span>Google Lens</span></button>
+        <button id="btn-reverse-bing" class="btn btn-secondary"><i data-lucide="search"></i><span>Bing Visual</span></button>
+        <button id="btn-reverse-yandex" class="btn btn-secondary"><i data-lucide="search"></i><span>Yandex</span></button>
+        <button id="btn-reverse-tineye" class="btn btn-secondary"><i data-lucide="search"></i><span>TinEye</span></button>
+      </div>
+    </section>
+
+    <section class="person-section hidden" id="person-section">
+      <div class="dashboard-header">
+        <i data-lucide="user-search" class="dashboard-icon"></i>
+        <h3>Person Finder</h3>
+      </div>
+      <div class="person-guard">
+        <i data-lucide="shield-check"></i>
+        <span>Recherche limitee aux contenus publics ou fournis avec consentement. Pas de contournement de comptes prives, pas d'adresse, telephone ou localisation temps reel.</span>
+      </div>
+
+      <div class="person-layout">
+        <form id="person-form" class="person-panel person-form">
+          <h4>Fiche personne</h4>
+          <label>Nom / pseudo principal
+            <input type="text" id="person-name" placeholder="Nom public, pseudo ou createur..." required>
+          </label>
+          <label>Type
+            <select id="person-type">
+              <option value="creator">Createur / creatrice</option>
+              <option value="public_figure">Personnalite publique</option>
+              <option value="artist">Artiste</option>
+              <option value="journalist">Journaliste</option>
+              <option value="athlete">Sportif</option>
+              <option value="consented_person">Personne consentie</option>
+              <option value="unknown_public">Profil public a verifier</option>
+            </select>
+          </label>
+          <label>Alias / anciens pseudos
+            <textarea id="person-aliases" rows="3" placeholder="Un par ligne"></textarea>
+          </label>
+          <label>Usernames
+            <textarea id="person-usernames" rows="3" placeholder="@pseudo, pseudo_site..."></textarea>
+          </label>
+          <label>Comptes publics connus
+            <textarea id="person-accounts" rows="3" placeholder="https://site.com/profil"></textarea>
+          </label>
+          <label>Mots-cles positifs
+            <textarea id="person-positive" rows="2" placeholder="metier, plateforme, projet..."></textarea>
+          </label>
+          <label>Mots a exclure
+            <textarea id="person-exclude" rows="2" placeholder="homonymes, villes, faux positifs..."></textarea>
+          </label>
+          <label>Notes
+            <textarea id="person-notes" rows="3"></textarea>
+          </label>
+          <div class="person-checks">
+            <label><input type="checkbox" id="person-public-only" checked> Public only</label>
+            <label><input type="checkbox" id="person-safe-mode" checked> Safe mode</label>
+          </div>
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i><span>Enregistrer</span></button>
+        </form>
+
+        <div class="person-panel">
+          <div class="person-panel-header">
+            <h4>Profils</h4>
+            <button id="btn-person-refresh" class="btn btn-secondary btn-small" type="button"><i data-lucide="refresh-cw"></i><span>Refresh</span></button>
+          </div>
+          <div id="person-list" class="person-list"></div>
+        </div>
+
+        <div class="person-panel person-main">
+          <div id="person-detail" class="person-detail empty">Selectionne ou cree une fiche personne.</div>
+          <div class="person-search-controls">
+            <select id="person-depth">
+              <option value="quick">Rapide</option>
+              <option value="normal" selected>Normal</option>
+              <option value="deep">Profond</option>
+              <option value="archive">Archive</option>
+            </select>
+            <input type="number" id="person-max-queries" min="1" max="40" value="10">
+            <input type="number" id="person-min-score" min="0" max="100" value="35">
+            <button id="btn-person-plan" class="btn btn-secondary" type="button"><i data-lucide="list-checks"></i><span>Plan</span></button>
+            <button id="btn-person-search" class="btn btn-primary" type="button"><i data-lucide="radar"></i><span>Lancer</span></button>
+          </div>
+          <div id="person-query-plan" class="person-query-plan"></div>
+          <div class="person-subgrid">
+            <div>
+              <h4>Galerie personne</h4>
+              <div id="person-media-list" class="person-media-list"></div>
+            </div>
+            <div>
+              <h4>Timeline</h4>
+              <div id="person-timeline-list" class="person-timeline-list"></div>
+              <h4>Regles</h4>
+              <form id="person-rule-form" class="person-rule-form">
+                <input type="text" id="person-rule-value" placeholder="mot, domaine, url a traiter...">
+                <select id="person-rule-action">
+                  <option value="exclude">Exclure</option>
+                  <option value="false_positive">Faux positif</option>
+                  <option value="probable">Probable</option>
+                  <option value="confirm">Confirmer</option>
+                </select>
+                <button class="btn btn-secondary btn-small" type="submit"><i data-lucide="plus"></i></button>
+              </form>
+              <div id="person-rule-list" class="person-rule-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEARCH & CONTROLS SECTION -->
+    <section class="search-section workspace-section">
+      <form id="search-form" class="search-form">
+        <div class="search-input-wrapper">
+          <i data-lucide="search" class="search-icon"></i>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Entrez des termes de recherche... (ex: cyberpunk, space, nature)" 
+            required 
+            autocomplete="off"
+          >
+          <button type="submit" class="btn-submit">
+            <span>Aspirer</span>
+            <i data-lucide="arrow-right"></i>
+          </button>
+        </div>
+        <!-- Sources Panel -->
+        <div class="sources-panel">
+          <div class="sources-row" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+            <div class="sources-group" style="flex: 1; min-width: 250px;">
+              <span class="panel-label">Sources Ã  interroger :</span>
+              <div class="sources-list" style="margin-top: 0.5rem;">
+                <label class="source-chip" for="src-ddg">
+                  <input type="checkbox" id="src-ddg" value="duckduckgo" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-duckduckgo"></span>
+                    <i data-lucide="image" class="chip-icon"></i>
+                    DuckDuckGo Images
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-bing">
+                  <input type="checkbox" id="src-bing" value="bing" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-bing"></span>
+                    <i data-lucide="search" class="chip-icon"></i>
+                    Bing Images
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-google">
+                  <input type="checkbox" id="src-google" value="google">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-google"></span>
+                    <i data-lucide="search" class="chip-icon"></i>
+                    Google API
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-brave">
+                  <input type="checkbox" id="src-brave" value="brave">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-brave"></span>
+                    <i data-lucide="search" class="chip-icon"></i>
+                    Brave API
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-flickr">
+                  <input type="checkbox" id="src-flickr" value="flickr" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-flickr"></span>
+                    <i data-lucide="camera" class="chip-icon"></i>
+                    Flickr Photos
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-wikimedia">
+                  <input type="checkbox" id="src-wikimedia" value="wikimedia" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-wikimedia"></span>
+                    <i data-lucide="globe" class="chip-icon"></i>
+                    Wikimedia Commons
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-youtube">
+                  <input type="checkbox" id="src-youtube" value="youtube" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-youtube"></span>
+                    <i data-lucide="youtube" class="chip-icon"></i>
+                    YouTube Videos
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-reddit">
+                  <input type="checkbox" id="src-reddit" value="reddit" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-reddit"></span>
+                    <i data-lucide="message-square" class="chip-icon"></i>
+                    Reddit Media
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-telegram">
+                  <input type="checkbox" id="src-telegram" value="telegram">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-telegram"></span>
+                    <i data-lucide="send" class="chip-icon"></i>
+                    Telegram Public
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-instagram">
+                  <input type="checkbox" id="src-instagram" value="instagram">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-instagram"></span>
+                    <i data-lucide="instagram" class="chip-icon"></i>
+                    Instagram
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-facebook">
+                  <input type="checkbox" id="src-facebook" value="facebook">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-facebook"></span>
+                    <i data-lucide="facebook" class="chip-icon"></i>
+                    Facebook
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-tiktok">
+                  <input type="checkbox" id="src-tiktok" value="tiktok">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-tiktok"></span>
+                    <i data-lucide="music" class="chip-icon"></i>
+                    TikTok
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-x">
+                  <input type="checkbox" id="src-x" value="x">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-x"></span>
+                    <i data-lucide="twitter" class="chip-icon"></i>
+                    X (Twitter)
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-pinterest">
+                  <input type="checkbox" id="src-pinterest" value="pinterest">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-pinterest"></span>
+                    <i data-lucide="bookmark" class="chip-icon"></i>
+                    Pinterest
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-wayback">
+                  <input type="checkbox" id="src-wayback" value="wayback" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-wayback"></span>
+                    <i data-lucide="archive" class="chip-icon"></i>
+                    Wayback Machine
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-vimeo">
+                  <input type="checkbox" id="src-vimeo" value="vimeo" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-vimeo"></span>
+                    <i data-lucide="video" class="chip-icon"></i>
+                    Vimeo Videos
+                  </span>
+                </label>
+
+                <label class="source-chip" for="src-dailymotion">
+                  <input type="checkbox" id="src-dailymotion" value="dailymotion" checked>
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-dailymotion"></span>
+                    <i data-lucide="play" class="chip-icon"></i>
+                    Dailymotion
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-freeones">
+                  <input type="checkbox" id="src-freeones" value="freeones">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-freeones"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    FreeOnes (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-freeonesforum">
+                  <input type="checkbox" id="src-freeonesforum" value="freeonesforum">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-freeonesforum"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    FreeOnes Forum (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-babesource">
+                  <input type="checkbox" id="src-babesource" value="babesource">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-babesource"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    BabeSource (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-erome">
+                  <input type="checkbox" id="src-erome" value="erome">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-erome"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    Erome (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-redgifs">
+                  <input type="checkbox" id="src-redgifs" value="redgifs">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-redgifs"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    RedGIFs (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-imagebam">
+                  <input type="checkbox" id="src-imagebam" value="imagebam">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-imagebam"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    ImageBam (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-imagefap">
+                  <input type="checkbox" id="src-imagefap" value="imagefap">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-imagefap"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    ImageFap (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-pornpics">
+                  <input type="checkbox" id="src-pornpics" value="pornpics">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-pornpics"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    PornPics (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-babepedia">
+                  <input type="checkbox" id="src-babepedia" value="babepedia">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-babepedia"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    BabePedia (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-camwhores">
+                  <input type="checkbox" id="src-camwhores" value="camwhores">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-camwhores"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    CamWhores Tags (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-pornzog">
+                  <input type="checkbox" id="src-pornzog" value="pornzog">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-pornzog"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    PornZog (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-onlyfans">
+                  <input type="checkbox" id="src-onlyfans" value="onlyfans">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-onlyfans"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    OnlyFans public
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-fansly">
+                  <input type="checkbox" id="src-fansly" value="fansly">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-fansly"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    Fansly public
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-mym">
+                  <input type="checkbox" id="src-mym" value="mym">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-mym"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    MYM public
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-xhamster">
+                  <input type="checkbox" id="src-xhamster" value="xhamster">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-xhamster"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    xHamster (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-xvideos">
+                  <input type="checkbox" id="src-xvideos" value="xvideos">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-xvideos"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    XVideos (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-spankbang">
+                  <input type="checkbox" id="src-spankbang" value="spankbang">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-spankbang"></span>
+                    <i data-lucide="heart" class="chip-icon" style="color:#f43f5e;"></i>
+                    SpankBang (18+)
+                  </span>
+                </label>
+                
+              </div>
+            </div>
+            <div class="safety-group" style="min-width: 200px;">
+              <span class="panel-label">SÃ©curitÃ© :</span>
+              <div class="safety-list" style="margin-top: 0.5rem;">
+                <label class="source-chip" for="safe-search-toggle">
+                  <input type="checkbox" id="safe-search-toggle" checked>
+                  <span class="chip-custom">
+                    <i data-lucide="shield-check" class="chip-icon"></i>
+                    Filtre Adulte (SafeSearch)
+                  </span>
+                </label>
+                <label class="safety-control" for="safety-risk-mode">
+                  <span>Mode anti-ban</span>
+                  <select id="safety-risk-mode" class="select-custom">
+                    <option value="cautious" selected>Prudent</option>
+                    <option value="balanced">Equilibre</option>
+                  </select>
+                </label>
+                <label class="safety-control" for="search-match-mode">
+                  <span>Pertinence</span>
+                  <select id="search-match-mode" class="select-custom">
+                    <option value="strict" selected>Strict</option>
+                    <option value="smart">Intelligent</option>
+                    <option value="broad">Large</option>
+                  </select>
+                </label>
+                <label class="safety-control" for="media-kind-mode">
+                  <span>Médias à aspirer</span>
+                  <select id="media-kind-mode" class="select-custom">
+                    <option value="both" selected>Photos + vidéos</option>
+                    <option value="photos">Photos seulement</option>
+                    <option value="videos">Vidéos seulement</option>
+                  </select>
+                </label>
+                <label class="safety-control" for="account-scrape-mode">
+                  <span>Comptes trouvÃ©s</span>
+                  <select id="account-scrape-mode" class="select-custom">
+                    <option value="complete" selected>Compte complet</option>
+                    <option value="strict">Strict terme</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="filters-group" style="min-width: 320px;">
+              <span class="panel-label">Filtres d'Images (DuckDuckGo / RÃ©seaux) :</span>
+              <div class="filters-dropdowns" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <select id="filter-size" class="select-custom">
+                  <option value="">Toutes tailles</option>
+                  <option value="Small">Petite</option>
+                  <option value="Medium">Moyenne</option>
+                  <option value="Large">Grande (HD)</option>
+                  <option value="Wallpaper">Fond d'Ã©cran</option>
+                </select>
+                <select id="filter-type" class="select-custom">
+                  <option value="">Tous types</option>
+                  <option value="photo">Photos</option>
+                  <option value="gif">GIFs AnimÃ©s</option>
+                  <option value="clipart">Clipart</option>
+                </select>
+                <select id="filter-color" class="select-custom">
+                  <option value="">Toutes couleurs</option>
+                  <option value="color">Couleur</option>
+                  <option value="Monochrome">Noir & Blanc</option>
+                  <option value="Red">Rouge</option>
+                  <option value="Orange">Orange</option>
+                  <option value="Yellow">Jaune</option>
+                  <option value="Green">Vert</option>
+                  <option value="Blue">Bleu</option>
+                  <option value="Purple">Violet</option>
+                  <option value="Black">Noir</option>
+                  <option value="White">Blanc</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- LIVE CONSOLE STATUS -->
+    <section class="console-section hidden workspace-section" id="status-console-wrapper">
+      <div class="console-header">
+        <div class="console-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="console-title">Journal d'aspiration en direct</div>
+        <button id="btn-clear-console" class="btn-clear" title="Effacer la console">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>
+      <div class="console-body" id="status-console">
+        <!-- Live status updates will be appended here -->
+      </div>
+    </section>
+
+    <!-- FILTER & COUNTS BAR -->
+    <section class="stats-bar hidden workspace-section" id="stats-bar">
+      <div class="stat-item">
+        <i data-lucide="image"></i>
+        <span>Photos : <strong id="count-images">0</strong></span>
+      </div>
+      <div class="stat-item">
+        <i data-lucide="video"></i>
+        <span>VidÃ©os : <strong id="count-videos">0</strong></span>
+      </div>
+      <div class="search-filter-wrapper">
+        <i data-lucide="filter" class="filter-icon"></i>
+        <input type="text" id="filter-input" placeholder="Filtrer par titre ou source...">
+      </div>
+
+      <!-- Dedicated Source Filter -->
+      <div class="source-filter-wrapper">
+        <select id="source-filter" class="select-custom" style="padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.6); color: #fff; cursor: pointer; outline: none; font-size: 0.9rem;">
+          <option value="all">Toutes sources</option>
+          <option value="duckduckgo">DuckDuckGo</option>
+          <option value="bing">Bing</option>
+          <option value="google">Google</option>
+          <option value="brave">Brave</option>
+          <option value="flickr">Flickr</option>
+          <option value="wikimedia">Wikimedia Commons</option>
+          <option value="youtube">YouTube</option>
+          <option value="reddit">Reddit</option>
+          <option value="telegram">Telegram Public</option>
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="tiktok">TikTok</option>
+          <option value="x">X (Twitter)</option>
+          <option value="pinterest">Pinterest</option>
+          <option value="wayback">Wayback Machine</option>
+          <option value="vimeo">Vimeo</option>
+          <option value="dailymotion">Dailymotion</option>
+          <option value="freeones">FreeOnes</option>
+          <option value="freeonesforum">FreeOnes Forum</option>
+          <option value="babesource">BabeSource</option>
+          <option value="erome">Erome</option>
+          <option value="redgifs">RedGIFs</option>
+          <option value="imagebam">ImageBam</option>
+          <option value="imagefap">ImageFap</option>
+          <option value="pornpics">PornPics</option>
+          <option value="babepedia">BabePedia</option>
+          <option value="camwhores">CamWhores</option>
+          <option value="pornzog">PornZog</option>
+          <option value="onlyfans">OnlyFans</option>
+          <option value="fansly">Fansly</option>
+          <option value="mym">MYM</option>
+          <option value="xhamster">xHamster</option>
+          <option value="xvideos">XVideos</option>
+          <option value="spankbang">SpankBang</option>
+        </select>
+      </div>
+
+      <!-- Layout Grid Selector -->
+      <div class="layout-selector-wrapper" style="display: flex; gap: 0.2rem; align-items: center; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 2px; background: rgba(15, 23, 42, 0.6);">
+        <button class="btn-layout" data-size="small" title="Mise en page compacte" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="layout-grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout active" data-size="medium" title="Mise en page par dÃ©faut" style="background: var(--accent-blue-gradient); border: none; color: #fff; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout" data-size="large" title="Mise en page HD" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="square" style="width: 1.1rem; height: 1.1rem;"></i></button>
+      </div>
+      <div class="action-buttons-wrapper" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button id="btn-toggle-fav" class="btn btn-secondary" title="Voir mes favoris">
+          <i data-lucide="heart" style="color: var(--accent-purple);"></i>
+          <span>Mes Favoris</span>
+        </button>
+        <button id="btn-download-zip" class="btn btn-primary" title="TÃ©lÃ©charger les photos filtrÃ©es en ZIP">
+          <i data-lucide="download-cloud"></i>
+          <span>TÃ©lÃ©charger ZIP</span>
+        </button>
+        <button id="btn-export-json" class="btn btn-secondary" title="Exporter les resultats bruts en JSON">
+          <i data-lucide="file-json"></i>
+          <span>Exporter JSON</span>
+        </button>
+        <div class="auto-refresh-control" title="Relancer la recherche active et ajouter uniquement les nouveaux mÃ©dias">
+          <select id="auto-refresh-interval" class="select-custom">
+            <option value="0" selected>Refresh off</option>
+            <option value="60">Chaque 1 min</option>
+            <option value="180">Chaque 3 min</option>
+            <option value="300">Chaque 5 min</option>
+            <option value="900">Chaque 15 min</option>
+          </select>
+          <button id="btn-auto-refresh" class="btn btn-secondary">
+            <i data-lucide="refresh-cw"></i>
+            <span>Activer</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATISTICS & SOURCE BREAKDOWN PANEL -->
+    <section class="stats-dashboard hidden workspace-section" id="stats-dashboard">
+      <div class="dashboard-header">
+        <i data-lucide="bar-chart-2" class="dashboard-icon"></i>
+        <h3>RÃ©partition des sources de mÃ©dias</h3>
+      </div>
+      <div class="dashboard-body" id="stats-breakdown-bars">
+        <!-- Rendu dynamique des barres statistiques -->
+      </div>
+    </section>
+
+    <section class="accounts-dashboard hidden workspace-section" id="accounts-dashboard">
+      <div class="dashboard-header">
+        <i data-lucide="user-search" class="dashboard-icon"></i>
+        <h3>Comptes et sites dÃ©tectÃ©s</h3>
+      </div>
+      <div class="accounts-list" id="accounts-list"></div>
+    </section>
+
+    <section class="insights-dashboard hidden workspace-section" id="insights-dashboard">
+      <div class="dashboard-header">
+        <i data-lucide="sparkles" class="dashboard-icon"></i>
+        <h3>Analyse de la recherche</h3>
+      </div>
+      <div class="insights-grid">
+        <div class="insight-panel">
+          <div class="insight-panel-header">
+            <i data-lucide="badge-check"></i>
+            <span>Confiance</span>
+          </div>
+          <div class="insight-list" id="confidence-summary"></div>
+        </div>
+        <div class="insight-panel">
+          <div class="insight-panel-header">
+            <i data-lucide="tag"></i>
+            <span>Alias trouvÃ©s</span>
+          </div>
+          <div class="alias-list" id="alias-list"></div>
+        </div>
+        <div class="insight-panel">
+          <div class="insight-panel-header">
+            <i data-lucide="wrench"></i>
+            <span>Diagnostics sources</span>
+          </div>
+          <div class="diagnostic-list" id="source-diagnostic-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflow-dashboard workspace-section">
+      <details class="workflow-drawer">
+        <summary>
+          <span><i data-lucide="list-plus"></i> Recherche batch</span>
+          <span id="batch-count">0 terme</span>
+        </summary>
+        <div class="workflow-body">
+          <textarea id="batch-input" rows="4" placeholder="Un terme ou username par ligne..."></textarea>
+          <div class="workflow-actions">
+            <button type="button" id="btn-batch-load" class="btn btn-secondary"><i data-lucide="plus"></i><span>Charger</span></button>
+            <button type="button" id="btn-batch-run" class="btn btn-primary"><i data-lucide="play"></i><span>Lancer batch</span></button>
+            <button type="button" id="btn-batch-clear" class="btn btn-secondary"><i data-lucide="x"></i><span>Vider</span></button>
+          </div>
+          <div class="batch-list" id="batch-list"></div>
+        </div>
+      </details>
+
+      <details class="workflow-drawer">
+        <summary>
+          <span><i data-lucide="history"></i> Historique</span>
+          <span id="history-count">0 recherche</span>
+        </summary>
+        <div class="workflow-body">
+          <div class="workflow-actions">
+            <button type="button" id="btn-history-clear" class="btn btn-secondary"><i data-lucide="trash-2"></i><span>Effacer</span></button>
+          </div>
+          <div class="history-list" id="history-list"></div>
+        </div>
+      </details>
+
+      <details class="workflow-drawer">
+        <summary>
+          <span><i data-lucide="radar"></i> Monitoring sauvegardÃ©</span>
+          <span id="monitor-count">0 veille</span>
+        </summary>
+        <div class="workflow-body">
+          <div class="workflow-actions">
+            <button type="button" id="btn-monitor-save" class="btn btn-primary"><i data-lucide="bookmark-plus"></i><span>Sauver recherche active</span></button>
+            <button type="button" id="btn-monitor-run" class="btn btn-secondary"><i data-lucide="refresh-cw"></i><span>VÃ©rifier maintenant</span></button>
+            <button type="button" id="btn-monitor-clear" class="btn btn-secondary"><i data-lucide="trash-2"></i><span>Vider</span></button>
+          </div>
+          <div class="monitor-list" id="monitor-list"></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- DUAL DISPLAY ZONES -->
+    <main class="media-display-grid workspace-section">
+      
+      <!-- ZONE 1: IMAGES -->
+      <section class="media-zone images-zone">
+        <div class="zone-header">
+          <div class="zone-title">
+            <i data-lucide="image" class="zone-icon text-blue"></i>
+            <h2>Zone Photos</h2>
+          </div>
+          <span class="badge badge-blue" id="badge-images-count">0</span>
+        </div>
+        <div class="zone-content-scroll">
+          <div class="media-grid" id="images-grid">
+            <!-- Empty State -->
+            <div class="empty-state">
+              <i data-lucide="image-down" class="empty-icon"></i>
+              <h3>PrÃªt Ã  aspirer</h3>
+              <p>Lancez une recherche pour charger des photos.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ZONE 2: VIDEOS -->
+      <section class="media-zone videos-zone">
+        <div class="zone-header">
+          <div class="zone-title">
+            <i data-lucide="video" class="zone-icon text-purple"></i>
+            <h2>Zone VidÃ©os</h2>
+          </div>
+          <span class="badge badge-purple" id="badge-videos-count">0</span>
+        </div>
+        <div class="zone-content-scroll">
+          <div class="media-grid" id="videos-grid">
+            <!-- Empty State -->
+            <div class="empty-state">
+              <i data-lucide="video-off" class="empty-icon"></i>
+              <h3>PrÃªt Ã  aspirer</h3>
+              <p>Lancez une recherche pour charger des vidÃ©os.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- LIGHTBOX FOR IMAGES -->
+  <div id="lightbox" class="lightbox modal hidden">
+    <button class="modal-close" id="lightbox-close"><i data-lucide="x"></i></button>
+    <div class="lightbox-content">
+      <img id="lightbox-img" src="" alt="">
+      <div class="lightbox-details">
+        <h4 id="lightbox-title">Image Title</h4>
+        <div class="lightbox-meta">
+          <span class="meta-item"><i data-lucide="info"></i> Source: <strong id="lightbox-source">DDG</strong></span>
+          <span class="meta-item" id="lightbox-resolution-wrapper"><i data-lucide="maximize-2"></i> RÃ©solution: <strong id="lightbox-resolution">1920x1080</strong></span>
+        </div>
+        <div class="lightbox-actions">
+          <a href="" id="lightbox-btn-download" download target="_blank" class="btn btn-primary">
+            <i data-lucide="download"></i> TÃ©lÃ©charger
+          </a>
+          <button id="lightbox-btn-copy" class="btn btn-secondary">
+            <i data-lucide="copy"></i> Copier le lien
+          </button>
+          <a href="" id="lightbox-btn-source" target="_blank" class="btn btn-secondary">
+            <i data-lucide="external-link"></i> Voir l'original
+          </a>
+          <button id="lightbox-btn-reverse" class="btn btn-secondary">
+            <i data-lucide="scan-search"></i> Recherche inversÃ©e
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIDEO PLAYER MODAL -->
+  <div id="video-modal" class="video-modal modal hidden">
+    <button class="modal-close" id="video-modal-close"><i data-lucide="x"></i></button>
+    <div class="video-modal-content">
+      <div class="video-player-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
+        <button id="video-btn-prev" class="nav-chevron chevron-left" title="VidÃ©o prÃ©cÃ©dente">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <div class="video-player-container" id="video-player-container" style="flex: 1;">
+          <!-- Iframe or Video tag will be injected here -->
+        </div>
+        <button id="video-btn-next" class="nav-chevron chevron-right" title="VidÃ©o suivante">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+      <div class="video-details">
+        <h4 id="video-title">Video Title</h4>
+        <div class="video-meta">
+          <span class="meta-item"><i data-lucide="info"></i> Source: <strong id="video-source">YouTube</strong></span>
+          <span class="meta-item"><i data-lucide="clock"></i> DurÃ©e: <strong id="video-duration">4:32</strong></span>
+        </div>
+        <div class="video-actions">
+          <a href="" id="video-btn-link" target="_blank" class="btn btn-secondary">
+            <i data-lucide="external-link"></i> Ouvrir sur la plateforme
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js?v=20260630-workflows-1"></script>
+  <script>
+    // Initialize Lucide icons on page load
+    lucide.createIcons();
+  </script>
+</body>
+</html>
+
+

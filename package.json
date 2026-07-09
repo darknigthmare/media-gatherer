@@ -1,0 +1,46 @@
+{
+  "name": "media-gatherer",
+  "version": "1.0.0",
+  "description": "Aspirateur de medias web photos/videos avec Person Finder",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/js/app.js",
+    "build": "npm run check",
+    "build:launcher": "dotnet publish launcher/MediaGathererLauncher.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o dist",
+    "build:exe": "pkg . --targets node18-win-x64 --output dist/MediaGatherer.exe",
+    "storage:status": "node -e \"fetch('http://127.0.0.1:3000/api/storage/status').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\"",
+    "persons:status": "node -e \"fetch('http://127.0.0.1:3000/api/persons/stats').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\""
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "docs/**/*",
+      ".env.example",
+      "README.md"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "keywords": [
+    "scraper",
+    "media",
+    "images",
+    "videos",
+    "person-finder"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.6.0"
+  }
+}

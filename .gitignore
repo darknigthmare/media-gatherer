@@ -1,0 +1,13 @@
+node_modules/
+.env
+.vercel/
+data/
+cache/
+logs/
+*.log
+dist/*.pdb
+launcher/bin/
+launcher/obj/
+Thumbs.db
+
+.vercel
