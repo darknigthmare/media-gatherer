@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const dns = require('dns').promises;
+const net = require('net');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -107,6 +109,29 @@ function sourceLabel(source) {
   return SOURCE_META[source]?.label || source || 'Source';
 }
 
+function sourceDomain(sourceId) {
+  const domains = {
+    erome: 'erome.com',
+    redgifs: 'redgifs.com',
+    imagebam: 'imagebam.com',
+    imagefap: 'imagefap.com',
+    pornpics: 'pornpics.com',
+    babepedia: 'babepedia.com',
+    camwhores: 'camwhores.tv',
+    pornzog: 'pornzog.com',
+    xhamster: 'xhamster.com',
+    xvideos: 'xvideos.com',
+    spankbang: 'spankbang.com',
+    freeones: 'freeones.com',
+    freeonesforum: 'freeones.com',
+    babesource: 'babesource.com',
+    onlyfans: 'onlyfans.com',
+    fansly: 'fansly.com',
+    mym: 'mym.fans'
+  };
+  return domains[sourceId] || `${sourceId}.com`;
+}
+
 function inferMediaType(item) {
   if (item.type) return item.type;
   const url = String(item.url || item.thumbnail || '').toLowerCase();
@@ -177,22 +202,139 @@ async function fetchText(url, options = {}) {
   return response.data;
 }
 
+async function fetchPage(url, options = {}) {
+  const response = await axios.get(url, {
+    timeout: options.timeout || 14000,
+    responseType: 'text',
+    maxRedirects: 5,
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'accept-language': 'fr-FR,fr;q=0.9,en;q=0.8',
+      referer: new URL(url).origin
+    },
+    validateStatus: status => status >= 200 && status < 500
+  });
+  return {
+    html: String(response.data || ''),
+    statusCode: response.status,
+    finalUrl: response.request?.res?.responseUrl || url,
+    contentType: response.headers?.['content-type'] || ''
+  };
+}
+
+function firstSrcFromSrcset(srcset) {
+  const candidates = String(srcset || '')
+    .split(',')
+    .map(part => {
+      const [url, descriptor] = part.trim().split(/\s+/, 2);
+      const width = Number(String(descriptor || '').replace(/[^\d.]/g, '')) || 0;
+      return { url, width };
+    })
+    .filter(item => item.url);
+  candidates.sort((a, b) => b.width - a.width);
+  return candidates[0]?.url || '';
+}
+
+function bestMediaCandidate(values = []) {
+  const candidates = values
+    .flatMap(value => String(value || '').includes(',') ? [firstSrcFromSrcset(value), value] : [value])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .filter(value => !/^data:/i.test(value))
+    .sort((a, b) => {
+      const aScore = (looksLikeImage(a) || looksLikeVideo(a) ? 2 : 0) + (/thumb|small|placeholder|blank/i.test(a) ? -1 : 0);
+      const bScore = (looksLikeImage(b) || looksLikeVideo(b) ? 2 : 0) + (/thumb|small|placeholder|blank/i.test(b) ? -1 : 0);
+      return bScore - aScore;
+    });
+  return candidates[0] || '';
+}
+
+function absolutize(candidate, baseUrl) {
+  if (!candidate) return '';
+  try {
+    const cleaned = String(candidate).replace(/\\u002F/g, '/').replace(/&amp;/g, '&').trim();
+    return new URL(cleaned, baseUrl).toString();
+  } catch {
+    return '';
+  }
+}
+
+function looksLikeImage(url) {
+  return /\.(jpg|jpeg|png|gif|webp|avif)(?:[?#].*)?$/i.test(url) || /\/(thumb|thumbnail|image|media|photos?)\//i.test(url);
+}
+
+function looksLikeVideo(url) {
+  return /\.(mp4|webm|m3u8|mov)(?:[?#].*)?$/i.test(url) || /\/(video|videos|watch|embed|clip|shorts)\//i.test(url);
+}
+
+function isPrivateIp(address) {
+  if (!address) return true;
+  if (address === '::1' || address.startsWith('fc') || address.startsWith('fd') || address.startsWith('fe80:')) return true;
+  if (net.isIP(address) === 4) {
+    const parts = address.split('.').map(Number);
+    return parts[0] === 10 ||
+      parts[0] === 127 ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      parts[0] === 0;
+  }
+  return false;
+}
+
+async function validatePublicMediaUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || ''));
+  } catch {
+    throw new Error('URL invalide');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('URL http(s) requise');
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.local')) throw new Error('Hote local bloque');
+  if (net.isIP(hostname) && isPrivateIp(hostname)) throw new Error('Adresse privee bloquee');
+  const addresses = await dns.lookup(hostname, { all: true });
+  if (addresses.some(entry => isPrivateIp(entry.address))) throw new Error('Resolution privee bloquee');
+  return parsed.toString();
+}
+
 function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35) {
   const $ = cheerio.load(html || '');
   const rows = [];
   $('img').each((_, el) => {
-    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-original') || $(el).attr('data-lazy-src');
+    const src = bestMediaCandidate([
+      $(el).attr('data-full'),
+      $(el).attr('data-large'),
+      $(el).attr('data-src'),
+      $(el).attr('data-original'),
+      $(el).attr('data-lazy-src'),
+      $(el).attr('data-thumb'),
+      $(el).attr('data-thumbnail'),
+      $(el).attr('srcset'),
+      $(el).attr('data-srcset'),
+      $(el).attr('src')
+    ]);
     if (!src) return;
-    let url;
-    try {
-      url = new URL(src, baseUrl).toString();
-    } catch {
-      return;
-    }
+    const url = absolutize(src, baseUrl);
     if (!/^https?:\/\//.test(url)) return;
     const title = $(el).attr('alt') || $(el).attr('title') || `${sourceLabel(sourceId)} image`;
     rows.push(enrichMedia({ url, thumbnail: url, title, link: baseUrl }, query, sourceId, 'image'));
   });
+  $('meta[property="og:image"], meta[name="twitter:image"], link[rel="image_src"], video[poster], source[srcset]').each((_, el) => {
+    const src = bestMediaCandidate([$(el).attr('content'), $(el).attr('href'), $(el).attr('poster'), $(el).attr('srcset')]);
+    const url = absolutize(src, baseUrl);
+    if (/^https?:\/\//.test(url)) {
+      rows.push(enrichMedia({ url, thumbnail: url, title: $('title').text().trim() || `${sourceLabel(sourceId)} image`, link: baseUrl }, query, sourceId, 'image'));
+    }
+  });
+  const imageRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:jpg|jpeg|png|gif|webp|avif)(?:\?[^"'<>\\\s]*)?/gi;
+  for (const match of String(html || '').matchAll(imageRegex)) {
+    const url = absolutize(match[0].replace(/\\\//g, '/'), baseUrl);
+    if (/^https?:\/\//.test(url)) {
+      rows.push(enrichMedia({ url, thumbnail: url, title: `${sourceLabel(sourceId)} image`, link: baseUrl }, query, sourceId, 'image'));
+    }
+  }
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
 
@@ -211,12 +353,43 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20) {
     }
     rows.push(enrichMedia({ url, link: url, title: text || `${sourceLabel(sourceId)} video`, duration: 'Lien public' }, query, sourceId, 'video'));
   });
+  $('video[src], source[src], meta[property="og:video"], meta[property="og:video:url"], meta[name="twitter:player"]').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('content');
+    const url = absolutize(src, baseUrl);
+    if (/^https?:\/\//.test(url)) {
+      rows.push(enrichMedia({ url, link: baseUrl, title: $('title').text().trim() || `${sourceLabel(sourceId)} video`, duration: 'Media public' }, query, sourceId, 'video'));
+    }
+  });
+  const videoRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:mp4|webm|m3u8|mov)(?:\?[^"'<>\\\s]*)?/gi;
+  for (const match of String(html || '').matchAll(videoRegex)) {
+    const url = absolutize(match[0].replace(/\\\//g, '/'), baseUrl);
+    if (/^https?:\/\//.test(url)) {
+      rows.push(enrichMedia({ url, link: baseUrl, title: `${sourceLabel(sourceId)} video`, duration: 'Media public' }, query, sourceId, 'video'));
+    }
+  }
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
 
-async function scrapeGenericSource(sourceId, query, options = {}) {
+function extractSearchResultPages(html, baseUrl, query, sourceId, limit = 20) {
+  const $ = cheerio.load(html || '');
+  const rows = [];
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href');
+    const text = $(el).text().replace(/\s+/g, ' ').trim();
+    const url = absolutize(href, baseUrl);
+    if (!/^https?:\/\//.test(url)) return;
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (!host.endsWith(sourceDomain(sourceId).replace(/^www\./, ''))) return;
+    if (!mediaText({ title: text, url }).includes(normalizeSearchTerm(query))) return;
+    const type = looksLikeVideo(url) ? 'video' : 'page';
+    rows.push(enrichMedia({ url, link: url, title: text || `${sourceLabel(sourceId)} page publique`, thumbnail: '' }, query, sourceId, type));
+  });
+  return dedupeBy(rows, item => item.url).slice(0, limit);
+}
+
+function sourceSearchUrls(sourceId, query) {
   const encoded = encodeURIComponent(query);
-  const siteMap = {
+  const direct = {
     duckduckgo: `https://duckduckgo.com/html/?q=${encoded}`,
     bing: `https://www.bing.com/images/search?q=${encoded}`,
     google: `https://www.google.com/search?tbm=isch&q=${encoded}`,
@@ -239,11 +412,39 @@ async function scrapeGenericSource(sourceId, query, options = {}) {
     xvideos: `https://www.xvideos.com/?k=${encoded}`,
     spankbang: `https://spankbang.com/s/${encoded}/`
   };
-  const url = siteMap[sourceId] || `https://duckduckgo.com/html/?q=${encoded}+site:${encodeURIComponent(sourceId + '.com')}`;
-  const html = await fetchText(url, { timeout: options.timeout || 12000 });
-  const images = extractImagesFromHtml(html, url, query, sourceId, options.imageLimit || 35);
-  const videos = extractLinksAsVideos(html, url, query, sourceId, options.videoLimit || 20);
-  return { images, videos, status: { success: true, note: `scan public ${url}`, imagesCount: images.length, videosCount: videos.length } };
+  const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
+  if (NSFW_SOURCES.has(sourceId)) {
+    const domain = sourceDomain(sourceId);
+    urls.push(`https://duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
+    urls.push(`https://www.bing.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
+  }
+  return uniq(urls);
+}
+
+async function scrapeGenericSource(sourceId, query, options = {}) {
+  const images = [];
+  const videos = [];
+  const pages = [];
+  const notes = [];
+  const urls = sourceSearchUrls(sourceId, query);
+  for (const url of urls) {
+    const page = await fetchPage(url, { timeout: options.timeout || 14000 });
+    notes.push(`${new URL(url).hostname}: HTTP ${page.statusCode}`);
+    if (page.statusCode >= 400) continue;
+    const pageImages = extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, options.imageLimit || 35);
+    const pageVideos = extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, options.videoLimit || 20);
+    const pageLinks = extractSearchResultPages(page.html, page.finalUrl, query, sourceId, 20);
+    images.push(...pageImages);
+    videos.push(...pageVideos, ...pageLinks.filter(item => inferMediaType(item) === 'video'));
+    pages.push(...pageLinks.filter(item => inferMediaType(item) !== 'video'));
+    if (images.length + videos.length >= 8 && !NSFW_SOURCES.has(sourceId)) break;
+  }
+  const uniqueImages = dedupeBy(images, item => item.url).slice(0, options.imageLimit || 35);
+  const uniqueVideos = dedupeBy([...videos, ...pages], item => item.url).slice(0, options.videoLimit || 20);
+  const note = uniqueImages.length + uniqueVideos.length
+    ? `scan public; ${notes.join('; ')}`
+    : `0 media public extractible; ${notes.join('; ')}; site possiblement JS, login ou anti-bot`;
+  return { images: uniqueImages, videos: uniqueVideos, status: { success: true, note, imagesCount: uniqueImages.length, videosCount: uniqueVideos.length, zeroReason: uniqueImages.length + uniqueVideos.length ? '' : 'no_public_media_extracted' } };
 }
 
 async function scrapeImageSearchWithFallback(query, sources, options = {}) {
@@ -502,6 +703,45 @@ app.get('/api/account/scrape', async (req, res) => {
     res.json(payload);
   } catch (error) {
     res.status(502).json({ success: false, error: error.message, images: [], videos: [] });
+  }
+});
+
+app.get('/api/proxy', async (req, res) => {
+  try {
+    const targetUrl = await validatePublicMediaUrl(req.query.url);
+    const upstream = await axios.get(targetUrl, {
+      responseType: 'stream',
+      timeout: 18000,
+      maxRedirects: 3,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+        accept: 'image/avif,image/webp,image/apng,image/*,video/*,*/*;q=0.8',
+        referer: new URL(targetUrl).origin
+      },
+      validateStatus: status => status >= 200 && status < 400
+    });
+    const contentType = String(upstream.headers['content-type'] || 'application/octet-stream').toLowerCase();
+    if (!/^(image|video)\//.test(contentType) && contentType !== 'application/octet-stream') {
+      upstream.data.destroy();
+      return res.status(415).json({ error: 'Type media non supporte' });
+    }
+    const maxBytes = 60 * 1024 * 1024;
+    let bytes = 0;
+    res.setHeader('content-type', contentType);
+    res.setHeader('cache-control', 'public, max-age=86400');
+    upstream.data.on('data', chunk => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        upstream.data.destroy();
+        res.destroy(new Error('Media trop volumineux'));
+      }
+    });
+    upstream.data.on('error', error => {
+      if (!res.headersSent) res.status(502).json({ error: error.message });
+    });
+    upstream.data.pipe(res);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

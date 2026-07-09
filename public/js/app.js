@@ -69,6 +69,8 @@ const safetyRiskMode = document.getElementById('safety-risk-mode');
 const searchMatchMode = document.getElementById('search-match-mode');
 const accountScrapeMode = document.getElementById('account-scrape-mode');
 const mediaKindMode = document.getElementById('media-kind-mode');
+const btnNsfwPreset = document.getElementById('btn-nsfw-preset');
+const nsfwModeNote = document.getElementById('nsfw-mode-note');
 
 const btnToggleFav = document.getElementById('btn-toggle-fav');
 const btnDownloadZip = document.getElementById('btn-download-zip');
@@ -796,7 +798,9 @@ function updateSourceDiagnostics(data) {
   Object.entries(data.status || {}).forEach(([source, status]) => {
     sourceDiagnostics[source] = {
       success: Boolean(status.success),
+      skipped: Boolean(status.skipped),
       note: status.note || status.error || '',
+      zeroReason: status.zeroReason || '',
       imagesCount: status.imagesCount || 0,
       videosCount: status.videosCount || 0,
       updatedAt: new Date().toISOString()
@@ -862,10 +866,10 @@ function renderInsights() {
     const entries = Object.entries(sourceDiagnostics);
     sourceDiagnosticList.innerHTML = entries.length
       ? entries.map(([source, item]) => `
-        <div class="diagnostic-row ${item.success ? 'ok' : 'fail'}">
+        <div class="diagnostic-row ${item.success ? 'ok' : 'fail'} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}">
           <strong>${escapeHtml(source)}</strong>
           <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
-          <small>${escapeHtml(item.note || (item.success ? 'OK' : 'Indisponible'))}</small>
+          <small>${escapeHtml(item.skipped ? 'Bloqué par SafeSearch' : (item.note || item.zeroReason || (item.success ? 'OK' : 'Indisponible')))}</small>
         </div>
       `).join('')
       : '<div class="muted-line">Aucun diagnostic encore disponible.</div>';
@@ -1035,19 +1039,21 @@ function mergeSearchData(data) {
 
 function logSourceStatus(source, status) {
   const sourceName = source.toUpperCase();
+  const isZero = (Number(status.imagesCount || 0) + Number(status.videosCount || 0)) === 0;
   if (status.success) {
-    updateSourceStatusDot(source, 'success');
+    updateSourceStatusDot(source, isZero ? 'warning' : 'success');
     const noteSuffix = status.note ? ` - ${status.note}` : '';
+    const logType = isZero ? 'warning' : 'success';
     if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram') {
-      addConsoleLog(`[${sourceName}] Succès : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, 'success');
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
     } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang') {
-      addConsoleLog(`[${sourceName}] Succès : ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, 'success');
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
     } else {
-      addConsoleLog(`[${sourceName}] Succès : ${status.imagesCount || 0} photos trouvées.${noteSuffix}`, 'success');
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${noteSuffix}`, logType);
     }
   } else {
     updateSourceStatusDot(source, 'error');
-    addConsoleLog(`[${sourceName}] Échec : ${status.error || 'source indisponible'}`, 'error');
+    addConsoleLog(`[${sourceName}] ${status.skipped ? 'Ignoré' : 'Échec'} : ${status.error || 'source indisponible'}`, status.skipped ? 'warning' : 'error');
   }
 }
 
@@ -2459,6 +2465,7 @@ function updateSourceStatusDot(source, state) {
     if (state === 'idle') dot.title = "En attente";
     else if (state === 'loading') dot.title = "Aspiration en cours...";
     else if (state === 'success') dot.title = "Aspiration réussie !";
+    else if (state === 'warning') dot.title = "Source joignable, mais aucun média public extrait";
     else if (state === 'error') dot.title = "Échec ou indisponible";
   }
 }
@@ -2470,51 +2477,48 @@ function resetAllStatusDots() {
   });
 }
 
-// Toggle Adult sources visibility based on SafeSearch checkbox
-if (safeSearchToggle) {
-  safeSearchToggle.addEventListener('change', () => {
-    const adultChips = document.querySelectorAll('.source-chip.adult-source');
-    const nsfwDrawer = document.querySelector('.source-drawer-nsfw');
-    adultChips.forEach(chip => {
-      if (safeSearchToggle.checked) {
-        chip.classList.add('hidden');
-        const cb = chip.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      } else {
-        chip.classList.remove('hidden');
-      }
-    });
-    if (nsfwDrawer) {
-      nsfwDrawer.classList.toggle('hidden', safeSearchToggle.checked);
-      if (!safeSearchToggle.checked) nsfwDrawer.open = true;
+function setNsfwVisibility() {
+  const safeEnabled = safeSearchToggle ? safeSearchToggle.checked : true;
+  const adultChips = document.querySelectorAll('.source-chip.adult-source');
+  const nsfwDrawer = document.querySelector('.source-drawer-nsfw');
+  adultChips.forEach(chip => {
+    if (safeEnabled) {
+      chip.classList.add('hidden');
+      const cb = chip.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+    } else {
+      chip.classList.remove('hidden');
     }
-    updateSourceDrawerCounts();
   });
+  if (nsfwDrawer) {
+    nsfwDrawer.classList.toggle('hidden', safeEnabled);
+    if (!safeEnabled) nsfwDrawer.open = true;
+  }
+  if (nsfwModeNote) {
+    nsfwModeNote.textContent = safeEnabled
+      ? 'SafeSearch actif : les sources NSFW sont masquées et désélectionnées.'
+      : 'Mode NSFW actif : seules les sources publiques sont interrogées, sans contournement de login/paywall.';
+    nsfwModeNote.classList.toggle('active', !safeEnabled);
+  }
+  updateSourceDrawerCounts();
 }
 
-// Initial adult source display setup
-function initAdultSources() {
-  if (safeSearchToggle) {
-    const adultChips = document.querySelectorAll('.source-chip.adult-source');
-    const nsfwDrawer = document.querySelector('.source-drawer-nsfw');
-    adultChips.forEach(chip => {
-      if (safeSearchToggle.checked) {
-        chip.classList.add('hidden');
-        const cb = chip.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      } else {
-        chip.classList.remove('hidden');
-      }
-    });
-    if (nsfwDrawer) {
-      nsfwDrawer.classList.toggle('hidden', safeSearchToggle.checked);
-      if (!safeSearchToggle.checked) nsfwDrawer.open = true;
-    }
-    updateSourceDrawerCounts();
-  }
+function activateNsfwPreset() {
+  if (safeSearchToggle) safeSearchToggle.checked = false;
+  if (searchMatchMode) searchMatchMode.value = 'smart';
+  if (mediaKindMode) mediaKindMode.value = 'both';
+  setNsfwVisibility();
+  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang']);
+  document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
+    if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
+  });
+  updateSourceDrawerCounts();
+  addConsoleLog('[NSFW] Mode public activé : SafeSearch désactivé, sources adultes publiques sélectionnées.', 'warning');
 }
+if (safeSearchToggle) safeSearchToggle.addEventListener('change', setNsfwVisibility);
+if (btnNsfwPreset) btnNsfwPreset.addEventListener('click', activateNsfwPreset);
 initializeSourceDrawers();
-initAdultSources();
+setNsfwVisibility();
 
 // Grid layout size selector
 const layoutButtons = document.querySelectorAll('.btn-layout');

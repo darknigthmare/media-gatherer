@@ -621,6 +621,11 @@ body {
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.9);
 }
 
+.source-status-dot.warning {
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.85);
+}
+
 .source-status-dot.error {
   background: #ef4444;
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.9);
@@ -680,6 +685,50 @@ body {
   border-color: #fb7185;
   color: #ffffff;
   box-shadow: 0 0 12px rgba(244, 63, 94, 0.22);
+}
+
+.nsfw-preset-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.12);
+  color: #fecdd3;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.nsfw-preset-btn:hover {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: #fb7185;
+  color: #ffffff;
+}
+
+.nsfw-preset-btn i {
+  width: 1rem;
+  height: 1rem;
+}
+
+.nsfw-mode-note {
+  max-width: 260px;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.nsfw-mode-note.active {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.08);
+  color: #fecdd3;
 }
 
 /* Specific styling for platform check-states */
