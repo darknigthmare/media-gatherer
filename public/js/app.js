@@ -1,4 +1,4 @@
-// ----------------------------------------------------
+﻿// ----------------------------------------------------
 // STATE VARIABLES
 // ----------------------------------------------------
 let allImages = [];
@@ -197,21 +197,21 @@ btnClearConsole.addEventListener('click', () => {
 // ----------------------------------------------------
 function setActiveTab(tabName) {
   appTabs.forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === tabName);
+    const isActive = tab.dataset.tab === tabName;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
 
   document.querySelectorAll('.workspace-section').forEach(section => {
     section.classList.toggle('tab-hidden', tabName !== 'search');
   });
-  if (connectionsSection) {
-    connectionsSection.classList.toggle('hidden', tabName !== 'connections');
-  }
-  if (reverseSection) {
-    reverseSection.classList.toggle('hidden', tabName !== 'reverse');
-  }
-  if (personSection) {
-    personSection.classList.toggle('hidden', tabName !== 'persons');
-  }
+  document.querySelectorAll('[data-app-view]').forEach(section => {
+    const isActive = section.dataset.appView === tabName;
+    section.classList.toggle('hidden', !isActive);
+    section.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+  });
+
+  if (tabName !== 'search') stopAutoRefresh();
 }
 
 appTabs.forEach(tab => {
@@ -294,14 +294,14 @@ function setConnectionMessage(card, message, type = 'info') {
 
 async function saveConnection(provider, card) {
   try {
-    const response = await fetch(`${API_BASE}/api/connections/configure`, {
+    const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, credentials: readConnectionForm(card) })
+      body: JSON.stringify({ credentials: readConnectionForm(card) })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-    setConnectionMessage(card, data.configured ? 'Identifiants enregistres pour cette session serveur.' : 'Aucun identifiant saisi.', data.configured ? 'success' : 'warning');
+    setConnectionMessage(card, data.note || data.message || 'Configuration recue pour cette session serveur.', data.ok === false ? 'warning' : 'success');
     await loadConnections();
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
@@ -310,14 +310,14 @@ async function saveConnection(provider, card) {
 
 async function testConnection(provider, card) {
   try {
-    const response = await fetch(`${API_BASE}/api/connections/test`, {
+    const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider })
+      body: JSON.stringify({})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
-    setConnectionMessage(card, data.message || 'Connexion valide.', 'success');
+    setConnectionMessage(card, data.message || data.note || 'Connexion valide.', 'success');
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
   }
@@ -325,14 +325,10 @@ async function testConnection(provider, card) {
 
 async function clearConnection(provider, card) {
   try {
-    const response = await fetch(`${API_BASE}/api/connections/clear`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider })
-    });
+    const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, { method: 'DELETE' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-    setConnectionMessage(card, 'Identifiants effaces pour cette session serveur.', 'info');
+    setConnectionMessage(card, data.note || data.message || 'Identifiants effaces pour cette session serveur.', 'info');
     await loadConnections();
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
@@ -853,11 +849,11 @@ function renderInsights() {
           <span>${alias.count}</span>
         </button>
       `).join('')
-      : '<div class="muted-line">Aucun alias infÃ©rÃ© pour le moment.</div>';
+      : '<div class="muted-line">Aucun alias inféré pour le moment.</div>';
     aliasList.querySelectorAll('[data-alias]').forEach(btn => {
       btn.addEventListener('click', () => {
         searchInput.value = btn.dataset.alias;
-        addConsoleLog(`[ALIAS] Terme chargÃ© : ${btn.dataset.alias}`, 'info');
+        addConsoleLog(`[ALIAS] Terme chargé : ${btn.dataset.alias}`, 'info');
       });
     });
   }
@@ -868,7 +864,7 @@ function renderInsights() {
       ? entries.map(([source, item]) => `
         <div class="diagnostic-row ${item.success ? 'ok' : 'fail'}">
           <strong>${escapeHtml(source)}</strong>
-          <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidÃ©os</span>
+          <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
           <small>${escapeHtml(item.note || (item.success ? 'OK' : 'Indisponible'))}</small>
         </div>
       `).join('')
@@ -903,7 +899,7 @@ function renderHistory() {
       <div class="workflow-row">
         <div>
           <strong>${escapeHtml(item.query)}</strong>
-          <span>${new Date(item.at).toLocaleString()} · ${item.images} photos · ${item.videos} vidÃ©os</span>
+          <span>${new Date(item.at).toLocaleString()} · ${item.images} photos · ${item.videos} vidéos</span>
         </div>
         <button type="button" class="btn btn-secondary btn-small" data-history-run="${escapeHtml(item.id)}">
           <i data-lucide="rotate-cw"></i><span>Relancer</span>
@@ -963,7 +959,7 @@ async function runBatchQueue() {
     renderBatchQueue();
     searchInput.value = item.query;
     await runSearchWithCurrentControls({ fromBatch: true, baseConfig });
-    item.status = `${allImages.length} photos · ${allVideos.length} vidÃ©os`;
+    item.status = `${allImages.length} photos · ${allVideos.length} vidéos`;
     renderBatchQueue();
   }
 }
@@ -995,14 +991,14 @@ function renderMonitors() {
       <div class="workflow-row">
         <div>
           <strong>${escapeHtml(item.query)}</strong>
-          <span>${item.lastImages || 0} photos · ${item.lastVideos || 0} vidÃ©os · ${item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : 'jamais'}</span>
+          <span>${item.lastImages || 0} photos · ${item.lastVideos || 0} vidéos · ${item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : 'jamais'}</span>
         </div>
         <button type="button" class="btn btn-secondary btn-small" data-monitor-run="${escapeHtml(item.id)}">
-          <i data-lucide="refresh-cw"></i><span>VÃ©rifier</span>
+          <i data-lucide="refresh-cw"></i><span>Vérifier</span>
         </button>
       </div>
     `).join('')
-    : '<div class="muted-line">Aucune veille sauvegardÃ©e.</div>';
+    : '<div class="muted-line">Aucune veille sauvegardée.</div>';
   monitorList.querySelectorAll('[data-monitor-run]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const monitor = savedMonitors.find(item => item.id === btn.dataset.monitorRun);
@@ -1129,7 +1125,7 @@ function renderAccountsDashboard() {
     row.innerHTML = `
       <div class="account-main">
         <span class="account-url" title="${escapeHtml(account.url)}">${escapeHtml(account.url)}</span>
-        <span class="account-count">${account.type || 'domain'} · ${account.count || 0} mÃ©dias liÃ©s</span>
+        <span class="account-count">${account.type || 'domain'} · ${account.count || 0} médias liés</span>
       </div>
       <div class="account-actions">
         <a href="${account.url}" target="_blank" class="btn btn-secondary btn-small" title="Ouvrir">
@@ -1158,7 +1154,7 @@ async function scrapeDetectedAccount(accountUrl) {
   }
 
   try {
-    addConsoleLog(`[COMPTE] Aspiration ciblÃ©e : ${accountUrl}`, 'info');
+    addConsoleLog(`[COMPTE] Aspiration ciblée : ${accountUrl}`, 'info');
     const safeSearch = safeSearchToggle ? safeSearchToggle.checked : true;
     const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
     const accountMode = accountScrapeMode ? accountScrapeMode.value : 'complete';
@@ -1167,9 +1163,9 @@ async function scrapeDetectedAccount(accountUrl) {
     if (!response.ok) throw new Error(`Erreur serveur (${response.status})`);
     const data = await response.json();
     mergeSearchData(data);
-    addConsoleLog(`[COMPTE] ${accountUrl} : ${(data.images || []).length} photos, ${(data.videos || []).length} vidÃ©os ajoutÃ©es.`, 'success');
+    addConsoleLog(`[COMPTE] ${accountUrl} : ${(data.images || []).length} photos, ${(data.videos || []).length} vidéos ajoutées.`, 'success');
   } catch (error) {
-    addConsoleLog(`[COMPTE] Ã‰chec sur ${accountUrl} : ${error.message}`, 'error');
+    addConsoleLog(`[COMPTE] Échec sur ${accountUrl} : ${error.message}`, 'error');
   } finally {
     if (account) {
       account.loading = false;
@@ -1582,7 +1578,7 @@ async function runSearchWithCurrentControls(options = {}) {
   addConsoleLog(`Filtre adulte (SafeSearch) : ${safeSearch ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`, 'info');
   addConsoleLog(`Mode anti-ban : ${riskMode === 'balanced' ? 'Equilibre' : 'Prudent'}`, 'info');
   addConsoleLog(`Pertinence : ${matchMode} ; comptes : ${accountMode === 'strict' ? 'strict terme' : 'compte complet'}`, 'info');
-  addConsoleLog(`MÃ©dias : ${mediaKind === 'photos' ? 'photos seulement' : (mediaKind === 'videos' ? 'vidÃ©os seulement' : 'photos + vidÃ©os')}`, 'info');
+  addConsoleLog(`Médias : ${mediaKind === 'photos' ? 'photos seulement' : (mediaKind === 'videos' ? 'vidéos seulement' : 'photos + vidéos')}`, 'info');
   if (sizeVal || typeVal || colorVal) {
     addConsoleLog(`Filtres d'images actifs : taille="${sizeVal || 'toutes'}", type="${typeVal || 'tous'}", couleur="${colorVal || 'toutes'}"`, 'info');
   }
@@ -2292,7 +2288,7 @@ if (btnExportJson) {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    addConsoleLog(`Export JSON gÃ©nÃ©rÃ© : ${allImages.length} photos, ${allVideos.length} vidÃ©os, ${detectedAccounts.length} comptes/sites.`, 'success');
+    addConsoleLog(`Export JSON généré : ${allImages.length} photos, ${allVideos.length} vidéos, ${detectedAccounts.length} comptes/sites.`, 'success');
   });
 }
 
@@ -2533,3 +2529,4 @@ layoutButtons.forEach(btn => {
     videosGrid.className = `media-grid grid-${size}`;
   });
 });
+

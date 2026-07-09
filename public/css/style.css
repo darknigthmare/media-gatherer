@@ -192,6 +192,7 @@ body {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .app-tab {
@@ -221,18 +222,31 @@ body {
   background: rgba(59, 130, 246, 0.15);
 }
 
+.app-tab[aria-selected="true"] {
+  box-shadow: inset 0 -2px 0 rgba(56, 189, 248, 0.85);
+}
+
 .tab-hidden {
   display: none !important;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .connections-section,
-.reverse-section {
+.reverse-section,
+.person-section {
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   padding: 1.25rem;
-  border-radius: 1.25rem;
+  border-radius: 8px;
   box-shadow: var(--shadow-md);
+}
+
+.app-view {
+  animation: fadeIn 0.22s ease-out;
 }
 
 .connections-note {
@@ -2123,11 +2137,6 @@ body {
 
 .person-section {
   margin: 1.5rem 0;
-  padding: 1.25rem;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.62);
-  box-shadow: var(--shadow-sm);
 }
 
 .person-guard {
@@ -2150,7 +2159,7 @@ body {
 
 .person-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(220px, 280px) 1fr;
+  grid-template-columns: minmax(260px, 320px) minmax(220px, 280px) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -2160,7 +2169,7 @@ body {
   padding: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.35);
+  background: rgba(2, 6, 23, 0.28);
 }
 
 .person-panel h4 {
@@ -2287,7 +2296,7 @@ body {
 
 .person-media-row {
   display: grid;
-  grid-template-columns: 72px 1fr auto;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: center;
   padding: 0.65rem;
@@ -2360,4 +2369,40 @@ body {
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+}
+
+@media (max-width: 720px) {
+  .app-container {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .app-tabs {
+    justify-content: stretch;
+  }
+
+  .app-tab {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+
+  .person-search-controls,
+  .person-rule-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .person-search-controls input,
+  .person-search-controls select,
+  .person-search-controls button,
+  .person-rule-form input,
+  .person-rule-form select,
+  .person-rule-form button {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+.hidden {
+  display: none !important;
 }

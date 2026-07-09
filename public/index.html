@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AeroGatherer - Aspirateur de MÃ©dias Web</title>
+  <title>AeroGatherer - Aspirateur de Médias Web</title>
   <!-- Google Fonts: Outfit (main) & JetBrains Mono (console) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,29 +32,29 @@
         <i data-lucide="wind" class="logo-icon"></i>
         <h1>Aero<span>Gatherer</span></h1>
       </div>
-      <p class="tagline">Aspirateur web de photos et vidÃ©os en temps rÃ©el</p>
+      <p class="tagline">Aspirateur web de photos et vidéos en temps réel</p>
     </header>
 
     <nav class="app-tabs" aria-label="Navigation principale">
-      <button class="app-tab active" data-tab="search">
+      <button class="app-tab active" data-tab="search" aria-selected="true" aria-controls="media-search-view">
         <i data-lucide="search"></i>
-        <span>Recherche</span>
+        <span>Media Finder</span>
       </button>
-      <button class="app-tab" data-tab="connections">
+      <button class="app-tab" data-tab="connections" aria-selected="false" aria-controls="connections-section">
         <i data-lucide="key-round"></i>
         <span>Connexions API</span>
       </button>
-      <button class="app-tab" data-tab="reverse">
+      <button class="app-tab" data-tab="reverse" aria-selected="false" aria-controls="reverse-section">
         <i data-lucide="scan-search"></i>
-        <span>Recherche inversÃ©e</span>
+        <span>Recherche inversée</span>
       </button>
-      <button class="app-tab" data-tab="persons">
+      <button class="app-tab" data-tab="persons" aria-selected="false" aria-controls="person-section">
         <i data-lucide="user-search"></i>
         <span>Person Finder</span>
       </button>
     </nav>
 
-    <section class="connections-section hidden" id="connections-section">
+    <section class="connections-section hidden app-view" id="connections-section" data-app-view="connections">
       <div class="dashboard-header">
         <i data-lucide="key-round" class="dashboard-icon"></i>
         <h3>Connexions API</h3>
@@ -63,13 +63,13 @@
       <div class="connections-grid" id="connections-grid"></div>
     </section>
 
-    <section class="reverse-section hidden" id="reverse-section">
+    <section class="reverse-section hidden app-view" id="reverse-section" data-app-view="reverse">
       <div class="dashboard-header">
         <i data-lucide="scan-search" class="dashboard-icon"></i>
-        <h3>Recherche inversÃ©e</h3>
+        <h3>Recherche inversée</h3>
       </div>
       <div class="reverse-tool">
-        <input type="url" id="reverse-image-url" placeholder="URL de l'image Ã  rechercher...">
+        <input type="url" id="reverse-image-url" placeholder="URL de l'image à rechercher...">
         <button id="btn-reverse-google" class="btn btn-primary"><i data-lucide="search"></i><span>Google Lens</span></button>
         <button id="btn-reverse-bing" class="btn btn-secondary"><i data-lucide="search"></i><span>Bing Visual</span></button>
         <button id="btn-reverse-yandex" class="btn btn-secondary"><i data-lucide="search"></i><span>Yandex</span></button>
@@ -77,7 +77,7 @@
       </div>
     </section>
 
-    <section class="person-section hidden" id="person-section">
+    <section class="person-section hidden app-view" id="person-section" data-app-view="persons">
       <div class="dashboard-header">
         <i data-lucide="user-search" class="dashboard-icon"></i>
         <h3>Person Finder</h3>
@@ -179,7 +179,7 @@
     </section>
 
     <!-- SEARCH & CONTROLS SECTION -->
-    <section class="search-section workspace-section">
+    <section class="search-section workspace-section" id="media-search-view" data-app-view="search">
       <form id="search-form" class="search-form">
         <div class="search-input-wrapper">
           <i data-lucide="search" class="search-icon"></i>
@@ -199,7 +199,7 @@
         <div class="sources-panel">
           <div class="sources-row" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem;">
             <div class="sources-group" style="flex: 1; min-width: 250px;">
-              <span class="panel-label">Sources Ã  interroger :</span>
+              <span class="panel-label">Sources à interroger :</span>
               <div class="sources-list" style="margin-top: 0.5rem;">
                 <label class="source-chip" for="src-ddg">
                   <input type="checkbox" id="src-ddg" value="duckduckgo" checked>
@@ -510,7 +510,7 @@
               </div>
             </div>
             <div class="safety-group" style="min-width: 200px;">
-              <span class="panel-label">SÃ©curitÃ© :</span>
+              <span class="panel-label">Sécurité :</span>
               <div class="safety-list" style="margin-top: 0.5rem;">
                 <label class="source-chip" for="safe-search-toggle">
                   <input type="checkbox" id="safe-search-toggle" checked>
@@ -543,7 +543,7 @@
                   </select>
                 </label>
                 <label class="safety-control" for="account-scrape-mode">
-                  <span>Comptes trouvÃ©s</span>
+                  <span>Comptes trouvés</span>
                   <select id="account-scrape-mode" class="select-custom">
                     <option value="complete" selected>Compte complet</option>
                     <option value="strict">Strict terme</option>
@@ -553,19 +553,19 @@
             </div>
 
             <div class="filters-group" style="min-width: 320px;">
-              <span class="panel-label">Filtres d'Images (DuckDuckGo / RÃ©seaux) :</span>
+              <span class="panel-label">Filtres d'Images (DuckDuckGo / Réseaux) :</span>
               <div class="filters-dropdowns" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <select id="filter-size" class="select-custom">
                   <option value="">Toutes tailles</option>
                   <option value="Small">Petite</option>
                   <option value="Medium">Moyenne</option>
                   <option value="Large">Grande (HD)</option>
-                  <option value="Wallpaper">Fond d'Ã©cran</option>
+                  <option value="Wallpaper">Fond d'écran</option>
                 </select>
                 <select id="filter-type" class="select-custom">
                   <option value="">Tous types</option>
                   <option value="photo">Photos</option>
-                  <option value="gif">GIFs AnimÃ©s</option>
+                  <option value="gif">GIFs Animés</option>
                   <option value="clipart">Clipart</option>
                 </select>
                 <select id="filter-color" class="select-custom">
@@ -614,7 +614,7 @@
       </div>
       <div class="stat-item">
         <i data-lucide="video"></i>
-        <span>VidÃ©os : <strong id="count-videos">0</strong></span>
+        <span>Vidéos : <strong id="count-videos">0</strong></span>
       </div>
       <div class="search-filter-wrapper">
         <i data-lucide="filter" class="filter-icon"></i>
@@ -665,7 +665,7 @@
       <!-- Layout Grid Selector -->
       <div class="layout-selector-wrapper" style="display: flex; gap: 0.2rem; align-items: center; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 2px; background: rgba(15, 23, 42, 0.6);">
         <button class="btn-layout" data-size="small" title="Mise en page compacte" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="layout-grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
-        <button class="btn-layout active" data-size="medium" title="Mise en page par dÃ©faut" style="background: var(--accent-blue-gradient); border: none; color: #fff; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout active" data-size="medium" title="Mise en page par défaut" style="background: var(--accent-blue-gradient); border: none; color: #fff; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
         <button class="btn-layout" data-size="large" title="Mise en page HD" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="square" style="width: 1.1rem; height: 1.1rem;"></i></button>
       </div>
       <div class="action-buttons-wrapper" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -673,15 +673,15 @@
           <i data-lucide="heart" style="color: var(--accent-purple);"></i>
           <span>Mes Favoris</span>
         </button>
-        <button id="btn-download-zip" class="btn btn-primary" title="TÃ©lÃ©charger les photos filtrÃ©es en ZIP">
+        <button id="btn-download-zip" class="btn btn-primary" title="Télécharger les photos filtrées en ZIP">
           <i data-lucide="download-cloud"></i>
-          <span>TÃ©lÃ©charger ZIP</span>
+          <span>Télécharger ZIP</span>
         </button>
         <button id="btn-export-json" class="btn btn-secondary" title="Exporter les resultats bruts en JSON">
           <i data-lucide="file-json"></i>
           <span>Exporter JSON</span>
         </button>
-        <div class="auto-refresh-control" title="Relancer la recherche active et ajouter uniquement les nouveaux mÃ©dias">
+        <div class="auto-refresh-control" title="Relancer la recherche active et ajouter uniquement les nouveaux médias">
           <select id="auto-refresh-interval" class="select-custom">
             <option value="0" selected>Refresh off</option>
             <option value="60">Chaque 1 min</option>
@@ -701,7 +701,7 @@
     <section class="stats-dashboard hidden workspace-section" id="stats-dashboard">
       <div class="dashboard-header">
         <i data-lucide="bar-chart-2" class="dashboard-icon"></i>
-        <h3>RÃ©partition des sources de mÃ©dias</h3>
+        <h3>Répartition des sources de médias</h3>
       </div>
       <div class="dashboard-body" id="stats-breakdown-bars">
         <!-- Rendu dynamique des barres statistiques -->
@@ -711,7 +711,7 @@
     <section class="accounts-dashboard hidden workspace-section" id="accounts-dashboard">
       <div class="dashboard-header">
         <i data-lucide="user-search" class="dashboard-icon"></i>
-        <h3>Comptes et sites dÃ©tectÃ©s</h3>
+        <h3>Comptes et sites détectés</h3>
       </div>
       <div class="accounts-list" id="accounts-list"></div>
     </section>
@@ -732,7 +732,7 @@
         <div class="insight-panel">
           <div class="insight-panel-header">
             <i data-lucide="tag"></i>
-            <span>Alias trouvÃ©s</span>
+            <span>Alias trouvés</span>
           </div>
           <div class="alias-list" id="alias-list"></div>
         </div>
@@ -778,13 +778,13 @@
 
       <details class="workflow-drawer">
         <summary>
-          <span><i data-lucide="radar"></i> Monitoring sauvegardÃ©</span>
+          <span><i data-lucide="radar"></i> Monitoring sauvegardé</span>
           <span id="monitor-count">0 veille</span>
         </summary>
         <div class="workflow-body">
           <div class="workflow-actions">
             <button type="button" id="btn-monitor-save" class="btn btn-primary"><i data-lucide="bookmark-plus"></i><span>Sauver recherche active</span></button>
-            <button type="button" id="btn-monitor-run" class="btn btn-secondary"><i data-lucide="refresh-cw"></i><span>VÃ©rifier maintenant</span></button>
+            <button type="button" id="btn-monitor-run" class="btn btn-secondary"><i data-lucide="refresh-cw"></i><span>Vérifier maintenant</span></button>
             <button type="button" id="btn-monitor-clear" class="btn btn-secondary"><i data-lucide="trash-2"></i><span>Vider</span></button>
           </div>
           <div class="monitor-list" id="monitor-list"></div>
@@ -809,7 +809,7 @@
             <!-- Empty State -->
             <div class="empty-state">
               <i data-lucide="image-down" class="empty-icon"></i>
-              <h3>PrÃªt Ã  aspirer</h3>
+              <h3>Prêt à aspirer</h3>
               <p>Lancez une recherche pour charger des photos.</p>
             </div>
           </div>
@@ -821,7 +821,7 @@
         <div class="zone-header">
           <div class="zone-title">
             <i data-lucide="video" class="zone-icon text-purple"></i>
-            <h2>Zone VidÃ©os</h2>
+            <h2>Zone Vidéos</h2>
           </div>
           <span class="badge badge-purple" id="badge-videos-count">0</span>
         </div>
@@ -830,8 +830,8 @@
             <!-- Empty State -->
             <div class="empty-state">
               <i data-lucide="video-off" class="empty-icon"></i>
-              <h3>PrÃªt Ã  aspirer</h3>
-              <p>Lancez une recherche pour charger des vidÃ©os.</p>
+              <h3>Prêt à aspirer</h3>
+              <p>Lancez une recherche pour charger des vidéos.</p>
             </div>
           </div>
         </div>
@@ -850,11 +850,11 @@
         <h4 id="lightbox-title">Image Title</h4>
         <div class="lightbox-meta">
           <span class="meta-item"><i data-lucide="info"></i> Source: <strong id="lightbox-source">DDG</strong></span>
-          <span class="meta-item" id="lightbox-resolution-wrapper"><i data-lucide="maximize-2"></i> RÃ©solution: <strong id="lightbox-resolution">1920x1080</strong></span>
+          <span class="meta-item" id="lightbox-resolution-wrapper"><i data-lucide="maximize-2"></i> Résolution: <strong id="lightbox-resolution">1920x1080</strong></span>
         </div>
         <div class="lightbox-actions">
           <a href="" id="lightbox-btn-download" download target="_blank" class="btn btn-primary">
-            <i data-lucide="download"></i> TÃ©lÃ©charger
+            <i data-lucide="download"></i> Télécharger
           </a>
           <button id="lightbox-btn-copy" class="btn btn-secondary">
             <i data-lucide="copy"></i> Copier le lien
@@ -863,7 +863,7 @@
             <i data-lucide="external-link"></i> Voir l'original
           </a>
           <button id="lightbox-btn-reverse" class="btn btn-secondary">
-            <i data-lucide="scan-search"></i> Recherche inversÃ©e
+            <i data-lucide="scan-search"></i> Recherche inversée
           </button>
         </div>
       </div>
@@ -875,13 +875,13 @@
     <button class="modal-close" id="video-modal-close"><i data-lucide="x"></i></button>
     <div class="video-modal-content">
       <div class="video-player-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
-        <button id="video-btn-prev" class="nav-chevron chevron-left" title="VidÃ©o prÃ©cÃ©dente">
+        <button id="video-btn-prev" class="nav-chevron chevron-left" title="Vidéo précédente">
           <i data-lucide="chevron-left"></i>
         </button>
         <div class="video-player-container" id="video-player-container" style="flex: 1;">
           <!-- Iframe or Video tag will be injected here -->
         </div>
-        <button id="video-btn-next" class="nav-chevron chevron-right" title="VidÃ©o suivante">
+        <button id="video-btn-next" class="nav-chevron chevron-right" title="Vidéo suivante">
           <i data-lucide="chevron-right"></i>
         </button>
       </div>
@@ -889,7 +889,7 @@
         <h4 id="video-title">Video Title</h4>
         <div class="video-meta">
           <span class="meta-item"><i data-lucide="info"></i> Source: <strong id="video-source">YouTube</strong></span>
-          <span class="meta-item"><i data-lucide="clock"></i> DurÃ©e: <strong id="video-duration">4:32</strong></span>
+          <span class="meta-item"><i data-lucide="clock"></i> Durée: <strong id="video-duration">4:32</strong></span>
         </div>
         <div class="video-actions">
           <a href="" id="video-btn-link" target="_blank" class="btn btn-secondary">
@@ -907,5 +907,6 @@
   </script>
 </body>
 </html>
+
 
 
