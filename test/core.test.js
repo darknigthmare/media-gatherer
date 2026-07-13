@@ -19,6 +19,7 @@ const {
   extractLinksAsVideos,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
+  discoveredVideoPageCandidates,
   filterBySearchMode,
   buildPersonQueries
 } = app.locals.testables;
@@ -90,6 +91,10 @@ test('lit les fallbacks web DuckDuckGo et Bing', () => {
   const bing = parseBingWebResults('<li class="b_algo"><h2><a href="https://example.com/video/sxysindy">Sxysindy video</a></h2><div class="b_caption"><p>Public media</p></div></li>', 'sxysindy');
   assert.equal(duck[0].url, 'https://example.com/sxysindy');
   assert.equal(bing[0].url, 'https://example.com/video/sxysindy');
+  const candidates = discoveredVideoPageCandidates(bing, 'sxysindy', 'bing');
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].playback, 'external');
+  assert.equal(candidates[0].thumbnail, '');
 });
 
 test('conserve l original plutot que sa miniature', () => {

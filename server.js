@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-5';
+const CACHE_SCHEMA_VERSION = '2026-07-13-media-6';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -1053,9 +1053,11 @@ function parseDuckDuckGoWebResults(html, query, limit = 8) {
     const url = unwrapSearchResultUrl(anchor.attr('href'), 'https://html.duckduckgo.com/html/');
     const title = anchor.text().replace(/\s+/g, ' ').trim();
     const snippet = $(element).find('.result__snippet').text().replace(/\s+/g, ' ').trim();
+    const image = $(element).find('img').first();
+    const thumbnail = absolutize(bestMediaCandidate([image.attr('data-src'), image.attr('src')]), 'https://html.duckduckgo.com/html/');
     if (!/^https?:\/\//i.test(url) || isSearchPageUrl(url)) return;
     if (!textMatchesQuery(`${title} ${snippet} ${url}`, query)) return;
-    rows.push({ url, title: title || query, snippet });
+    rows.push({ url, title: title || query, snippet, thumbnail: looksLikeImage(thumbnail) && !isLikelyUiAsset(thumbnail) ? thumbnail : '' });
   });
   return dedupeBy(rows, row => row.url).slice(0, limit);
 }
@@ -1068,11 +1070,25 @@ function parseBingWebResults(html, query, limit = 8) {
     const url = unwrapSearchResultUrl(anchor.attr('href'), 'https://www.bing.com/search');
     const title = anchor.text().replace(/\s+/g, ' ').trim();
     const snippet = $(element).find('.b_caption p, p').first().text().replace(/\s+/g, ' ').trim();
+    const image = $(element).find('img').first();
+    const thumbnail = absolutize(bestMediaCandidate([image.attr('data-src'), image.attr('src')]), 'https://www.bing.com/search');
     if (!/^https?:\/\//i.test(url) || isSearchPageUrl(url)) return;
     if (!textMatchesQuery(`${title} ${snippet} ${url}`, query)) return;
-    rows.push({ url, title: title || query, snippet });
+    rows.push({ url, title: title || query, snippet, thumbnail: looksLikeImage(thumbnail) && !isLikelyUiAsset(thumbnail) ? thumbnail : '' });
   });
   return dedupeBy(rows, row => row.url).slice(0, limit);
+}
+
+function discoveredVideoPageCandidates(pages, query, sourceId) {
+  return (pages || []).filter(result => looksLikeVideo(result.url)).map(result => enrichMedia({
+    url: result.url,
+    link: result.url,
+    thumbnail: result.thumbnail || '',
+    title: result.title || query,
+    description: result.snippet || '',
+    duration: 'Ouvrir la source',
+    playback: 'external'
+  }, query, sourceId, 'video'));
 }
 
 async function crawlWebResultPages(pages, query, sourceId, options = {}) {
@@ -1122,7 +1138,9 @@ async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
     timeout: Math.min(Number(options.timeout) || 12000, 15000)
   });
   const pages = parseDuckDuckGoWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
-  return { ...(await crawlWebResultPages(pages, query, 'duckduckgo', options)), httpStatus: htmlSearch.statusCode };
+  const crawled = await crawlWebResultPages(pages, query, 'duckduckgo', options);
+  crawled.videos = dedupeBestMedia([...crawled.videos, ...discoveredVideoPageCandidates(pages, query, 'duckduckgo')]).slice(0, options.videoLimit || 20);
+  return { ...crawled, httpStatus: htmlSearch.statusCode };
 }
 
 async function scrapeBingHtmlFallback(query, options = {}) {
@@ -1131,7 +1149,9 @@ async function scrapeBingHtmlFallback(query, options = {}) {
     timeout: Math.min(Number(options.timeout) || 12000, 15000)
   });
   const pages = parseBingWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
-  return { ...(await crawlWebResultPages(pages, query, 'bing', options)), httpStatus: htmlSearch.statusCode };
+  const crawled = await crawlWebResultPages(pages, query, 'bing', options);
+  crawled.videos = dedupeBestMedia([...crawled.videos, ...discoveredVideoPageCandidates(pages, query, 'bing')]).slice(0, options.videoLimit || 20);
+  return { ...crawled, httpStatus: htmlSearch.statusCode };
 }
 
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
@@ -2498,6 +2518,7 @@ app.locals.testables = {
   extractLinksAsVideos,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
+  discoveredVideoPageCandidates,
   filterBySearchMode,
   buildPersonQueries,
   scorePersonMedia,
