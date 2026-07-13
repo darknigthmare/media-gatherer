@@ -20,6 +20,7 @@ const {
   parseDuckDuckGoWebResults,
   parseBingWebResults,
   discoveredVideoPageCandidates,
+  isTrustedIdentityResultPage,
   filterBySearchMode,
   buildPersonQueries
 } = app.locals.testables;
@@ -74,6 +75,15 @@ test('extrait tout le media d une page de compte publique validee', () => {
   assert.equal(videos.length, 1);
   assert.equal(videos[0].confidenceScore, 68);
   assert.match(videos[0].thumbnail, /poster\.jpg/);
+});
+
+test('valide un profil ou tag public exact avant extraction complete', () => {
+  assert.equal(isTrustedIdentityResultPage('https://example.com/tags/sxysindy/', 'Sxysindy videos', 'sxysindy'), true);
+  assert.equal(isTrustedIdentityResultPage('https://example.com/sxysindy/', 'Sxysindy public profile', 'sxysindy'), true);
+  assert.equal(isTrustedIdentityResultPage('https://example.com/tags/another/', 'Another profile', 'sxysindy'), false);
+  const images = extractImagesFromHtml('<img src="https://cdn.example/random-name.jpg" width="1200" height="900">', 'https://example.com/tags/sxysindy/', 'sxysindy', 'bing', 35, { trustedContext: true });
+  assert.equal(images.length, 1);
+  assert.equal(images[0].trustedContext, true);
 });
 
 test('applique les seuils strict et profond', () => {

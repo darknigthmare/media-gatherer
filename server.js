@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-6';
+const CACHE_SCHEMA_VERSION = '2026-07-13-media-7';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -660,11 +660,11 @@ async function validatePublicMediaUrl(rawUrl) {
   return parsed.toString();
 }
 
-function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35) {
+function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
   const parsedBase = new URL(baseUrl);
-  const trustedDetailPage = hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname);
+  const trustedDetailPage = Boolean(options.trustedContext) || (hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname));
   $('img').each((_, el) => {
     const src = bestMediaCandidate([
       $(el).attr('data-full'),
@@ -710,11 +710,11 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35) {
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
 
-function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20) {
+function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
   const parsedBase = new URL(baseUrl);
-  const trustedDetailPage = hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname);
+  const trustedDetailPage = Boolean(options.trustedContext) || (hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname));
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     const text = $(el).text().trim();
@@ -1091,6 +1091,23 @@ function discoveredVideoPageCandidates(pages, query, sourceId) {
   }, query, sourceId, 'video'));
 }
 
+function isTrustedIdentityResultPage(rawUrl, pageTitle, query) {
+  const queryKey = compactSearchTerm(query);
+  if (!queryKey) return false;
+  try {
+    const parsed = new URL(rawUrl);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const lastSegment = compactSearchTerm(segments.at(-1) || '');
+    const identityPath = /\/(?:tags?|users?|profiles?|models?|creators?|channels?|members?)(?:\/|$)/i.test(parsed.pathname);
+    const exactProfilePath = segments.length === 1 && lastSegment === queryKey;
+    const queryInPath = compactSearchTerm(parsed.pathname).includes(queryKey);
+    const queryInTitle = compactSearchTerm(pageTitle).includes(queryKey);
+    return (identityPath && queryInPath) || (exactProfilePath && queryInTitle);
+  } catch {
+    return false;
+  }
+}
+
 async function crawlWebResultPages(pages, query, sourceId, options = {}) {
   const imageLimit = options.imageLimit || 35;
   const videoLimit = options.videoLimit || 20;
@@ -1104,8 +1121,9 @@ async function crawlWebResultPages(pages, query, sourceId, options = {}) {
       const $ = cheerio.load(page.html || '');
       const pageTitle = $('title').text().replace(/\s+/g, ' ').trim();
       if (!textMatchesQuery(`${result.title} ${result.snippet} ${pageTitle} ${page.finalUrl}`, query)) continue;
-      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, imageLimit));
-      videos.push(...extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, videoLimit));
+      const trustedIdentityPage = isTrustedIdentityResultPage(page.finalUrl, pageTitle, query);
+      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, imageLimit, { trustedContext: trustedIdentityPage }));
+      videos.push(...extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, videoLimit, { trustedContext: trustedIdentityPage }));
       if (looksLikeVideo(page.finalUrl)) {
         const poster = absolutize(bestMediaCandidate([
           $('meta[property="og:image"]').attr('content'),
@@ -2521,6 +2539,7 @@ app.locals.testables = {
   parseDuckDuckGoWebResults,
   parseBingWebResults,
   discoveredVideoPageCandidates,
+  isTrustedIdentityResultPage,
   filterBySearchMode,
   buildPersonQueries,
   scorePersonMedia,
