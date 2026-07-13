@@ -17,6 +17,8 @@ const {
   validatePublicMediaUrl,
   extractImagesFromHtml,
   extractLinksAsVideos,
+  parseDuckDuckGoWebResults,
+  parseBingWebResults,
   filterBySearchMode,
   buildPersonQueries
 } = app.locals.testables;
@@ -81,6 +83,13 @@ test('applique les seuils strict et profond', () => {
   ];
   assert.deepEqual(filterBySearchMode(rows, 'strict').map(row => row.title), ['exact']);
   assert.deepEqual(filterBySearchMode(rows, 'smart').map(row => row.title), ['exact', 'trusted']);
+});
+
+test('lit les fallbacks web DuckDuckGo et Bing', () => {
+  const duck = parseDuckDuckGoWebResults('<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fsxysindy">Sxysindy profile</a><div class="result__snippet">Public media</div></div>', 'sxysindy');
+  const bing = parseBingWebResults('<li class="b_algo"><h2><a href="https://example.com/video/sxysindy">Sxysindy video</a></h2><div class="b_caption"><p>Public media</p></div></li>', 'sxysindy');
+  assert.equal(duck[0].url, 'https://example.com/sxysindy');
+  assert.equal(bing[0].url, 'https://example.com/video/sxysindy');
 });
 
 test('conserve l original plutot que sa miniature', () => {

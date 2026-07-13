@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-3';
+const CACHE_SCHEMA_VERSION = '2026-07-13-media-4';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -1060,13 +1060,24 @@ function parseDuckDuckGoWebResults(html, query, limit = 8) {
   return dedupeBy(rows, row => row.url).slice(0, limit);
 }
 
-async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
+function parseBingWebResults(html, query, limit = 8) {
+  const $ = cheerio.load(html || '');
+  const rows = [];
+  $('.b_algo, .b_ans').each((_, element) => {
+    const anchor = $(element).find('h2 a[href], a[href]').first();
+    const url = unwrapSearchResultUrl(anchor.attr('href'), 'https://www.bing.com/search');
+    const title = anchor.text().replace(/\s+/g, ' ').trim();
+    const snippet = $(element).find('.b_caption p, p').first().text().replace(/\s+/g, ' ').trim();
+    if (!/^https?:\/\//i.test(url) || isSearchPageUrl(url)) return;
+    if (!textMatchesQuery(`${title} ${snippet} ${url}`, query)) return;
+    rows.push({ url, title: title || query, snippet });
+  });
+  return dedupeBy(rows, row => row.url).slice(0, limit);
+}
+
+async function crawlWebResultPages(pages, query, sourceId, options = {}) {
   const imageLimit = options.imageLimit || 35;
   const videoLimit = options.videoLimit || 20;
-  const htmlSearch = await fetchPage(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-    timeout: Math.min(Number(options.timeout) || 12000, 15000)
-  });
-  const pages = parseDuckDuckGoWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
   const images = [];
   const videos = [];
   let crawled = 0;
@@ -1074,10 +1085,25 @@ async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
     try {
       const page = await fetchPage(result.url, { timeout: Math.min(Number(options.timeout) || 12000, 15000) });
       if (page.statusCode >= 400 || isSearchPageUrl(page.finalUrl)) continue;
-      const pageTitle = cheerio.load(page.html || '')('title').text().replace(/\s+/g, ' ').trim();
+      const $ = cheerio.load(page.html || '');
+      const pageTitle = $('title').text().replace(/\s+/g, ' ').trim();
       if (!textMatchesQuery(`${result.title} ${result.snippet} ${pageTitle} ${page.finalUrl}`, query)) continue;
-      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, 'duckduckgo', imageLimit));
-      videos.push(...extractLinksAsVideos(page.html, page.finalUrl, query, 'duckduckgo', videoLimit));
+      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, imageLimit));
+      videos.push(...extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, videoLimit));
+      if (looksLikeVideo(page.finalUrl)) {
+        const poster = absolutize(bestMediaCandidate([
+          $('meta[property="og:image"]').attr('content'),
+          $('meta[name="twitter:image"]').attr('content'),
+          $('video[poster]').first().attr('poster')
+        ]), page.finalUrl);
+        videos.push(enrichMedia({
+          url: page.finalUrl,
+          link: page.finalUrl,
+          thumbnail: looksLikeImage(poster) ? poster : '',
+          title: result.title || pageTitle || query,
+          duration: 'Ouvrir la source'
+        }, query, sourceId, 'video'));
+      }
       crawled += 1;
     } catch {
       // A single blocked result must not suppress the other public pages.
@@ -1087,9 +1113,25 @@ async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
     images: dedupeBestMedia(images).slice(0, imageLimit),
     videos: dedupeBestMedia(videos).slice(0, videoLimit),
     pagesDiscovered: pages.length,
-    pagesCrawled: crawled,
-    httpStatus: htmlSearch.statusCode
+    pagesCrawled: crawled
   };
+}
+
+async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
+  const htmlSearch = await fetchPage(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+    timeout: Math.min(Number(options.timeout) || 12000, 15000)
+  });
+  const pages = parseDuckDuckGoWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
+  return { ...(await crawlWebResultPages(pages, query, 'duckduckgo', options)), httpStatus: htmlSearch.statusCode };
+}
+
+async function scrapeBingHtmlFallback(query, options = {}) {
+  const safe = options.safe !== false;
+  const htmlSearch = await fetchPage(`https://www.bing.com/search?q=${encodeURIComponent(query)}&adlt=${safe ? 'strict' : 'off'}`, {
+    timeout: Math.min(Number(options.timeout) || 12000, 15000)
+  });
+  const pages = parseBingWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
+  return { ...(await crawlWebResultPages(pages, query, 'bing', options)), httpStatus: htmlSearch.statusCode };
 }
 
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
@@ -1219,7 +1261,27 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
   if (sourceId === 'bing') {
     const page = await fetchPage(sourceSearchUrls('bing', query, options)[0]);
     const images = parseBingImageResults(page.html, query, imageLimit);
-    return { images, videos: [], status: { success: page.statusCode < 400, adapter: 'bing-images', imagesCount: images.length, videosCount: 0, note: `Bing Images HTTP ${page.statusCode}`, zeroReason: images.length ? '' : 'no_matching_public_media' } };
+    let fallback = { images: [], videos: [], pagesDiscovered: 0, pagesCrawled: 0 };
+    if (!images.length) {
+      try { fallback = await scrapeBingHtmlFallback(query, options); } catch { /* Diagnostic below remains explicit. */ }
+    }
+    const combinedImages = dedupeBestMedia([...images, ...fallback.images]).slice(0, imageLimit);
+    const combinedVideos = dedupeBestMedia(fallback.videos).slice(0, videoLimit);
+    const total = combinedImages.length + combinedVideos.length;
+    return {
+      images: combinedImages,
+      videos: combinedVideos,
+      status: {
+        success: page.statusCode < 400,
+        adapter: fallback.pagesDiscovered ? 'bing-images+web-fallback' : 'bing-images',
+        imagesCount: combinedImages.length,
+        videosCount: combinedVideos.length,
+        pagesDiscovered: fallback.pagesDiscovered,
+        pagesCrawled: fallback.pagesCrawled,
+        note: [`Bing Images HTTP ${page.statusCode}`, fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : ''].filter(Boolean).join('; '),
+        zeroReason: total ? '' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_matching_public_media')
+      }
+    };
   }
 
   if (sourceId === 'google') {
@@ -2430,6 +2492,8 @@ app.locals.testables = {
   validatePublicMediaUrl,
   extractImagesFromHtml,
   extractLinksAsVideos,
+  parseDuckDuckGoWebResults,
+  parseBingWebResults,
   filterBySearchMode,
   buildPersonQueries,
   scorePersonMedia,

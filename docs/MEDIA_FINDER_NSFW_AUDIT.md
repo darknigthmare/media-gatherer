@@ -53,7 +53,7 @@ Le mode NSFW reste volontairement limite a:
 
 ## Verification
 
-- `npm run qa`: 9 tests sur 9 OK.
+- `npm run qa`: 10 tests sur 10 OK.
 - `npm audit`: 0 vulnerabilite.
 - `/api/health`: OK.
 - `/api/sources/adapters`: 39 sources, dont 22 adaptateurs NSFW `source-crawl`.
