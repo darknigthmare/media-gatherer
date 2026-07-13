@@ -1140,7 +1140,7 @@ async function scrapeDuckDuckGoHtmlFallback(query, options = {}) {
   const pages = parseDuckDuckGoWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
   const crawled = await crawlWebResultPages(pages, query, 'duckduckgo', options);
   crawled.videos = dedupeBestMedia([...crawled.videos, ...discoveredVideoPageCandidates(pages, query, 'duckduckgo')]).slice(0, options.videoLimit || 20);
-  return { ...crawled, httpStatus: htmlSearch.statusCode };
+  return { ...crawled, httpStatus: htmlSearch.statusCode, pageSamples: pages.slice(0, 5).map(page => page.url) };
 }
 
 async function scrapeBingHtmlFallback(query, options = {}) {
@@ -1151,7 +1151,7 @@ async function scrapeBingHtmlFallback(query, options = {}) {
   const pages = parseBingWebResults(htmlSearch.html, query, options.riskMode === 'cautious' ? 3 : 5);
   const crawled = await crawlWebResultPages(pages, query, 'bing', options);
   crawled.videos = dedupeBestMedia([...crawled.videos, ...discoveredVideoPageCandidates(pages, query, 'bing')]).slice(0, options.videoLimit || 20);
-  return { ...crawled, httpStatus: htmlSearch.statusCode };
+  return { ...crawled, httpStatus: htmlSearch.statusCode, pageSamples: pages.slice(0, 5).map(page => page.url) };
 }
 
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
@@ -1206,6 +1206,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
         filteredCount: Math.max(0, Math.min(rawResults.length, imageLimit) - images.length),
         pagesDiscovered: fallback.pagesDiscovered,
         pagesCrawled: fallback.pagesCrawled,
+        discoveredPageSamples: fallback.pageSamples || [],
         note: ['Endpoint public DuckDuckGo Images', fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : '', imageApiNote].filter(Boolean).join('; '),
         zeroReason: total ? '' : (rawResults.length ? 'results_filtered_by_relevance' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_upstream_results'))
       }
@@ -1298,6 +1299,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
         videosCount: combinedVideos.length,
         pagesDiscovered: fallback.pagesDiscovered,
         pagesCrawled: fallback.pagesCrawled,
+        discoveredPageSamples: fallback.pageSamples || [],
         note: [`Bing Images HTTP ${page.statusCode}`, fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : ''].filter(Boolean).join('; '),
         zeroReason: total ? '' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_matching_public_media')
       }
