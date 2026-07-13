@@ -1,0 +1,6 @@
+dist/
+.tools/
+data/
+launcher/
+node_modules/
+*.log
