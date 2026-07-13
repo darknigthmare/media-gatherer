@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-4';
+const CACHE_SCHEMA_VERSION = '2026-07-13-media-5';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -1380,10 +1380,10 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
   const status = {};
   const safe = options.safe !== false;
   const selected = uniq(String(sources || 'duckduckgo').split(',')).filter(Boolean).slice(0, SOURCE_IDS.length);
-  const concurrency = options.riskMode === 'balanced' ? 4 : 2;
+  const concurrency = options.riskMode === 'balanced' ? 3 : 1;
 
   await mapWithConcurrency(selected, concurrency, async (sourceId, index) => {
-    if (index && options.riskMode !== 'balanced') await new Promise(resolve => setTimeout(resolve, 180));
+    if (index && options.riskMode !== 'balanced') await new Promise(resolve => setTimeout(resolve, 400));
     if (!SOURCE_META[sourceId]) {
       status[sourceId] = { success: false, error: 'source inconnue', imagesCount: 0, videosCount: 0 };
       return;
@@ -1628,8 +1628,11 @@ app.get('/api/wayback/hosts', async (req, res) => {
     officialError = error.message;
   }
 
-  const result = await scrapeImageSearchWithFallback(q, 'duckduckgo,bing', { safe: true, matchMode: 'strict', riskMode: 'cautious' });
-  const engineDomains = [...result.images, ...result.videos].map(item => normalizeHost(item.link || item.url)).filter(Boolean);
+  let engineDomains = [];
+  if (!officialDomains.length) {
+    const result = await scrapeImageSearchWithFallback(q, 'duckduckgo,bing', { safe: true, matchMode: 'strict', riskMode: 'cautious' });
+    engineDomains = [...result.images, ...result.videos].map(item => normalizeHost(item.link || item.url)).filter(Boolean);
+  }
   const compactQuery = compactSearchTerm(q);
   const domains = uniq([...officialDomains, ...engineDomains])
     .sort((a, b) => Number(compactSearchTerm(b).includes(compactQuery)) - Number(compactSearchTerm(a).includes(compactQuery)))
@@ -1640,6 +1643,7 @@ app.get('/api/wayback/hosts', async (req, res) => {
     diagnostics: {
       officialWaybackHosts: officialDomains.length,
       engineCandidates: engineDomains.length,
+      engineFallbackUsed: officialDomains.length === 0,
       officialError: officialError || null
     }
   });

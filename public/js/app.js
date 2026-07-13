@@ -1767,13 +1767,13 @@ async function runSearchWithCurrentControls(options = {}) {
         logSourceStatus(source, { success: false, error: sourceError.message });
       }
     };
-    const workerCount = Math.min(sourceQueue.length, riskMode === 'balanced' ? 4 : 2);
+    const workerCount = Math.min(sourceQueue.length, riskMode === 'balanced' ? 3 : 1);
     const serverTasks = Array.from({ length: workerCount }, async () => {
       while (sourceQueue.length > 0) {
         const source = sourceQueue.shift();
         await runServerSource(source);
         if (riskMode !== 'balanced' && sourceQueue.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 250));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
     });
