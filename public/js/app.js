@@ -1227,16 +1227,18 @@ function mergeSearchData(data) {
 function logSourceStatus(source, status) {
   const sourceName = source.toUpperCase();
   const isZero = (Number(status.imagesCount || 0) + Number(status.videosCount || 0)) === 0;
+  const accountsCount = Array.isArray(status.accounts) ? status.accounts.length : 0;
+  const accountsSuffix = accountsCount ? ` ${accountsCount} page${accountsCount > 1 ? 's' : ''} ou compte${accountsCount > 1 ? 's' : ''} public${accountsCount > 1 ? 's' : ''} détecté${accountsCount > 1 ? 's' : ''}.` : '';
   if (status.success) {
     updateSourceStatusDot(source, isZero ? 'warning' : 'success');
     const noteSuffix = status.note ? ` - ${status.note}` : '';
     const logType = isZero ? 'warning' : 'success';
     if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram') {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
     } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix') {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${noteSuffix}`, logType);
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
     } else {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${noteSuffix}`, logType);
+      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${accountsSuffix}${noteSuffix}`, logType);
     }
   } else {
     updateSourceStatusDot(source, 'error');

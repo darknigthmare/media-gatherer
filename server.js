@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-7';
+const CACHE_SCHEMA_VERSION = '2026-07-13-media-8';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -985,6 +985,7 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
       videosCount: uniqueVideos.length,
       pagesDiscovered: uniquePages.length,
       pagesCrawled: crawled,
+      accounts: uniquePages.map(item => item.url).slice(0, 10),
       zeroReason
     }
   };
@@ -1225,6 +1226,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
         pagesDiscovered: fallback.pagesDiscovered,
         pagesCrawled: fallback.pagesCrawled,
         discoveredPageSamples: fallback.pageSamples || [],
+        accounts: fallback.pageSamples || [],
         note: ['Endpoint public DuckDuckGo Images', fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : '', imageApiNote].filter(Boolean).join('; '),
         zeroReason: total ? '' : (rawResults.length ? 'results_filtered_by_relevance' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_upstream_results'))
       }
@@ -1318,6 +1320,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
         pagesDiscovered: fallback.pagesDiscovered,
         pagesCrawled: fallback.pagesCrawled,
         discoveredPageSamples: fallback.pageSamples || [],
+        accounts: fallback.pageSamples || [],
         note: [`Bing Images HTTP ${page.statusCode}`, fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : ''].filter(Boolean).join('; '),
         zeroReason: total ? '' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_matching_public_media')
       }
