@@ -3,73 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AeroGatherer - Aspirateur de Médias Web</title>
-  <!-- Google Fonts: Outfit (main) & JetBrains Mono (console) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- JSZip & FileSaver.js for bulk ZIP download -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <title>MediaGatherer - Recherche de médias publics</title>
+  <script src="vendor/lucide.min.js" defer></script>
+  <script src="vendor/jszip.min.js" defer></script>
+  <script src="vendor/FileSaver.min.js" defer></script>
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/style.css?v=20260630-workflows-1">
 </head>
 <body>
   
-  <!-- Background Glow FX -->
-  <div class="glow-bg">
-    <div class="glow-sphere sphere-1"></div>
-    <div class="glow-sphere sphere-2"></div>
-  </div>
-
   <div class="app-container">
     
     <!-- HEADER -->
     <header class="app-header">
       <div class="logo-area">
         <i data-lucide="wind" class="logo-icon"></i>
-        <h1>Aero<span>Gatherer</span></h1>
+        <h1>Media<span>Gatherer</span></h1>
       </div>
-      <p class="tagline">Aspirateur web de photos et vidéos en temps réel</p>
+      <div class="runtime-status" id="runtime-status" role="status" aria-live="polite">
+        <span class="runtime-status-dot" aria-hidden="true"></span>
+        <span>Vérification du stockage...</span>
+      </div>
     </header>
 
-    <nav class="app-tabs" aria-label="Navigation principale">
-      <button class="app-tab active" data-tab="search" aria-selected="true" aria-controls="media-search-view">
+    <nav class="app-tabs" role="tablist" aria-label="Navigation principale">
+      <button class="app-tab active" id="tab-search" role="tab" data-tab="search" aria-selected="true" aria-controls="media-search-view" tabindex="0">
         <i data-lucide="search"></i>
         <span>Media Finder</span>
       </button>
-      <button class="app-tab" data-tab="connections" aria-selected="false" aria-controls="connections-section">
+      <button class="app-tab" id="tab-connections" role="tab" data-tab="connections" aria-selected="false" aria-controls="connections-section" tabindex="-1">
         <i data-lucide="key-round"></i>
         <span>Connexions API</span>
       </button>
-      <button class="app-tab" data-tab="reverse" aria-selected="false" aria-controls="reverse-section">
+      <button class="app-tab" id="tab-reverse" role="tab" data-tab="reverse" aria-selected="false" aria-controls="reverse-section" tabindex="-1">
         <i data-lucide="scan-search"></i>
         <span>Recherche inversée</span>
       </button>
-      <button class="app-tab" data-tab="persons" aria-selected="false" aria-controls="person-section">
+      <button class="app-tab" id="tab-persons" role="tab" data-tab="persons" aria-selected="false" aria-controls="person-section" tabindex="-1">
         <i data-lucide="user-search"></i>
         <span>Person Finder</span>
       </button>
     </nav>
 
-    <section class="connections-section hidden app-view" id="connections-section" data-app-view="connections">
+    <section class="connections-section hidden app-view" id="connections-section" data-app-view="connections" role="tabpanel" aria-labelledby="tab-connections">
       <div class="dashboard-header">
         <i data-lucide="key-round" class="dashboard-icon"></i>
         <h3>Connexions API</h3>
       </div>
-      <p class="connections-note">Les identifiants sont gardes en memoire par le serveur local pendant cette session. YouTube et Flickr utilisent deja ces cles si elles sont configurees; les autres sources sont preparees pour OAuth/session.</p>
+      <p class="connections-note">Les identifiants saisis restent uniquement en mémoire dans l'instance active. YouTube, Flickr, Google et Brave sont testés auprès de leur API; Telegram est indiqué indisponible tant que l'authentification MTProto n'est pas intégrée.</p>
       <div class="connections-grid" id="connections-grid"></div>
     </section>
 
-    <section class="reverse-section hidden app-view" id="reverse-section" data-app-view="reverse">
+    <section class="reverse-section hidden app-view" id="reverse-section" data-app-view="reverse" role="tabpanel" aria-labelledby="tab-reverse">
       <div class="dashboard-header">
         <i data-lucide="scan-search" class="dashboard-icon"></i>
         <h3>Recherche inversée</h3>
       </div>
       <div class="reverse-tool">
-        <input type="url" id="reverse-image-url" placeholder="URL de l'image à rechercher...">
+        <label class="sr-only" for="reverse-image-url">URL de l'image</label>
+        <input type="url" id="reverse-image-url" placeholder="URL publique de l'image à rechercher...">
         <button id="btn-reverse-google" class="btn btn-primary"><i data-lucide="search"></i><span>Google Lens</span></button>
         <button id="btn-reverse-bing" class="btn btn-secondary"><i data-lucide="search"></i><span>Bing Visual</span></button>
         <button id="btn-reverse-yandex" class="btn btn-secondary"><i data-lucide="search"></i><span>Yandex</span></button>
@@ -77,7 +69,7 @@
       </div>
     </section>
 
-    <section class="person-section hidden app-view" id="person-section" data-app-view="persons">
+    <section class="person-section hidden app-view" id="person-section" data-app-view="persons" role="tabpanel" aria-labelledby="tab-persons">
       <div class="dashboard-header">
         <i data-lucide="user-search" class="dashboard-icon"></i>
         <h3>Person Finder</h3>
@@ -140,16 +132,16 @@
         <div class="person-panel person-main">
           <div id="person-detail" class="person-detail empty">Selectionne ou cree une fiche personne.</div>
           <div class="person-search-controls">
-            <select id="person-depth">
+            <label>Profondeur<select id="person-depth">
               <option value="quick">Rapide</option>
               <option value="normal" selected>Normal</option>
               <option value="deep">Profond</option>
               <option value="archive">Archive</option>
-            </select>
-            <input type="number" id="person-max-queries" min="1" max="40" value="10">
-            <input type="number" id="person-min-score" min="0" max="100" value="35">
-            <button id="btn-person-plan" class="btn btn-secondary" type="button"><i data-lucide="list-checks"></i><span>Plan</span></button>
-            <button id="btn-person-search" class="btn btn-primary" type="button"><i data-lucide="radar"></i><span>Lancer</span></button>
+            </select></label>
+            <label>Requêtes max<input type="number" id="person-max-queries" min="1" max="40" value="10"></label>
+            <label>Score minimum<input type="number" id="person-min-score" min="0" max="100" value="35"></label>
+            <button id="btn-person-plan" class="btn btn-secondary" type="button" disabled><i data-lucide="list-checks"></i><span>Plan</span></button>
+            <button id="btn-person-search" class="btn btn-primary" type="button" disabled><i data-lucide="radar"></i><span>Lancer</span></button>
           </div>
           <div id="person-query-plan" class="person-query-plan"></div>
           <div class="person-subgrid">
@@ -169,7 +161,7 @@
                   <option value="probable">Probable</option>
                   <option value="confirm">Confirmer</option>
                 </select>
-                <button class="btn btn-secondary btn-small" type="submit"><i data-lucide="plus"></i></button>
+                <button class="btn btn-secondary btn-small" type="submit" aria-label="Ajouter la règle"><i data-lucide="plus"></i></button>
               </form>
               <div id="person-rule-list" class="person-rule-list"></div>
             </div>
@@ -179,7 +171,7 @@
     </section>
 
     <!-- SEARCH & CONTROLS SECTION -->
-    <section class="search-section workspace-section" id="media-search-view" data-app-view="search">
+    <section class="search-section workspace-section" id="media-search-view" data-app-view="search" role="tabpanel" aria-labelledby="tab-search">
       <form id="search-form" class="search-form">
         <div class="search-input-wrapper">
           <i data-lucide="search" class="search-icon"></i>
@@ -605,7 +597,7 @@
             </div>
 
             <div class="filters-group" style="min-width: 320px;">
-              <span class="panel-label">Filtres d'Images (DuckDuckGo / Réseaux) :</span>
+              <span class="panel-label">Filtres média disponibles :</span>
               <div class="filters-dropdowns" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <select id="filter-size" class="select-custom">
                   <option value="">Toutes tailles</option>
@@ -618,20 +610,6 @@
                   <option value="">Tous types</option>
                   <option value="photo">Photos</option>
                   <option value="gif">GIFs Animés</option>
-                  <option value="clipart">Clipart</option>
-                </select>
-                <select id="filter-color" class="select-custom">
-                  <option value="">Toutes couleurs</option>
-                  <option value="color">Couleur</option>
-                  <option value="Monochrome">Noir & Blanc</option>
-                  <option value="Red">Rouge</option>
-                  <option value="Orange">Orange</option>
-                  <option value="Yellow">Jaune</option>
-                  <option value="Green">Vert</option>
-                  <option value="Blue">Bleu</option>
-                  <option value="Purple">Violet</option>
-                  <option value="Black">Noir</option>
-                  <option value="White">Blanc</option>
                 </select>
               </div>
             </div>
@@ -649,7 +627,7 @@
           <span class="dot green"></span>
         </div>
         <div class="console-title">Journal d'aspiration en direct</div>
-        <button id="btn-clear-console" class="btn-clear" title="Effacer la console">
+        <button id="btn-clear-console" class="btn-clear" title="Effacer la console" aria-label="Effacer la console">
           <i data-lucide="trash-2"></i>
         </button>
       </div>
@@ -675,7 +653,8 @@
 
       <!-- Dedicated Source Filter -->
       <div class="source-filter-wrapper">
-        <select id="source-filter" class="select-custom" style="padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.6); color: #fff; cursor: pointer; outline: none; font-size: 0.9rem;">
+        <label class="sr-only" for="source-filter">Filtrer les résultats par source</label>
+        <select id="source-filter" class="select-custom source-filter-select">
           <option value="all">Toutes sources</option>
           <option value="duckduckgo">DuckDuckGo</option>
           <option value="bing">Bing</option>
@@ -721,9 +700,9 @@
 
       <!-- Layout Grid Selector -->
       <div class="layout-selector-wrapper" style="display: flex; gap: 0.2rem; align-items: center; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 2px; background: rgba(15, 23, 42, 0.6);">
-        <button class="btn-layout" data-size="small" title="Mise en page compacte" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="layout-grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
-        <button class="btn-layout active" data-size="medium" title="Mise en page par défaut" style="background: var(--accent-blue-gradient); border: none; color: #fff; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
-        <button class="btn-layout" data-size="large" title="Mise en page HD" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="square" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout" data-size="small" title="Mise en page compacte" aria-label="Mise en page compacte" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="layout-grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout active" data-size="medium" title="Mise en page par défaut" aria-label="Mise en page par défaut" style="background: var(--accent-blue-gradient); border: none; color: #fff; cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="grid" style="width: 1.1rem; height: 1.1rem;"></i></button>
+        <button class="btn-layout" data-size="large" title="Mise en page HD" aria-label="Mise en page HD" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px;"><i data-lucide="square" style="width: 1.1rem; height: 1.1rem;"></i></button>
       </div>
       <div class="action-buttons-wrapper" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button id="btn-toggle-fav" class="btn btn-secondary" title="Voir mes favoris">
@@ -734,10 +713,18 @@
           <i data-lucide="download-cloud"></i>
           <span>Télécharger ZIP</span>
         </button>
-        <button id="btn-export-json" class="btn btn-secondary" title="Exporter les resultats bruts en JSON">
-          <i data-lucide="file-json"></i>
-          <span>Exporter JSON</span>
-        </button>
+        <div class="export-control">
+          <label class="sr-only" for="export-format">Format d'export</label>
+          <select id="export-format" class="select-custom" title="Format d'export">
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="markdown">Markdown</option>
+          </select>
+          <button id="btn-export-json" class="btn btn-secondary" title="Exporter les résultats filtrés">
+            <i data-lucide="file-down"></i>
+            <span>Exporter</span>
+          </button>
+        </div>
         <div class="auto-refresh-control" title="Relancer la recherche active et ajouter uniquement les nouveaux médias">
           <select id="auto-refresh-interval" class="select-custom">
             <option value="0" selected>Refresh off</option>
@@ -899,8 +886,8 @@
   </div>
 
   <!-- LIGHTBOX FOR IMAGES -->
-  <div id="lightbox" class="lightbox modal hidden">
-    <button class="modal-close" id="lightbox-close"><i data-lucide="x"></i></button>
+  <div id="lightbox" class="lightbox modal hidden" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" tabindex="-1">
+    <button class="modal-close" id="lightbox-close" aria-label="Fermer l'image"><i data-lucide="x"></i></button>
     <div class="lightbox-content">
       <img id="lightbox-img" src="" alt="">
       <div class="lightbox-details">
@@ -928,8 +915,8 @@
   </div>
 
   <!-- VIDEO PLAYER MODAL -->
-  <div id="video-modal" class="video-modal modal hidden">
-    <button class="modal-close" id="video-modal-close"><i data-lucide="x"></i></button>
+  <div id="video-modal" class="video-modal modal hidden" role="dialog" aria-modal="true" aria-labelledby="video-title" tabindex="-1">
+    <button class="modal-close" id="video-modal-close" aria-label="Fermer la vidéo"><i data-lucide="x"></i></button>
     <div class="video-modal-content">
       <div class="video-player-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
         <button id="video-btn-prev" class="nav-chevron chevron-left" title="Vidéo précédente">
@@ -957,11 +944,7 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260630-workflows-1"></script>
-  <script>
-    // Initialize Lucide icons on page load
-    lucide.createIcons();
-  </script>
+  <script src="js/app.js?v=20260713-stabilization-1" defer></script>
 </body>
 </html>
 

@@ -1,20 +1,27 @@
-# Roadmap integree localement
+# Etat et suite
 
-Cette version compacte integre les passes utiles de la conversation dans le projet local existant :
+## Integre dans la version 1.2.0
 
-- Backend Express reconstruit.
-- Stockage JSON local pour historique, collection, cache, queue et Person Finder.
-- Endpoints Media Finder conserves : recherche, Wayback, sources, connexions, politique de securite.
-- Endpoints collection, exports, dashboard, cache et queue.
-- Onglet Person Finder separe du Media Finder.
-- Profils personnes, alias, usernames, comptes publics, mots positifs/exclus.
-- Plan de recherche par profondeur.
-- Recherche Person Finder avec association automatique en validation.
-- Galerie personne, timeline, regles de validation et faux positifs.
+- Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
+- Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
+- Modes photo, video ou mixte, pertinence stricte/intelligente/large et conservation de la meilleure qualite.
+- Recherche Wayback par terme, domaines officiels et extraction CDX sans filtre de nom apres validation du site.
+- 22 adaptateurs NSFW publics avec extraction image/video, miniatures, pages decouvertes et raison des zeros.
+- Profils Person Finder, alias detectes ou saisis, comptes publics, score, galerie, timeline, validation et exclusions.
+- Securite HTTP, SSRF, CORS, CSP, rate limits, limites de taille et token d'ecriture facultatif.
+- Executable Windows Node 24 autonome et workflow GitHub Actions.
 
-Restent a faire pour une version lourde :
+## Limites externes connues
 
-- Refactor complet en `src/routes` et `src/services`.
-- SQLite natif a la place du JSON.
-- Build Tauri reel avec sidecar Windows.
-- Adaptateurs API officiels plus riches pour les sources qui en disposent.
+- Le stockage Vercel reste temporaire sans base externe.
+- Telegram MTProto n'est pas active : une application Telegram et une session utilisateur autorisee seraient necessaires. Aucun compte prive ne doit etre aspire.
+- Google, Brave, Flickr et YouTube donnent de meilleurs resultats avec leurs identifiants API officiels.
+- Une source peut bloquer les robots, imposer JavaScript, un compte, un paywall ou une restriction regionale. Le diagnostic l'indique sans tenter de contourner la protection.
+
+## Prochaines evolutions utiles
+
+1. Brancher une base durable compatible Vercel et migrer le magasin JSON local.
+2. Decouper progressivement `server.js` en routes, services et adaptateurs testes sans changer les contrats API.
+3. Ajouter des tests d'integration enregistres par source avec reponses HTML fixturees pour detecter les changements de structure.
+4. Ajouter un client Telegram public opt-in, uniquement via API officielle et session locale explicite.
+5. Signer l'EXE Windows et automatiser sa publication dans une release GitHub apres la CI.

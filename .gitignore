@@ -5,9 +5,9 @@ data/
 cache/
 logs/
 *.log
-dist/*.pdb
-launcher/bin/
-launcher/obj/
+dist/
+launcher/
+.tools/
 Thumbs.db
 
 .vercel

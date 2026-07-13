@@ -1,6 +1,6 @@
 # Media Finder NSFW Audit
 
-Date: 2026-07-10
+Date: 2026-07-13
 
 ## Scope
 
@@ -42,21 +42,28 @@ Le mode NSFW reste volontairement limite a:
 9. Le diagnostic d'une source exigeait une recherche complete.
    Correction: `GET /api/sources/:id/test?q=...&safe=false` retourne le mode d'adaptateur, les pages decouvertes/ouvertes, la raison d'un zero et dix echantillons maximum.
 
+10. DuckDuckGo Images pouvait repondre avec un tableau vide alors que sa recherche web trouvait la personne.
+    Correction: fallback borne sur DuckDuckGo HTML, ouverture de trois a cinq pages publiques pertinentes, extraction des medias et diagnostic `pagesDiscovered/pagesCrawled`.
+
+11. Wayback etait limite a 200 lignes CDX et filtrait implicitement trop de medias.
+    Correction: recherche officielle de domaines Wayback, lecture de 1 000 lignes CDX, aucun filtre de nom apres validation du domaine, retrait limite aux assets d'interface evidents.
+
+12. Une URL de page video pouvait etre reutilisee comme fausse miniature.
+    Correction: une video sans image reelle utilise le placeholder de l'interface; les posters et miniatures valides restent prioritaires.
+
 ## Verification
 
-- `npm run check`: OK.
+- `npm run qa`: 9 tests sur 9 OK.
+- `npm audit`: 0 vulnerabilite.
 - `/api/health`: OK.
 - `/api/sources/adapters`: 39 sources, dont 22 adaptateurs NSFW `source-crawl`.
-- `/api/search?q=mia%20khalifa&sources=tnaflix&safe=false&media=both&fresh=1`: 6 videos, 6 miniatures, aucune image parasite sur l'environnement de test.
-- `/api/search?q=sxysindy&sources=erome&safe=true&media=both&fresh=1`: source ignoree par SafeSearch.
+- `/api/search?q=sxysindy&sources=duckduckgo,bing&safe=false&mode=smart&fresh=1`: 35 images et 2 videos pertinentes.
+- `/api/sources/erome/test?q=mz&safe=false`: 5 images originales et 5 videos MP4 publiques avec miniatures distinctes.
+- `/api/wayback/hosts?q=sxysindy`: retrouve `sxysindy.tumblr.com`, `sxysindy.com`, `thesxysindy.weebly.com`, `wiccansmagic.com` et `camsoda.com`.
+- `/api/wayback/cdx?domain=sxysindy.com&q=sxysindy`: 714 images publiques, 555 timestamps, aucun filtre de nom, 5 assets UI retires.
 - `/api/proxy` sur image publique: OK.
 - `/api/proxy` vers `127.0.0.1`: bloque.
-
-## Visual Audit Limit
-
-La capture via navigateur integre Codex a echoue avec une erreur d'outil: `failed to write kernel assets: Le chemin d'acces specifie est introuvable`.
-
-L'audit visuel complet avec captures doit etre relance quand le navigateur integre est disponible.
+- Audit navigateur desktop 1280x900 et mobile 390x844: aucun debordement horizontal, recherche et bouton separes, quatre onglets exclusifs, drawer NSFW rose lisible.
 
 ## Limites reelles
 

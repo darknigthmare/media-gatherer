@@ -1,15 +1,17 @@
 {
   "name": "media-gatherer",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Aspirateur de medias web photos/videos avec Person Finder",
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js && node --check public/js/app.js",
-    "build": "npm run check",
-    "build:launcher": "dotnet publish launcher/MediaGathererLauncher.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o dist",
-    "build:exe": "pkg . --targets node18-win-x64 --output dist/MediaGatherer.exe",
+    "test": "node --test --test-concurrency=1",
+    "qa": "npm run check && npm test",
+    "build": "npm run qa",
+    "prebuild:exe": "npm run qa && node -e \"require('fs').mkdirSync('dist',{recursive:true})\"",
+    "build:exe": "pkg . --targets node24-win-x64 --output dist/MediaGatherer.exe",
     "storage:status": "node -e \"fetch('http://127.0.0.1:3000/api/storage/status').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\"",
     "persons:status": "node -e \"fetch('http://127.0.0.1:3000/api/persons/stats').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\""
   },
@@ -21,7 +23,7 @@
       "README.md"
     ],
     "targets": [
-      "node18-win-x64"
+      "node24-win-x64"
     ],
     "outputPath": "dist"
   },
@@ -38,7 +40,12 @@
     "axios": "^1.7.9",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
+    "file-saver": "^2.0.5",
+    "helmet": "^8.1.0",
+    "jszip": "^3.10.1",
+    "lucide": "^0.468.0"
   },
   "devDependencies": {
     "@yao-pkg/pkg": "^6.6.0"

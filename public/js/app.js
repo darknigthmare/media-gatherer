@@ -1,24 +1,42 @@
 ﻿// ----------------------------------------------------
 // STATE VARIABLES
 // ----------------------------------------------------
+function readLocalArray(keys) {
+  for (const key of keys) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || 'null');
+      if (Array.isArray(value)) return value;
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
+  return [];
+}
+
+function normalizeSearchTerm(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
 let allImages = [];
 let allVideos = [];
 let filteredImages = [];
 let filteredVideos = [];
-let favorites = JSON.parse(localStorage.getItem('aerogatherer_favorites')) || [];
+let favorites = readLocalArray(['mediagatherer_favorites', 'aerogatherer_favorites']);
 let showingFavorites = false;
 let currentVideoIndex = -1;
+let lastModalTrigger = null;
 let currentSearchQuery = '';
 let detectedAccounts = [];
 let lastSearchConfig = null;
 let refreshTimerId = null;
 let refreshInProgress = false;
 let refreshCycleCount = 0;
-let searchHistory = JSON.parse(localStorage.getItem('aerogatherer_history') || '[]');
-let savedMonitors = JSON.parse(localStorage.getItem('aerogatherer_monitors') || '[]');
+let searchHistory = readLocalArray(['mediagatherer_history', 'aerogatherer_history']);
+let savedMonitors = readLocalArray(['mediagatherer_monitors', 'aerogatherer_monitors']);
 let batchQueue = [];
 let currentAliases = [];
 let sourceDiagnostics = {};
+let runtimePersistentStorage = true;
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
 
 const SOURCE_GROUPS = {
@@ -58,6 +76,7 @@ function getSourceGroup(source) {
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const statusConsoleWrapper = document.getElementById('status-console-wrapper');
+const runtimeStatus = document.getElementById('runtime-status');
 const statusConsole = document.getElementById('status-console');
 const btnClearConsole = document.getElementById('btn-clear-console');
 
@@ -76,6 +95,7 @@ const nsfwModeNote = document.getElementById('nsfw-mode-note');
 const btnToggleFav = document.getElementById('btn-toggle-fav');
 const btnDownloadZip = document.getElementById('btn-download-zip');
 const btnExportJson = document.getElementById('btn-export-json');
+const exportFormat = document.getElementById('export-format');
 const autoRefreshInterval = document.getElementById('auto-refresh-interval');
 const btnAutoRefresh = document.getElementById('btn-auto-refresh');
 const statsDashboard = document.getElementById('stats-dashboard');
@@ -137,8 +157,15 @@ const personRuleValue = document.getElementById('person-rule-value');
 const personRuleAction = document.getElementById('person-rule-action');
 const personRuleList = document.getElementById('person-rule-list');
 
-let personProfiles = [];
+let personProfiles = readLocalArray(['mediagatherer_persons']);
 let selectedPersonId = null;
+
+function updatePersonActions() {
+  const disabled = !selectedPersonId;
+  if (btnPersonPlan) btnPersonPlan.disabled = disabled;
+  if (btnPersonSearch) btnPersonSearch.disabled = disabled;
+  if (personRuleForm) personRuleForm.querySelectorAll('input, select, button').forEach(control => { control.disabled = disabled; });
+}
 
 const imagesGrid = document.getElementById('images-grid');
 const videosGrid = document.getElementById('videos-grid');
@@ -190,6 +217,26 @@ function addConsoleLog(message, type = 'info') {
   statusConsole.scrollTop = statusConsole.scrollHeight;
 }
 
+async function loadRuntimeStatus() {
+  if (!runtimeStatus) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const persistent = data.storage?.persistent !== false;
+    runtimePersistentStorage = persistent;
+    runtimeStatus.classList.toggle('warning', !persistent);
+    runtimeStatus.querySelector('span:last-child').textContent = persistent
+      ? 'Stockage durable actif'
+      : 'Stockage Vercel temporaire';
+    runtimeStatus.title = data.storage?.warning || 'API et stockage disponibles';
+  } catch (error) {
+    runtimeStatus.classList.add('error');
+    runtimeStatus.querySelector('span:last-child').textContent = 'Serveur indisponible';
+    runtimeStatus.title = error.message;
+  }
+}
+
 btnClearConsole.addEventListener('click', () => {
   statusConsole.innerHTML = '';
   addConsoleLog('Journal d\'aspiration réinitialisé.', 'info');
@@ -203,6 +250,7 @@ function setActiveTab(tabName) {
     const isActive = tab.dataset.tab === tabName;
     tab.classList.toggle('active', isActive);
     tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    tab.tabIndex = isActive ? 0 : -1;
   });
 
   document.querySelectorAll('.workspace-section').forEach(section => {
@@ -222,6 +270,15 @@ appTabs.forEach(tab => {
     setActiveTab(tab.dataset.tab);
     if (tab.dataset.tab === 'connections') loadConnections();
     if (tab.dataset.tab === 'persons') loadPersons();
+  });
+  tab.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const tabs = [...appTabs];
+    const current = tabs.indexOf(tab);
+    const targetIndex = event.key === 'Home' ? 0 : (event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length);
+    tabs[targetIndex].focus();
+    tabs[targetIndex].click();
   });
 });
 
@@ -258,13 +315,13 @@ function renderConnections(providers) {
           <h4>${escapeHtml(provider.label)}</h4>
           <p>${escapeHtml(provider.unlocks || '')}</p>
         </div>
-        <span class="connection-state ${provider.configured ? 'ok' : 'idle'}">${provider.configured ? 'Configure' : 'Non configure'}</span>
+        <span class="connection-state ${provider.configured ? 'ok' : (provider.available === false ? 'warning' : 'idle')}">${provider.configured ? 'Configuré' : (provider.available === false ? 'Indisponible' : 'Non configuré')}</span>
       </div>
       <div class="connection-fields">${fieldsHtml}</div>
       <div class="connection-actions">
-        <button type="submit" class="btn btn-primary btn-small"><i data-lucide="save"></i><span>Enregistrer</span></button>
-        <button type="button" class="btn btn-secondary btn-small" data-action="test"><i data-lucide="plug-zap"></i><span>Tester</span></button>
-        <button type="button" class="btn btn-secondary btn-small" data-action="clear"><i data-lucide="x"></i><span>Effacer</span></button>
+        <button type="submit" class="btn btn-primary btn-small" ${provider.available === false ? 'disabled' : ''}><i data-lucide="save"></i><span>Enregistrer</span></button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="test" ${provider.available === false ? 'disabled' : ''}><i data-lucide="plug-zap"></i><span>Tester</span></button>
+        <button type="button" class="btn btn-secondary btn-small" data-action="clear" ${provider.available === false ? 'disabled' : ''}><i data-lucide="x"></i><span>Effacer</span></button>
       </div>
       <div class="connection-message"></div>
     `;
@@ -300,7 +357,7 @@ async function saveConnection(provider, card) {
     const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credentials: readConnectionForm(card) })
+      body: JSON.stringify(readConnectionForm(card))
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
@@ -319,7 +376,7 @@ async function testConnection(provider, card) {
       body: JSON.stringify({})
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+    if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
     setConnectionMessage(card, data.message || data.note || 'Connexion valide.', 'success');
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
@@ -414,12 +471,17 @@ async function loadPersons() {
     const response = await fetch(`${API_BASE}/api/persons`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    personProfiles = data.persons || [];
+    const serverProfiles = data.persons || [];
+    if (serverProfiles.length || runtimePersistentStorage) personProfiles = serverProfiles;
+    localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    if (selectedPersonId && !personProfiles.some(person => person.id === selectedPersonId)) selectedPersonId = null;
     if (!selectedPersonId && personProfiles[0]) selectedPersonId = personProfiles[0].id;
+    updatePersonActions();
     renderPersonList();
     if (selectedPersonId) await selectPerson(selectedPersonId, false);
   } catch (error) {
-    personList.innerHTML = `<div class="person-empty">Erreur Person Finder : ${escapeHtml(error.message)}</div>`;
+    renderPersonList();
+    if (!personProfiles.length) personList.innerHTML = `<div class="person-empty">Erreur Person Finder : ${escapeHtml(error.message)}</div>`;
   }
 }
 
@@ -432,7 +494,10 @@ function renderPersonDetail(person) {
         <h4>${escapeHtml(person.displayName || person.name)}</h4>
         <p>${escapeHtml(person.type || '')}</p>
       </div>
-      <span class="person-safe-badge">${person.publicOnly !== false && person.safeMode !== false ? 'Public only' : 'Bloque'}</span>
+      <div class="person-detail-actions">
+        <span class="person-safe-badge">${person.publicOnly !== false && person.safeMode !== false ? 'Public only' : 'Bloque'}</span>
+        <button type="button" class="btn btn-danger btn-small" data-person-delete="${escapeHtml(person.id)}"><i data-lucide="trash-2"></i><span>Supprimer</span></button>
+      </div>
     </div>
     <div class="person-chip-row">
       ${(person.aliases || []).map(alias => `<span>${escapeHtml(alias)}</span>`).join('')}
@@ -440,6 +505,8 @@ function renderPersonDetail(person) {
     </div>
     <p class="person-note">${escapeHtml(person.notes || 'Pas de note.')}</p>
   `;
+  personDetail.querySelector('[data-person-delete]')?.addEventListener('click', () => deletePersonProfile(person.id));
+  lucide.createIcons();
 }
 
 function renderPersonPlan(queries) {
@@ -455,10 +522,10 @@ function renderPersonMedia(links) {
   }
   personMediaList.innerHTML = links.map(link => {
     const media = link.media || {};
-    const preview = media.thumbnail || media.url || '';
+    const preview = safeHttpUrl(media.thumbnail || media.url || '');
     return `
       <article class="person-media-row">
-        ${preview ? `<img src="${escapeHtml(preview)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : '<div class="person-media-placeholder"></div>'}
+        ${preview ? `<img src="${escapeHtml(preview)}" loading="lazy" referrerpolicy="no-referrer" alt="${escapeHtml(media.title || 'Aperçu média')}">` : '<div class="person-media-placeholder" aria-hidden="true"></div>'}
         <div class="person-media-main">
           <strong>${escapeHtml(media.title || 'Media sans titre')}</strong>
           <span>${escapeHtml(media.source || '')} · score ${Number(link.personScore || media.confidenceScore || 0)} · ${escapeHtml(link.status || 'to_review')}</span>
@@ -493,7 +560,7 @@ function renderPersonRules(rules) {
   personRuleList.innerHTML = (rules || []).map(rule => `
     <div class="person-rule-row">
       <span>${escapeHtml(rule.value)} · ${escapeHtml(rule.action)}</span>
-      <button data-rule-delete="${escapeHtml(rule.id)}" class="btn btn-secondary btn-small" type="button"><i data-lucide="trash-2"></i></button>
+      <button data-rule-delete="${escapeHtml(rule.id)}" class="btn btn-secondary btn-small" type="button" aria-label="Supprimer la règle"><i data-lucide="trash-2"></i></button>
     </div>
   `).join('') || '<div class="person-empty">Aucune regle.</div>';
   personRuleList.querySelectorAll('[data-rule-delete]').forEach(button => {
@@ -504,7 +571,10 @@ function renderPersonRules(rules) {
 
 async function selectPerson(id, rerenderList = true) {
   selectedPersonId = id;
+  updatePersonActions();
   if (rerenderList) renderPersonList();
+  const localPerson = personProfiles.find(person => person.id === id);
+  if (localPerson) renderPersonDetail(localPerson);
   const [personRes, planRes, galleryRes, timelineRes, rulesRes] = await Promise.all([
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`),
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/queries?depth=${encodeURIComponent(personDepth?.value || 'normal')}`),
@@ -533,11 +603,37 @@ async function savePersonProfile(event) {
     return;
   }
   const person = await response.json();
+  personProfiles = [person, ...personProfiles.filter(item => item.id !== person.id)].slice(0, 100);
+  localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
   selectedPersonId = person.id;
   personForm.reset();
   if (personPublicOnly) personPublicOnly.checked = true;
   if (personSafeMode) personSafeMode.checked = true;
   await loadPersons();
+}
+
+async function deletePersonProfile(id) {
+  const person = personProfiles.find(item => item.id === id);
+  if (!person || !window.confirm(`Supprimer le profil ${person.displayName || person.name} et ses liens associés ?`)) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Suppression serveur impossible : ${error.message}`, 'warning');
+  }
+  personProfiles = personProfiles.filter(item => item.id !== id);
+  localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+  selectedPersonId = personProfiles[0]?.id || null;
+  updatePersonActions();
+  renderPersonList();
+  if (selectedPersonId) await selectPerson(selectedPersonId, false);
+  else if (personDetail) {
+    personDetail.className = 'person-detail empty';
+    personDetail.textContent = 'Selectionne ou cree une fiche personne.';
+    renderPersonMedia([]);
+    renderPersonTimeline([]);
+    renderPersonRules([]);
+  }
 }
 
 async function previewPersonPlan() {
@@ -619,13 +715,13 @@ function getCurrentSearchConfig() {
     mediaKind: mediaKindMode ? mediaKindMode.value : 'both',
     sizeVal: document.getElementById('filter-size').value,
     typeVal: document.getElementById('filter-type').value,
-    colorVal: document.getElementById('filter-color').value
+    colorVal: ''
   };
 }
 
 function buildSearchUrl(config, sources) {
   const freshParams = config.fresh ? `&fresh=true&since=${encodeURIComponent(config.since || '')}` : '';
-  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'broad'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
+  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'broad'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}&record=false${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
 }
 
 function updateAutoRefreshButton(active) {
@@ -785,8 +881,8 @@ function prepareMediaItems(items) {
 
 function confidenceClass(item) {
   const score = Number(item?.confidenceScore || item?.relevanceScore || 0);
-  if (score >= 90) return 'high';
-  if (score >= 70) return 'medium';
+  if (score >= 80) return 'high';
+  if (score >= 55) return 'medium';
   return 'low';
 }
 
@@ -884,19 +980,62 @@ function renderInsights() {
   lucide.createIcons();
 }
 
-function saveSearchHistoryEntry() {
-  if (!currentSearchQuery) return;
-  const entry = {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+function mergeHistoryEntries(...lists) {
+  const merged = lists.flat().filter(item => item?.query).sort((a, b) => new Date(b.createdAt || b.at || 0) - new Date(a.createdAt || a.at || 0));
+  const rows = [];
+  for (const item of merged) {
+    const itemTime = new Date(item.createdAt || item.at || 0).getTime();
+    const duplicateIndex = rows.findIndex(existing => existing.id === item.id || (
+      normalizeSearchTerm(existing.query) === normalizeSearchTerm(item.query) &&
+      Math.abs(new Date(existing.createdAt || existing.at || 0).getTime() - itemTime) < 30000
+    ));
+    if (duplicateIndex === -1) {
+      rows.push(item);
+      continue;
+    }
+    const currentTotal = Number(rows[duplicateIndex].imagesCount || rows[duplicateIndex].images || 0) + Number(rows[duplicateIndex].videosCount || rows[duplicateIndex].videos || 0);
+    const candidateTotal = Number(item.imagesCount || item.images || 0) + Number(item.videosCount || item.videos || 0);
+    if (candidateTotal > currentTotal) rows[duplicateIndex] = item;
+  }
+  return rows.slice(0, 200);
+}
+
+async function recordCompletedSearch() {
+  const fallback = {
+    id: `local-${Date.now()}`,
     query: currentSearchQuery,
-    at: new Date().toISOString(),
-    images: allImages.length,
-    videos: allVideos.length,
-    aliases: currentAliases.slice(0, 8),
-    config: lastSearchConfig
+    sources: lastSearchConfig?.checkedSources || [],
+    imagesCount: allImages.length,
+    videosCount: allVideos.length,
+    options: lastSearchConfig,
+    createdAt: new Date().toISOString(),
+    localOnly: true
   };
-  searchHistory = [entry, ...searchHistory.filter(item => item.query !== entry.query)].slice(0, 40);
-  localStorage.setItem('aerogatherer_history', JSON.stringify(searchHistory));
+  let item = fallback;
+  try {
+    const response = await fetch(`${API_BASE}/api/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...fallback, id: undefined, localOnly: undefined })
+    });
+    if (response.ok) item = await response.json();
+  } catch {
+    // The browser copy remains durable for this device.
+  }
+  searchHistory = mergeHistoryEntries([item], searchHistory);
+  localStorage.setItem('mediagatherer_history', JSON.stringify(searchHistory));
+}
+
+async function refreshSearchHistory() {
+  try {
+    const response = await fetch(`${API_BASE}/api/history`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    searchHistory = mergeHistoryEntries(data.items || [], searchHistory);
+    localStorage.setItem('mediagatherer_history', JSON.stringify(searchHistory));
+  } catch {
+    // The local copy remains an offline fallback.
+  }
   renderHistory();
 }
 
@@ -908,7 +1047,7 @@ function renderHistory() {
       <div class="workflow-row">
         <div>
           <strong>${escapeHtml(item.query)}</strong>
-          <span>${new Date(item.at).toLocaleString()} · ${item.images} photos · ${item.videos} vidéos</span>
+          <span>${new Date(item.createdAt || item.at).toLocaleString()} · ${item.imagesCount ?? item.images ?? 0} photos · ${item.videosCount ?? item.videos ?? 0} vidéos</span>
         </div>
         <button type="button" class="btn btn-secondary btn-small" data-history-run="${escapeHtml(item.id)}">
           <i data-lucide="rotate-cw"></i><span>Relancer</span>
@@ -920,7 +1059,14 @@ function renderHistory() {
     btn.addEventListener('click', () => {
       const entry = searchHistory.find(item => item.id === btn.dataset.historyRun);
       if (!entry) return;
-      restoreSearchConfig(entry.config || { query: entry.query });
+      restoreSearchConfig(entry.config || {
+        query: entry.query,
+        checkedSources: entry.sources || [],
+        safeSearch: entry.options?.safe !== false,
+        riskMode: entry.options?.riskMode,
+        matchMode: entry.options?.matchMode,
+        mediaKind: entry.options?.mediaKind
+      });
       searchForm.requestSubmit();
     });
   });
@@ -962,18 +1108,34 @@ function renderBatchQueue() {
 
 async function runBatchQueue() {
   if (batchQueue.length === 0) return;
-  const baseConfig = getCurrentSearchConfig();
-  for (const item of batchQueue) {
-    item.status = 'en cours';
+  const config = getCurrentSearchConfig();
+  batchQueue.forEach(item => { item.status = 'en attente serveur'; });
+  renderBatchQueue();
+  try {
+    const createResponse = await fetch(`${API_BASE}/api/queue/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries: batchQueue.map(item => item.query), sources: config.checkedSources.filter(source => source !== 'wayback').join(','), safe: config.safeSearch, media: config.mediaKind, mode: config.matchMode })
+    });
+    const job = await createResponse.json();
+    if (!createResponse.ok) throw new Error(job.error || `HTTP ${createResponse.status}`);
+    batchQueue.forEach(item => { item.status = 'en cours'; });
     renderBatchQueue();
-    searchInput.value = item.query;
-    await runSearchWithCurrentControls({ fromBatch: true, baseConfig });
-    item.status = `${allImages.length} photos · ${allVideos.length} vidéos`;
-    renderBatchQueue();
+    const startResponse = await fetch(`${API_BASE}/api/queue/jobs/${encodeURIComponent(job.id)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const result = await startResponse.json();
+    if (!startResponse.ok) throw new Error(result.error || `HTTP ${startResponse.status}`);
+    const rows = result.job?.results || [];
+    batchQueue.forEach(item => {
+      const row = rows.find(entry => entry.query === item.query);
+      item.status = row ? `${row.imagesCount} photos · ${row.videosCount} vidéos` : 'terminé sans résultat';
+    });
+  } catch (error) {
+    batchQueue.forEach(item => { if (item.status === 'en cours' || item.status === 'en attente serveur') item.status = `erreur: ${error.message}`; });
   }
+  renderBatchQueue();
 }
 
-function saveMonitor() {
+async function saveMonitor() {
   if (!lastSearchConfig?.query) {
     alert('Lancez une recherche avant de la sauvegarder en monitoring.');
     return;
@@ -987,8 +1149,28 @@ function saveMonitor() {
     lastImages: allImages.length,
     lastVideos: allVideos.length
   };
-  savedMonitors = [monitor, ...savedMonitors.filter(item => item.id !== monitor.id)].slice(0, 20);
-  localStorage.setItem('aerogatherer_monitors', JSON.stringify(savedMonitors));
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const saved = await response.json();
+    savedMonitors = [saved, ...savedMonitors.filter(item => item.id !== saved.id)].slice(0, 50);
+    localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+    renderMonitors();
+  } catch (error) {
+    addConsoleLog(`[VEILLE] Sauvegarde impossible : ${error.message}`, 'error');
+  }
+}
+
+async function loadMonitors() {
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const serverItems = (await response.json()).items || [];
+    savedMonitors = [...serverItems, ...savedMonitors].filter((item, index, rows) => index === rows.findIndex(candidate => candidate.id === item.id || candidate.query === item.query)).slice(0, 50);
+    localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+  } catch {
+    // Keep offline fallback.
+  }
   renderMonitors();
 }
 
@@ -1073,7 +1255,12 @@ function extractMediaAccount(item) {
       const match = parsed.pathname.match(/^\/web\/\d+(?:id_)?\/(https?:\/\/[^/]+)/i);
       return match ? match[1] : '';
     }
-    return `${parsed.protocol}//${parsed.hostname}`;
+    const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'instagram.com', 'tiktok.com', 'onlyfans.com', 'fansly.com', 'mym.fans'];
+    const normalizedHost = host.replace(/^www\./, '');
+    if (!accountHosts.some(accountHost => normalizedHost === accountHost || normalizedHost.endsWith(`.${accountHost}`))) return '';
+    const firstSegment = parsed.pathname.split('/').filter(Boolean)[0];
+    if (!firstSegment || ['search', 'results', 'watch', 'video', 'videos'].includes(firstSegment.toLowerCase())) return '';
+    return `${parsed.protocol}//${parsed.hostname}/${firstSegment}`;
   } catch (error) {
     return '';
   }
@@ -1110,7 +1297,7 @@ function registerDetectedAccounts(data) {
     const existing = detectedAccounts.find(account => account.url === url);
     const count = media.filter(item => extractMediaAccount(item) === url || item.accountUrl === url).length;
     if (existing) {
-      existing.count += count;
+      existing.count = Math.max(existing.count || 0, count);
     } else {
       detectedAccounts.push({ url, count, lastScraped: false, loading: false, ...targetMeta });
     }
@@ -1139,7 +1326,7 @@ function renderAccountsDashboard() {
         <span class="account-count">${account.type || 'domain'} · ${account.count || 0} médias liés</span>
       </div>
       <div class="account-actions">
-        <a href="${account.url}" target="_blank" class="btn btn-secondary btn-small" title="Ouvrir">
+        <a href="${escapeHtml(safeHttpUrl(account.url))}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-small" title="Ouvrir" aria-label="Ouvrir le compte public">
           <i data-lucide="external-link"></i>
         </a>
         <button class="btn btn-primary btn-small" data-account-url="${escapeHtml(account.url)}" ${account.loading || account.canScrape === false ? 'disabled' : ''}>
@@ -1170,7 +1357,7 @@ async function scrapeDetectedAccount(accountUrl) {
     const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
     const accountMode = accountScrapeMode ? accountScrapeMode.value : 'complete';
     const mediaKind = mediaKindMode ? mediaKindMode.value : 'both';
-    const response = await fetch(`${API_BASE}/api/account/scrape?url=${encodeURIComponent(accountUrl)}&safe=${safeSearch}&risk=${encodeURIComponent(riskMode)}&accountMode=${encodeURIComponent(accountMode)}&media=${encodeURIComponent(mediaKind)}`);
+    const response = await fetch(`${API_BASE}/api/account/scrape?url=${encodeURIComponent(accountUrl)}&q=${encodeURIComponent(currentSearchQuery)}&safe=${safeSearch}&risk=${encodeURIComponent(riskMode)}&accountMode=${encodeURIComponent(accountMode)}&media=${encodeURIComponent(mediaKind)}`);
     if (!response.ok) throw new Error(`Erreur serveur (${response.status})`);
     const data = await response.json();
     mergeSearchData(data);
@@ -1191,13 +1378,23 @@ function extractTargetDomains(mediaList, query) {
   const domains = new Set();
   const blockedHosts = [
     'duckduckgo.com',
+    'bing.com',
+    'mm.bing.net',
+    'google.com',
+    'gstatic.com',
+    'googleusercontent.com',
+    'search.brave.com',
     'web.archive.org',
     'archive.org',
     'upload.wikimedia.org',
+    'wikimedia.org',
+    'mediawiki.org',
     'staticflickr.com',
+    'flickr.com',
     'redditmedia.com',
     'redd.it',
     'ytimg.com',
+    'youtube.com',
     'pinimg.com',
     'fbcdn.net',
     'twimg.com'
@@ -1222,18 +1419,13 @@ function extractTargetDomains(mediaList, query) {
 
 // Fetch Wayback Machine CDX files directly from browser (bypasses sandbox firewall)
 async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = null) {
-  let domainsToQuery = [...new Set(extractedDomains)].slice(0, 12);
-  
-  if (domainsToQuery.length === 0) {
-    let guessedDomain = query.trim().toLowerCase();
-    if (!guessedDomain.includes('.')) {
-      guessedDomain = `${guessedDomain}.com`;
-    }
-    guessedDomain = guessedDomain.replace(/^(https?:\/\/)?(www\.)?/, '');
-    domainsToQuery.push(guessedDomain);
-  }
+  const domainsToQuery = [...new Set(extractedDomains)].slice(0, 12);
 
-  addConsoleLog(`[WAYBACK] Domaines ciblés : ${domainsToQuery.join(', ')}`, 'info');
+  if (domainsToQuery.length > 0) {
+    addConsoleLog(`[WAYBACK] Domaines ciblés : ${domainsToQuery.join(', ')}`, 'info');
+  } else {
+    addConsoleLog('[WAYBACK] Aucun domaine fiable détecté : recherche dans les collections Archive.org uniquement.', 'info');
+  }
   const domainResults = [];
   for (let i = 0; i < domainsToQuery.length; i += 2) {
     const batch = domainsToQuery.slice(i, i + 2);
@@ -1252,86 +1444,7 @@ async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = 
   const videos = dedupeMedia([...domainResults.flatMap(result => result.videos), ...archiveResults.videos]);
   const scannedDomains = domainResults.filter(result => result.scanned).length;
 
-  if (images.length === 0 && videos.length === 0) {
-    images.push(...domainsToQuery.map(domain => ({
-      url: `https://archive.org/images/glogo.png?domain=${encodeURIComponent(domain)}`,
-      thumbnail: 'https://archive.org/images/glogo.png',
-      title: `Explorer les snapshots Wayback de ${domain}`,
-      source: 'Wayback',
-      width: null,
-      height: null,
-      link: `https://web.archive.org/web/*/${domain}`
-    })));
-  }
-
   return { images, videos, success: scannedDomains > 0 || images.length > 0 || videos.length > 0, scannedDomains, domains: domainsToQuery };
-  
-  const legacyImages = [];
-  const legacyVideos = [];
-  let success = false;
-  
-  for (const domain of domainsToQuery) {
-    try {
-      addConsoleLog(`[WAYBACK] Aspiration CDX en cours pour *.${domain}...`, 'info');
-      
-      const imgUrl = `https://web.archive.org/cdx/search/cdx?url=*.${domain}/*&output=json&fl=original,timestamp,mimetype&filter=statuscode:200&filter=mimetype:image/.*&limit=100`;
-      const vidUrl = `https://web.archive.org/cdx/search/cdx?url=*.${domain}/*&output=json&fl=original,timestamp,mimetype&filter=statuscode:200&filter=mimetype:video/.*&limit=50`;
-      
-      const [imgRes, vidRes] = await Promise.all([
-        fetch(imgUrl).then(r => r.json()).catch(() => null),
-        fetch(vidUrl).then(r => r.json()).catch(() => null)
-      ]);
-      
-      // Parse Images (header row at [0])
-      if (imgRes && imgRes.length > 1) {
-        success = true;
-        for (let i = 1; i < imgRes.length; i++) {
-          const [original, timestamp, mimetype] = imgRes[i];
-          const archiveUrl = `https://web.archive.org/web/${timestamp}/${original}`;
-          
-          let filename = original.substring(original.lastIndexOf('/') + 1);
-          if (filename.includes('?')) filename = filename.substring(0, filename.indexOf('?'));
-          const dateStr = new Date(timestamp.substring(0,4) + '-' + timestamp.substring(4,6) + '-' + timestamp.substring(6,8)).toLocaleDateString();
-          
-          images.push({
-            url: archiveUrl,
-            thumbnail: archiveUrl,
-            title: filename ? `${filename} (${dateStr})` : `Image Wayback (${dateStr})`,
-            source: 'Wayback',
-            width: null,
-            height: null,
-            link: `https://web.archive.org/web/${timestamp}/${original}`
-          });
-        }
-      }
-      
-      // Parse Videos
-      if (vidRes && vidRes.length > 1) {
-        success = true;
-        for (let i = 1; i < vidRes.length; i++) {
-          const [original, timestamp, mimetype] = vidRes[i];
-          const archiveUrl = `https://web.archive.org/web/${timestamp}/${original}`;
-          
-          let filename = original.substring(original.lastIndexOf('/') + 1);
-          if (filename.includes('?')) filename = filename.substring(0, filename.indexOf('?'));
-          const dateStr = new Date(timestamp.substring(0,4) + '-' + timestamp.substring(4,6) + '-' + timestamp.substring(6,8)).toLocaleDateString();
-          
-          videos.push({
-            title: filename ? `${filename} (${dateStr})` : `Vidéo Wayback (${dateStr})`,
-            url: archiveUrl,
-            embedUrl: '', // Rendered using direct HTML5 player
-            thumbnail: 'https://archive.org/images/glogo.png',
-            duration: 'Archive',
-            source: 'Wayback'
-          });
-        }
-      }
-    } catch (err) {
-      console.warn(`Wayback search failed for domain ${domain}:`, err.message);
-    }
-  }
-  
-  return { images, videos, success };
 }
 
 async function fetchWaybackJson(url, timeoutMs = 8000) {
@@ -1366,9 +1479,13 @@ function buildWaybackRows(data, domain, type) {
         title,
         url: archiveUrl,
         embedUrl: '',
-        thumbnail: 'https://archive.org/images/glogo.png',
+        thumbnail: '',
         duration: mimetype || 'Archive',
-        source: 'Wayback'
+        source: 'Wayback',
+        trustedContext: true,
+        confidenceScore: 68,
+        confidenceLabel: 'moyenne',
+        confidenceReason: 'Média extrait d’un snapshot du domaine validé'
       };
     }
 
@@ -1379,7 +1496,11 @@ function buildWaybackRows(data, domain, type) {
       source: 'Wayback',
       width: null,
       height: null,
-      link: `https://web.archive.org/web/${timestamp}/${original}`
+      link: `https://web.archive.org/web/${timestamp}/${original}`,
+      trustedContext: true,
+      confidenceScore: 68,
+      confidenceLabel: 'moyenne',
+      confidenceReason: 'Média extrait d’un snapshot du domaine validé'
     };
   }).filter(Boolean);
 }
@@ -1522,7 +1643,7 @@ async function fetchWaybackArchiveSearch(query) {
   
   // 2. Fallback to server endpoint
   try {
-    const data = await fetchWaybackJson(`/api/wayback/archive?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 12000);
+    const data = await fetchWaybackJson(`/api/archive/search?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 12000);
     if (data) {
       result.images.push(...(data.images || []));
       result.videos.push(...(data.videos || []));
@@ -1565,7 +1686,7 @@ async function runSearchWithCurrentControls(options = {}) {
   const mediaKind = mediaKindMode ? mediaKindMode.value : 'both';
   const sizeVal = document.getElementById('filter-size').value;
   const typeVal = document.getElementById('filter-type').value;
-  const colorVal = document.getElementById('filter-color').value;
+  const colorVal = '';
   stopAutoRefresh();
   lastSearchConfig = {
     query,
@@ -1590,8 +1711,8 @@ async function runSearchWithCurrentControls(options = {}) {
   addConsoleLog(`Mode anti-ban : ${riskMode === 'balanced' ? 'Equilibre' : 'Prudent'}`, 'info');
   addConsoleLog(`Pertinence : ${matchMode} ; comptes : ${accountMode === 'strict' ? 'strict terme' : 'compte complet'}`, 'info');
   addConsoleLog(`Médias : ${mediaKind === 'photos' ? 'photos seulement' : (mediaKind === 'videos' ? 'vidéos seulement' : 'photos + vidéos')}`, 'info');
-  if (sizeVal || typeVal || colorVal) {
-    addConsoleLog(`Filtres d'images actifs : taille="${sizeVal || 'toutes'}", type="${typeVal || 'tous'}", couleur="${colorVal || 'toutes'}"`, 'info');
+  if (sizeVal || typeVal) {
+    addConsoleLog(`Filtres média actifs : taille="${sizeVal || 'toutes'}", type="${typeVal || 'tous'}"`, 'info');
   }
   renderLoading();
   
@@ -1623,7 +1744,8 @@ async function runSearchWithCurrentControls(options = {}) {
   let domainSeedData = { images: [], videos: [] };
   
   try {
-    const serverTasks = serverSources.map(async (source) => {
+    const sourceQueue = [...serverSources];
+    const runServerSource = async (source) => {
       try {
         const response = await fetch(buildSearchUrl(lastSearchConfig, source));
         if (!response.ok) {
@@ -1643,6 +1765,16 @@ async function runSearchWithCurrentControls(options = {}) {
         }
       } catch (sourceError) {
         logSourceStatus(source, { success: false, error: sourceError.message });
+      }
+    };
+    const workerCount = Math.min(sourceQueue.length, riskMode === 'balanced' ? 4 : 2);
+    const serverTasks = Array.from({ length: workerCount }, async () => {
+      while (sourceQueue.length > 0) {
+        const source = sourceQueue.shift();
+        await runServerSource(source);
+        if (riskMode !== 'balanced' && sourceQueue.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
       }
     });
 
@@ -1705,7 +1837,8 @@ async function runSearchWithCurrentControls(options = {}) {
     }
 
     addConsoleLog(`Aspiration terminée. Total: ${allImages.length} photos, ${allVideos.length} vidéos.`, 'success');
-    saveSearchHistoryEntry();
+    await recordCompletedSearch();
+    await refreshSearchHistory();
     if (options.monitorId) {
       const monitor = savedMonitors.find(item => item.id === options.monitorId);
       if (monitor) {
@@ -1713,7 +1846,8 @@ async function runSearchWithCurrentControls(options = {}) {
         monitor.lastImages = allImages.length;
         monitor.lastVideos = allVideos.length;
         monitor.config = lastSearchConfig;
-        localStorage.setItem('aerogatherer_monitors', JSON.stringify(savedMonitors));
+        await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(monitor.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor) });
+        localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
         renderMonitors();
       }
     }
@@ -1755,17 +1889,21 @@ function renderMedia() {
     imagesGrid.innerHTML = '';
     filteredImages.forEach(img => {
       const isFav = favorites.some(fav => fav.url === img.url);
-      const previewUrl = img.thumbnail || img.url;
+      const previewUrl = safeHttpUrl(img.thumbnail || img.url);
+      const sourceText = String(img.source || 'Source');
+      const previewMarkup = previewUrl
+        ? `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(img.title)}" loading="lazy" referrerpolicy="no-referrer">`
+        : '<div class="media-placeholder" aria-hidden="true"><i data-lucide="image-off"></i></div>';
       const card = document.createElement('div');
       card.className = 'media-card';
       card.innerHTML = `
-        <span class="source-badge ${img.source.toLowerCase()}">${img.source}</span>
+        <span class="source-badge ${safeCssToken(sourceText)}">${escapeHtml(sourceText)}</span>
         <span class="confidence-badge confidence-${confidenceClass(img)}" title="${escapeHtml((img.matchReasons || []).join(' · '))}">${escapeHtml(confidenceText(img))}</span>
         <button class="card-fav-btn ${isFav ? 'active' : ''}" title="${isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}">
           <i data-lucide="heart"></i>
         </button>
         <div class="media-card-img-wrapper">
-          <img src="${previewUrl}" alt="${escapeHtml(img.title)}" loading="lazy" referrerpolicy="no-referrer">
+          ${previewMarkup}
           <div class="card-overlay">
             <button class="overlay-btn"><i data-lucide="eye"></i></button>
           </div>
@@ -1783,10 +1921,13 @@ function renderMedia() {
         toggleFavorite(img, favBtn);
       });
 
-      attachImageProxyFallback(card.querySelector('img'), previewUrl);
+      if (previewUrl) attachImageProxyFallback(card.querySelector('img'), previewUrl);
       
       // Click event opens Lightbox
-      card.addEventListener('click', () => openLightbox(img));
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.addEventListener('click', () => openLightbox(img, card));
+      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLightbox(img, card); } });
       imagesGrid.appendChild(card);
     });
   }
@@ -1798,18 +1939,22 @@ function renderMedia() {
     videosGrid.innerHTML = '';
     filteredVideos.forEach(vid => {
       const isFav = favorites.some(fav => fav.url === vid.url);
-      const previewUrl = vid.thumbnail || 'https://www.redditstatic.com/icon.png';
+      const previewUrl = safeHttpUrl(vid.thumbnail || '');
+      const sourceText = String(vid.source || 'Source');
+      const previewMarkup = previewUrl
+        ? `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(vid.title)}" loading="lazy" referrerpolicy="no-referrer">`
+        : '<div class="media-placeholder" aria-hidden="true"><i data-lucide="video"></i></div>';
       const card = document.createElement('div');
       card.className = 'media-card';
       card.innerHTML = `
-        <span class="source-badge ${vid.source.toLowerCase()}">${vid.source}</span>
+        <span class="source-badge ${safeCssToken(sourceText)}">${escapeHtml(sourceText)}</span>
         <span class="confidence-badge confidence-${confidenceClass(vid)}" title="${escapeHtml((vid.matchReasons || []).join(' · '))}">${escapeHtml(confidenceText(vid))}</span>
-        <span class="duration-badge"><i data-lucide="play"></i> ${vid.duration}</span>
+        <span class="duration-badge"><i data-lucide="play"></i> ${escapeHtml(vid.duration || 'Ouvrir la source')}</span>
         <button class="card-fav-btn ${isFav ? 'active' : ''}" title="${isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}">
           <i data-lucide="heart"></i>
         </button>
         <div class="media-card-img-wrapper">
-          <img src="${previewUrl}" alt="${escapeHtml(vid.title)}" loading="lazy" referrerpolicy="no-referrer">
+          ${previewMarkup}
           <div class="card-overlay">
             <button class="overlay-btn"><i data-lucide="play"></i></button>
           </div>
@@ -1827,10 +1972,13 @@ function renderMedia() {
         toggleFavorite(vid, favBtn);
       });
 
-      attachImageProxyFallback(card.querySelector('img'), previewUrl);
+      if (previewUrl) attachImageProxyFallback(card.querySelector('img'), previewUrl);
       
       // Click event opens Video Modal
-      card.addEventListener('click', () => openVideoModal(vid));
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.addEventListener('click', () => openVideoModal(vid, card));
+      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openVideoModal(vid, card); } });
       videosGrid.appendChild(card);
     });
   }
@@ -1844,13 +1992,28 @@ function renderMedia() {
 
 // Helper: Escape HTML to prevent XSS
 function escapeHtml(text) {
-  if (!text) return '';
-  return text
+  if (text === undefined || text === null) return '';
+  return String(text)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function safeHttpUrl(value) {
+  try {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function safeCssToken(value) {
+  return String(value || 'source').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
 }
 
 // ----------------------------------------------------
@@ -1894,8 +2057,11 @@ document.getElementById('source-filter').addEventListener('change', applyFilters
 // ----------------------------------------------------
 // LIGHTBOX MODAL OPERATION
 // ----------------------------------------------------
-function openLightbox(img) {
-  lightboxImg.src = img.url;
+function openLightbox(img, trigger = document.activeElement) {
+  const imageUrl = safeHttpUrl(img.url);
+  if (!imageUrl) return;
+  lastModalTrigger = trigger;
+  lightboxImg.src = imageUrl;
   lightboxTitle.textContent = img.title || 'Sans titre';
   lightboxSource.textContent = img.source;
   
@@ -1906,12 +2072,12 @@ function openLightbox(img) {
     lightboxResolutionWrapper.style.display = 'none';
   }
   
-  lightboxBtnDownload.href = img.url;
+  lightboxBtnDownload.href = imageUrl;
   
   // Setup copy to clipboard
   lightboxBtnCopy.onclick = (e) => {
     e.preventDefault();
-    navigator.clipboard.writeText(img.url).then(() => {
+    navigator.clipboard.writeText(imageUrl).then(() => {
       const originalText = lightboxBtnCopy.innerHTML;
       lightboxBtnCopy.innerHTML = '<i data-lucide="check"></i> Copié !';
       lucide.createIcons();
@@ -1924,22 +2090,25 @@ function openLightbox(img) {
     });
   };
   
-  if (img.link) {
+  const sourceUrl = safeHttpUrl(img.link);
+  if (sourceUrl) {
     lightboxBtnSource.style.display = 'inline-flex';
-    lightboxBtnSource.href = img.link;
+    lightboxBtnSource.href = sourceUrl;
   } else {
     lightboxBtnSource.style.display = 'none';
   }
   if (lightboxBtnReverse) {
-    lightboxBtnReverse.onclick = () => prepareReverseSearch(img.url);
+    lightboxBtnReverse.onclick = () => prepareReverseSearch(imageUrl);
   }
   
   lightbox.classList.remove('hidden');
+  lightbox.focus();
 }
 
 function closeLightbox() {
   lightbox.classList.add('hidden');
   lightboxImg.src = '';
+  if (lastModalTrigger?.focus) lastModalTrigger.focus();
 }
 
 lightboxClose.addEventListener('click', closeLightbox);
@@ -1952,25 +2121,29 @@ lightbox.addEventListener('click', (e) => {
 // ----------------------------------------------------
 // VIDEO MODAL OPERATION
 // ----------------------------------------------------
-function openVideoModal(vid) {
+function openVideoModal(vid, trigger = document.activeElement) {
+  const videoUrl = safeHttpUrl(vid.url);
+  const embedUrl = safeHttpUrl(vid.embedUrl);
+  lastModalTrigger = trigger;
   videoTitle.textContent = vid.title || 'Sans titre';
   videoSource.textContent = vid.source;
-  videoDuration.textContent = vid.duration;
-  videoBtnLink.href = vid.url;
+  videoDuration.textContent = vid.duration || 'Inconnue';
+  videoBtnLink.href = videoUrl || '#';
   
   videoPlayerContainer.innerHTML = '';
   
-  if (vid.embedUrl) {
+  if (embedUrl) {
     // Iframe embed (e.g. YouTube)
     const iframe = document.createElement('iframe');
-    iframe.src = vid.embedUrl + "?autoplay=1";
+    const separator = embedUrl.includes('?') ? '&' : '?';
+    iframe.src = `${embedUrl}${separator}autoplay=1`;
     iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
     iframe.allowFullscreen = true;
     videoPlayerContainer.appendChild(iframe);
-  } else if (vid.url) {
+  } else if (videoUrl) {
     // HTML5 Direct Video player (e.g. Reddit mp4 fallback)
     const video = document.createElement('video');
-    video.src = vid.url;
+    video.src = videoUrl;
     video.controls = true;
     video.autoplay = true;
     video.playsInline = true;
@@ -2017,11 +2190,13 @@ function openVideoModal(vid) {
   };
   
   videoModal.classList.remove('hidden');
+  videoModal.focus();
 }
 
 function closeVideoModal() {
   videoModal.classList.add('hidden');
   videoPlayerContainer.innerHTML = ''; // Stop video and audio instantly
+  if (lastModalTrigger?.focus) lastModalTrigger.focus();
 }
 
 videoModalClose.addEventListener('click', closeVideoModal);
@@ -2044,14 +2219,53 @@ window.addEventListener('keydown', (e) => {
 // ----------------------------------------------------
 // FAVORITES OPERATIONS
 // ----------------------------------------------------
-function toggleFavorite(item, btnEl) {
+async function loadCollection() {
+  try {
+    const response = await fetch(`${API_BASE}/api/collection`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const serverItems = (await response.json()).items || [];
+    const localItems = [...favorites];
+    favorites = [...serverItems, ...localItems].filter((item, index, rows) => index === rows.findIndex(candidate => (candidate.visualSignature && candidate.visualSignature === item.visualSignature) || candidate.url === item.url));
+    const serverKeys = new Set(serverItems.map(item => item.visualSignature || item.url));
+    for (const item of localItems.slice(0, 100)) {
+      if (serverKeys.has(item.visualSignature || item.url)) continue;
+      const migrated = await fetch(`${API_BASE}/api/collection`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...item, id: undefined, status: 'favorite' }) });
+      if (migrated.ok) {
+        const saved = await migrated.json();
+        favorites = favorites.map(candidate => candidate.url === item.url ? saved : candidate);
+      }
+    }
+    localStorage.setItem('mediagatherer_favorites', JSON.stringify(favorites));
+  } catch {
+    // Keep offline favorites when the local API is unavailable.
+  }
+  renderMedia();
+}
+
+async function toggleFavorite(item, btnEl) {
   const index = favorites.findIndex(fav => fav.url === item.url);
   if (index === -1) {
-    favorites.push(item);
+    try {
+      const response = await fetch(`${API_BASE}/api/collection`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...item, status: 'favorite' }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      favorites.push(await response.json());
+    } catch (error) {
+      favorites.push({ ...item, id: `local-${Date.now()}`, status: 'favorite', localOnly: true });
+      addConsoleLog(`Favori conservé dans ce navigateur : ${error.message}`, 'warning');
+    }
     btnEl.classList.add('active');
     btnEl.title = "Retirer des favoris";
     addConsoleLog(`Ajouté aux favoris : "${item.title}"`, 'success');
   } else {
+    const favorite = favorites[index];
+    if (favorite.id) {
+      try {
+        const response = await fetch(`${API_BASE}/api/collection/${encodeURIComponent(favorite.id)}`, { method: 'DELETE' });
+        if (!response.ok && !favorite.localOnly) addConsoleLog('Copie serveur du favori non supprimée.', 'warning');
+      } catch (error) {
+        addConsoleLog(`Favori retiré localement; serveur indisponible : ${error.message}`, 'warning');
+      }
+    }
     favorites.splice(index, 1);
     btnEl.classList.remove('active');
     btnEl.title = "Ajouter aux favoris";
@@ -2059,12 +2273,12 @@ function toggleFavorite(item, btnEl) {
     
     // If currently displaying favorites, re-render immediately
     if (showingFavorites) {
-      filteredImages = favorites.filter(img => !img.duration);
-      filteredVideos = favorites.filter(vid => vid.duration);
+      filteredImages = favorites.filter(item => (item.type || '').toLowerCase() !== 'video');
+      filteredVideos = favorites.filter(item => (item.type || '').toLowerCase() === 'video');
       renderMedia();
     }
   }
-  localStorage.setItem('aerogatherer_favorites', JSON.stringify(favorites));
+  localStorage.setItem('mediagatherer_favorites', JSON.stringify(favorites));
   lucide.createIcons();
 }
 
@@ -2075,8 +2289,8 @@ btnToggleFav.addEventListener('click', () => {
     btnToggleFav.innerHTML = '<i data-lucide="heart-off"></i> <span>Résultats</span>';
     
     // Load favorites split into images (no duration) and videos (has duration)
-    filteredImages = favorites.filter(img => !img.duration);
-    filteredVideos = favorites.filter(vid => vid.duration);
+    filteredImages = favorites.filter(item => (item.type || '').toLowerCase() !== 'video');
+    filteredVideos = favorites.filter(item => (item.type || '').toLowerCase() === 'video');
     
     statsBar.classList.remove('hidden');
     addConsoleLog('Affichage de votre collection de favoris.', 'info');
@@ -2226,7 +2440,7 @@ btnDownloadZip.addEventListener('click', async () => {
   addConsoleLog(`Démarrage de la génération de l'archive ZIP pour ${filteredImages.length} images...`, 'info');
   
   const zip = new JSZip();
-  const folder = zip.folder("aerogatherer_photos");
+  const folder = zip.folder("mediagatherer_photos");
   
   let successCount = 0;
   let failCount = 0;
@@ -2266,7 +2480,7 @@ btnDownloadZip.addEventListener('click', async () => {
   if (successCount > 0) {
     try {
       const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, "aerogatherer_photos.zip");
+      saveAs(content, "mediagatherer_photos.zip");
       addConsoleLog(`ZIP généré avec succès ! ${successCount} images archivées (${failCount} échecs).`, 'success');
     } catch (err) {
       addConsoleLog(`Erreur de génération ZIP : ${err.message}`, 'error');
@@ -2281,25 +2495,35 @@ btnDownloadZip.addEventListener('click', async () => {
 });
 
 if (btnExportJson) {
-  btnExportJson.addEventListener('click', () => {
-    const payload = {
-      query: currentSearchQuery,
-      generatedAt: new Date().toISOString(),
-      images: allImages,
-      videos: allVideos,
-      accounts: detectedAccounts
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+  btnExportJson.addEventListener('click', async () => {
+    const format = exportFormat?.value || 'json';
+    const rows = [
+      ...allImages.map(item => ({ ...item, type: 'image', query: currentSearchQuery })),
+      ...allVideos.map(item => ({ ...item, type: 'video', query: currentSearchQuery }))
+    ];
     const safeName = (currentSearchQuery || 'recherche').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    link.href = url;
-    link.download = `aerogatherer_${safeName}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    addConsoleLog(`Export JSON généré : ${allImages.length} photos, ${allVideos.length} vidéos, ${detectedAccounts.length} comptes/sites.`, 'success');
+    const extension = format === 'markdown' ? 'md' : format;
+    btnExportJson.disabled = true;
+    try {
+      const response = await fetch(`${API_BASE}/api/exports/results?format=${encodeURIComponent(format)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: rows.filter(item => item.type === 'image'), videos: rows.filter(item => item.type === 'video') })
+      });
+      if (!response.ok) throw new Error(`serveur ${response.status}`);
+      saveAs(await response.blob(), `mediagatherer_${safeName}.${extension}`);
+      addConsoleLog(`Export ${format.toUpperCase()} généré : ${allImages.length} photos et ${allVideos.length} vidéos.`, 'success');
+    } catch (error) {
+      if (format !== 'json') {
+        addConsoleLog(`Export ${format.toUpperCase()} indisponible sans le serveur : ${error.message}`, 'error');
+        return;
+      }
+      const payload = { query: currentSearchQuery, generatedAt: new Date().toISOString(), images: allImages, videos: allVideos, accounts: detectedAccounts };
+      saveAs(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `mediagatherer_${safeName}.json`);
+      addConsoleLog('Export JSON local généré en mode de secours.', 'info');
+    } finally {
+      btnExportJson.disabled = false;
+    }
   });
 }
 
@@ -2346,8 +2570,11 @@ if (btnBatchClear) {
 }
 
 if (btnHistoryClear) {
-  btnHistoryClear.addEventListener('click', () => {
+  btnHistoryClear.addEventListener('click', async () => {
+    const response = await fetch(`${API_BASE}/api/history`, { method: 'DELETE' });
+    if (!response.ok) return addConsoleLog('Impossible de vider l’historique serveur.', 'error');
     searchHistory = [];
+    localStorage.removeItem('mediagatherer_history');
     localStorage.removeItem('aerogatherer_history');
     renderHistory();
   });
@@ -2365,16 +2592,23 @@ if (btnMonitorRun) {
 }
 
 if (btnMonitorClear) {
-  btnMonitorClear.addEventListener('click', () => {
+  btnMonitorClear.addEventListener('click', async () => {
+    const response = await fetch(`${API_BASE}/api/monitors`, { method: 'DELETE' });
+    if (!response.ok) return addConsoleLog('Impossible de vider les veilles serveur.', 'error');
     savedMonitors = [];
+    localStorage.removeItem('mediagatherer_monitors');
     localStorage.removeItem('aerogatherer_monitors');
     renderMonitors();
   });
 }
 
-renderHistory();
 renderBatchQueue();
-renderMonitors();
+loadRuntimeStatus();
+refreshSearchHistory();
+loadMonitors();
+loadCollection();
+updatePersonActions();
+lucide.createIcons();
 
 // ----------------------------------------------------
 // UI STATUS DOTS & ADULT SOURCES & GRID SELECTOR INITIALIZATION
