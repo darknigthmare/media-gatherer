@@ -7,7 +7,9 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 - **Recherche inversee** : ouverture des moteurs inverses depuis une image choisie.
 - **Person Finder** : profils publics ou consentis, alias, comptes, galerie, validation, timeline et exclusions.
 
-Le mode NSFW public contient 22 adaptateurs par source. Il ne contourne ni connexion, ni compte prive, ni paywall.
+Le mode NSFW public contient 29 adaptateurs par source. Il ne contourne ni connexion, ni compte prive, ni paywall.
+
+La version 1.3.0 ajoute Eporner via son API publique ainsi que XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz via des adaptateurs HTML dedies. Chaque adaptateur conserve la miniature, la page source et, lorsqu'il existe, le lecteur public integre.
 
 ## Demarrage local
 
@@ -57,6 +59,8 @@ Les identifiants saisis dans l'onglet Connexions restent en memoire de session s
 - Une page de compte publique validee peut etre extraite entierement sans imposer le nom dans chaque media.
 - Wayback decouvre d'abord les domaines via la recherche officielle, puis lit les medias CDX sans filtre de nom.
 - Chaque source expose un statut, le nombre brut, le nombre filtre, les pages ouvertes et une raison explicite en cas de zero.
+- Les sources NSFW distinguent acces direct, fallback moteur, blocage, limitation de debit et indisponibilite reseau.
+- Eporner utilise son API publique en priorite, puis repasse sur la recherche HTML et les moteurs publics si elle ne repond pas.
 - La meilleure URL connue est conservee lors du dedoublonnage ; une miniature ne remplace pas un original.
 
 ## Stockage
@@ -73,4 +77,4 @@ Sur Vercel, le stockage fichier est temporaire. L'interface l'indique explicitem
 - Person Finder interdit l'adresse privee, le telephone prive et la localisation temps reel.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/AUDIT_2026-07-13.md](docs/AUDIT_2026-07-13.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md), [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md) et [docs/AUDIT_2026-07-13.md](docs/AUDIT_2026-07-13.md).

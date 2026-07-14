@@ -56,7 +56,8 @@ const SOURCE_GROUPS = {
     sources: [
       'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
       'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-      'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
+      'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
+      'drtuber', 'pornone', 'youjizz'
     ]
   }
 };
@@ -903,6 +904,9 @@ function updateSourceDiagnostics(data) {
       videosCount: status.videosCount || 0,
       pagesDiscovered: status.pagesDiscovered || 0,
       pagesCrawled: status.pagesCrawled || 0,
+      directReachable: status.directReachable !== false,
+      fallbackUsed: Boolean(status.fallbackUsed),
+      available: status.available !== false,
       updatedAt: new Date().toISOString()
     };
   });
@@ -966,10 +970,10 @@ function renderInsights() {
     const entries = Object.entries(sourceDiagnostics);
     sourceDiagnosticList.innerHTML = entries.length
       ? entries.map(([source, item]) => `
-        <div class="diagnostic-row ${item.success ? 'ok' : 'fail'} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}">
+        <div class="diagnostic-row ${item.success ? (item.fallbackUsed ? 'warning' : 'ok') : 'fail'} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}">
           <strong>${escapeHtml(source)}</strong>
           <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
-          ${item.adapter === 'source-crawl' ? `<small>Adaptateur source · ${item.pagesCrawled}/${item.pagesDiscovered} pages ouvertes</small>` : ''}
+          ${item.adapter ? `<small>${escapeHtml(item.adapter)} · ${item.pagesCrawled}/${item.pagesDiscovered} pages ouvertes${item.fallbackUsed ? ' · fallback actif' : ''}</small>` : ''}
           <small>${escapeHtml(item.skipped ? 'Bloqué par SafeSearch' : (item.note || item.zeroReason || (item.success ? 'OK' : 'Indisponible')))}</small>
         </div>
       `).join('')
@@ -1235,7 +1239,7 @@ function logSourceStatus(source, status) {
     const logType = isZero ? 'warning' : 'success';
     if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
-    } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix') {
+    } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix' || source === 'eporner' || source === 'xnxx' || source === 'hqporner' || source === 'nuvid' || source === 'drtuber' || source === 'pornone' || source === 'youjizz') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
     } else {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${accountsSuffix}${noteSuffix}`, logType);
@@ -1261,7 +1265,7 @@ function extractMediaAccount(item) {
     const normalizedHost = host.replace(/^www\./, '');
     if (!accountHosts.some(accountHost => normalizedHost === accountHost || normalizedHost.endsWith(`.${accountHost}`))) return '';
     const firstSegment = parsed.pathname.split('/').filter(Boolean)[0];
-    if (!firstSegment || ['search', 'results', 'watch', 'video', 'videos'].includes(firstSegment.toLowerCase())) return '';
+    if (!firstSegment || ['search', 'results', 'watch', 'video', 'videos', 'embed'].includes(firstSegment.toLowerCase()) || /^(?:video|watch|embed|hdporn)(?:[-_]|$)/i.test(firstSegment)) return '';
     return `${parsed.protocol}//${parsed.hostname}/${firstSegment}`;
   } catch (error) {
     return '';
@@ -1281,7 +1285,7 @@ function classifyDetectedTarget(url) {
     return { type: 'cdn', canScrape: false };
   }
 
-  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'pornhub.com', 'youporn.com', 'tube8.com', 'tnaflix.com', 'motherless.com'];
+  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'pornhub.com', 'youporn.com', 'tube8.com', 'tnaflix.com', 'motherless.com', 'eporner.com', 'xnxx.com', 'hqporner.com', 'nuvid.com', 'drtuber.com', 'pornone.com', 'youjizz.com'];
   if (accountHosts.some(accountHost => host === accountHost || host.endsWith(`.${accountHost}`))) {
     return { type: 'account', canScrape: true };
   }
@@ -2126,11 +2130,14 @@ lightbox.addEventListener('click', (e) => {
 function openVideoModal(vid, trigger = document.activeElement) {
   const videoUrl = safeHttpUrl(vid.url);
   const embedUrl = safeHttpUrl(vid.embedUrl);
+  const sourcePageUrl = safeHttpUrl(vid.link) || videoUrl;
+  const directVideo = /\.(?:mp4|webm|m3u8|mov)(?:[?#]|$)/i.test(videoUrl);
+  const externalPlayback = vid.playback === 'external' || (videoUrl && !directVideo && !embedUrl);
   lastModalTrigger = trigger;
   videoTitle.textContent = vid.title || 'Sans titre';
   videoSource.textContent = vid.source;
   videoDuration.textContent = vid.duration || 'Inconnue';
-  videoBtnLink.href = videoUrl || '#';
+  videoBtnLink.href = sourcePageUrl || '#';
   
   videoPlayerContainer.innerHTML = '';
   
@@ -2142,7 +2149,7 @@ function openVideoModal(vid, trigger = document.activeElement) {
     iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
     iframe.allowFullscreen = true;
     videoPlayerContainer.appendChild(iframe);
-  } else if (videoUrl) {
+  } else if (videoUrl && !externalPlayback) {
     // HTML5 Direct Video player (e.g. Reddit mp4 fallback)
     const video = document.createElement('video');
     video.src = videoUrl;
@@ -2150,6 +2157,14 @@ function openVideoModal(vid, trigger = document.activeElement) {
     video.autoplay = true;
     video.playsInline = true;
     videoPlayerContainer.appendChild(video);
+  } else if (sourcePageUrl) {
+    videoPlayerContainer.innerHTML = `
+      <div class="external-video-state">
+        <i data-lucide="external-link"></i>
+        <p>Lecture disponible sur la page publique de la source.</p>
+      </div>
+    `;
+    lucide.createIcons();
   } else {
     videoPlayerContainer.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);">
@@ -2749,7 +2764,7 @@ function activateNsfwPreset() {
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
   setNsfwVisibility();
-  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless']);
+  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz']);
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
     if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
   });

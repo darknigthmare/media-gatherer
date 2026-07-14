@@ -1568,6 +1568,29 @@ body {
   height: 100%;
 }
 
+.external-video-state {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.external-video-state i {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--accent-blue);
+}
+
+.external-video-state p {
+  margin: 0;
+}
+
 /* ----------------------------------------------------
    KEYFRAMES ANIMATIONS
    ---------------------------------------------------- */
@@ -1889,6 +1912,7 @@ body {
 }
 
 .diagnostic-row.ok { border-left: 2px solid rgba(34, 197, 94, 0.55); padding-left: 0.55rem; }
+.diagnostic-row.warning { border-left: 2px solid rgba(245, 158, 11, 0.65); padding-left: 0.55rem; }
 .diagnostic-row.fail { border-left: 2px solid rgba(239, 68, 68, 0.55); padding-left: 0.55rem; }
 
 .dashboard-header {

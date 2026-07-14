@@ -11,14 +11,20 @@ process.env.NODE_ENV = 'test';
 const app = require('../server');
 const {
   normalizeSearchTerm,
+  repairMojibake,
   evaluateMediaMatch,
   dedupeBestMedia,
   isPrivateIp,
   validatePublicMediaUrl,
   extractImagesFromHtml,
   extractLinksAsVideos,
+  extractAdapterPageLinks,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
+  parseEpornerApiResults,
+  sourceSearchUrls,
+  pageMatchesAdapter,
+  isProfileLikeSourcePage,
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
   filterBySearchMode,
@@ -47,6 +53,11 @@ test('normalise les accents et exige une preuve textuelle', () => {
   assert.equal(evaluateMediaMatch({ title: 'Sxysindy official gallery' }, 'sxysindy').score, 96);
   assert.equal(evaluateMediaMatch({ title: 'Random image', url: 'https://cdn.test/random.jpg', link: 'https://google.com/search?q=sxysindy' }, 'sxysindy').score, 20);
   assert.equal(evaluateMediaMatch({ title: 'Random filename', trustedContext: true }, 'sxysindy').score, 68);
+});
+
+test('repare les titres UTF-8 interpretes en latin1', () => {
+  assert.equal(repairMojibake('Amazing Five â» Mia'), 'Amazing Five ※ Mia');
+  assert.equal(repairMojibake('Titre français normal'), 'Titre français normal');
 });
 
 test('rejette les assets UI et les cartes hors sujet sur une page de recherche', () => {
@@ -105,6 +116,54 @@ test('lit les fallbacks web DuckDuckGo et Bing', () => {
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].playback, 'external');
   assert.equal(candidates[0].thumbnail, '');
+});
+
+test('normalise l API Eporner et conserve la meilleure miniature', () => {
+  const videos = parseEpornerApiResults({
+    videos: [{
+      id: 'abc123',
+      title: 'Mia public video',
+      keywords: 'mia creator',
+      url: 'https://www.eporner.com/video-abc123/mia-public-video/',
+      embed: 'https://www.eporner.com/embed/abc123/',
+      length_sec: 125,
+      default_thumb: { src: 'https://cdn.example/640.jpg', width: 640, height: 360 },
+      thumbs: [{ src: 'https://cdn.example/1280.jpg', width: 1280, height: 720 }]
+    }, {
+      id: 'noise',
+      title: 'Unrelated result',
+      keywords: 'another person',
+      url: 'https://www.eporner.com/video-noise/unrelated/'
+    }]
+  }, 'mia', 10);
+  assert.equal(videos.length, 1);
+  assert.equal(videos[0].thumbnail, 'https://cdn.example/1280.jpg');
+  assert.equal(videos[0].embedUrl, 'https://www.eporner.com/embed/abc123/');
+  assert.equal(videos[0].duration, '2:05');
+});
+
+test('enregistre les nouvelles routes de recherche NSFW publiques', () => {
+  assert.match(sourceSearchUrls('xnxx', 'mia')[0], /xnxx\.com\/search\/mia\/0/);
+  assert.match(sourceSearchUrls('hqporner', 'mia')[0], /hqporner\.com\/\?q=mia/);
+  assert.match(sourceSearchUrls('youjizz', 'mia')[0], /youjizz\.com\/search\/mia-1\.html/);
+  assert.equal(pageMatchesAdapter('https://www.xnxx.com/video-abc/mia-public-video', 'xnxx'), true);
+  assert.equal(pageMatchesAdapter('https://hqporner.com/hdporn/123_mia.html', 'hqporner'), true);
+  assert.equal(pageMatchesAdapter('https://pornone.com/category/pornone-sex-video-123/123/', 'pornone'), true);
+  assert.equal(pageMatchesAdapter('https://example.com/video-abc/mia', 'xnxx'), false);
+  assert.equal(isProfileLikeSourcePage('https://www.xnxx.com/porn-maker/mia', 'xnxx'), true);
+  assert.equal(isProfileLikeSourcePage('https://www.xnxx.com/video-abc/mia', 'xnxx'), false);
+
+  const trustedHqRows = extractAdapterPageLinks(
+    '<section><a href="/hdporn/123_related-result.html"><img src="/thumb.jpg">Related result</a></section>',
+    'https://hqporner.com/?q=mia',
+    'mia',
+    'hqporner',
+    5,
+    { trustedSearchResults: true }
+  );
+  assert.equal(trustedHqRows.length, 1);
+  assert.equal(trustedHqRows[0].trustedContext, true);
+  assert.equal(trustedHqRows[0].thumbnail, 'https://hqporner.com/thumb.jpg');
 });
 
 test('conserve l original plutot que sa miniature', () => {
@@ -167,6 +226,11 @@ test('expose des contrats API coherents', async () => {
   const desktopQa = await fetch(`${baseUrl}/api/desktop/qa`);
   assert.equal(desktopQa.status, 200);
   assert.equal((await desktopQa.json()).assetsReady, true);
+
+  const adapters = await fetch(`${baseUrl}/api/sources/adapters`).then(response => response.json());
+  const eporner = adapters.adapters.find(adapter => adapter.id === 'eporner');
+  assert.equal(eporner.mode, 'eporner-api-v2');
+  assert.equal(eporner.availability, 'official-public-api-with-html-fallback');
 });
 
 test('exporte les resultats en CSV et Markdown', async () => {

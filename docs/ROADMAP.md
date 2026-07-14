@@ -1,12 +1,14 @@
 # Etat et suite
 
-## Integre dans la version 1.2.0
+## Integre dans la version 1.3.0
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
 - Modes photo, video ou mixte, pertinence stricte/intelligente/large et conservation de la meilleure qualite.
 - Recherche Wayback par terme, domaines officiels et extraction CDX sans filtre de nom apres validation du site.
-- 22 adaptateurs NSFW publics avec extraction image/video, miniatures, pages decouvertes et raison des zeros.
+- 29 adaptateurs NSFW publics avec extraction image/video, miniatures, pages decouvertes et raison des zeros.
+- Eporner API v2 prioritaire, plus XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz en HTML public.
+- Etats distincts pour acces direct, fallback actif, blocage, limitation et source indisponible.
 - Profils Person Finder, alias detectes ou saisis, comptes publics, score, galerie, timeline, validation et exclusions.
 - Securite HTTP, SSRF, CORS, CSP, rate limits, limites de taille et token d'ecriture facultatif.
 - Executable Windows Node 24 autonome et workflow GitHub Actions.

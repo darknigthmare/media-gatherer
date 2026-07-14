@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-13-media-8';
+const CACHE_SCHEMA_VERSION = '2026-07-14-media-9';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -32,13 +32,15 @@ const SOURCE_IDS = [
   'instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'wayback', 'vimeo', 'dailymotion',
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
+  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
+  'drtuber', 'pornone', 'youjizz'
 ];
 
 const NSFW_SOURCES = new Set([
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless'
+  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
+  'drtuber', 'pornone', 'youjizz'
 ]);
 
 const SOURCE_LABELS = {
@@ -63,7 +65,14 @@ const SOURCE_LABELS = {
   youporn: 'YouPorn',
   tube8: 'Tube8',
   tnaflix: 'TNAFlix',
-  motherless: 'Motherless'
+  motherless: 'Motherless',
+  eporner: 'Eporner',
+  xnxx: 'XNXX',
+  hqporner: 'HQPorner',
+  nuvid: 'Nuvid',
+  drtuber: 'DrTuber',
+  pornone: 'PornOne',
+  youjizz: 'YouJizz'
 };
 
 const NSFW_ADAPTERS = {
@@ -88,7 +97,20 @@ const NSFW_ADAPTERS = {
   youporn: { domains: ['youporn.com'], pagePatterns: [/\/watch\//i, /\/(?:porntags|pornstar)\//i], media: ['video'], crawlLimit: 6 },
   tube8: { domains: ['tube8.com'], pagePatterns: [/\/(?:porn-video|video|pornstar)\//i, /\/[^/]+\/[^/]+\/\d+/i], media: ['video'], crawlLimit: 6 },
   tnaflix: { domains: ['tnaflix.com'], pagePatterns: [/\/(?:hd-videos?|videos?|profile)\//i], media: ['video'], crawlLimit: 6 },
-  motherless: { domains: ['motherless.com'], pagePatterns: [/\/(?:G|GI|GV|term|m)\//i], media: ['image', 'video'], crawlLimit: 6 }
+  motherless: { domains: ['motherless.com'], pagePatterns: [/\/(?:G|GI|GV|term|m)\//i], media: ['image', 'video'], crawlLimit: 6 },
+  eporner: {
+    domains: ['eporner.com'],
+    pagePatterns: [/\/video-[^/]+\//i, /\/embed\//i],
+    media: ['video'],
+    crawlLimit: 4,
+    transport: 'eporner-api-v2'
+  },
+  xnxx: { domains: ['xnxx.com'], pagePatterns: [/\/video-[^/]+\//i], media: ['video'], crawlLimit: 5 },
+  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5, trustSearchResults: true },
+  nuvid: { domains: ['nuvid.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
+  drtuber: { domains: ['drtuber.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
+  pornone: { domains: ['pornone.com'], pagePatterns: [/\/[^/]+\/[^/]*video-\d+\/\d+\/?$/i], media: ['video'], crawlLimit: 5 },
+  youjizz: { domains: ['youjizz.com'], pagePatterns: [/\/videos\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 }
 };
 
 const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
@@ -243,6 +265,14 @@ function normalizeSearchTerm(value) {
     .toLowerCase();
 }
 
+function repairMojibake(value) {
+  const text = String(value || '');
+  if (!/(?:Ã.|Â.|â[\u0080-\u00bf]|ð[\u0080-\u00bf])/u.test(text)) return text;
+  const repaired = Buffer.from(text, 'latin1').toString('utf8');
+  const replacementCount = candidate => (candidate.match(/�/g) || []).length;
+  return replacementCount(repaired) <= replacementCount(text) ? repaired : text;
+}
+
 function isSafeHttpUrl(value) {
   try {
     const parsed = new URL(String(value || ''));
@@ -336,7 +366,14 @@ function sourceDomain(sourceId) {
     youporn: 'youporn.com',
     tube8: 'tube8.com',
     tnaflix: 'tnaflix.com',
-    motherless: 'motherless.com'
+    motherless: 'motherless.com',
+    eporner: 'eporner.com',
+    xnxx: 'xnxx.com',
+    hqporner: 'hqporner.com',
+    nuvid: 'nuvid.com',
+    drtuber: 'drtuber.com',
+    pornone: 'pornone.com',
+    youjizz: 'youjizz.com'
   };
   return domains[sourceId] || `${sourceId}.com`;
 }
@@ -387,26 +424,31 @@ function evaluateMediaMatch(item, query) {
 }
 
 function enrichMedia(item, query, sourceId, kind = 'image') {
-  const match = evaluateMediaMatch(item, query);
-  const score = Number(item.confidenceScore || match.score);
-  const source = item.source || sourceLabel(sourceId);
-  const url = item.url || item.thumbnail || item.link;
-  const thumbnail = item.thumbnail || ((item.type || kind) === 'image' && looksLikeImage(url) ? url : '');
-  return {
+  const normalizedItem = {
     ...item,
-    type: item.type || kind,
+    title: repairMojibake(item?.title),
+    description: repairMojibake(item?.description)
+  };
+  const match = evaluateMediaMatch(normalizedItem, query);
+  const score = Number(normalizedItem.confidenceScore || match.score);
+  const source = normalizedItem.source || sourceLabel(sourceId);
+  const url = normalizedItem.url || normalizedItem.thumbnail || normalizedItem.link;
+  const thumbnail = normalizedItem.thumbnail || ((normalizedItem.type || kind) === 'image' && looksLikeImage(url) ? url : '');
+  return {
+    ...normalizedItem,
+    type: normalizedItem.type || kind,
     source,
     sourceId,
     sourceLabel: sourceLabel(sourceId),
-    title: item.title || `${source} media`,
+    title: normalizedItem.title || `${source} media`,
     url,
     thumbnail,
-    link: item.link || item.url,
+    link: normalizedItem.link || normalizedItem.url,
     confidenceScore: score,
     confidenceLabel: score >= 80 ? 'haute' : (score >= 55 ? 'moyenne' : 'faible'),
-    matchReasons: item.matchReasons || match.reasons,
-    visualSignature: item.visualSignature || stableHash({ type: item.type || kind, media: canonicalMediaKey({ ...item, url }) }),
-    qualityLabel: item.qualityLabel || (item.width && item.height ? `${item.width}x${item.height}` : 'source publique')
+    matchReasons: normalizedItem.matchReasons || match.reasons,
+    visualSignature: normalizedItem.visualSignature || stableHash({ type: normalizedItem.type || kind, media: canonicalMediaKey({ ...normalizedItem, url }) }),
+    qualityLabel: normalizedItem.qualityLabel || (normalizedItem.width && normalizedItem.height ? `${normalizedItem.width}x${normalizedItem.height}` : 'source publique')
   };
 }
 
@@ -583,6 +625,18 @@ function pageMatchesAdapter(url, sourceId) {
   const adapter = NSFW_ADAPTERS[sourceId];
   if (!adapter || !hostMatchesSource(url, sourceId)) return false;
   return !adapter.pagePatterns?.length || adapter.pagePatterns.some(pattern => pattern.test(new URL(url).pathname + new URL(url).search));
+}
+
+function isProfileLikeSourcePage(rawUrl, sourceId) {
+  try {
+    if (!hostMatchesSource(rawUrl, sourceId)) return false;
+    const pathname = new URL(rawUrl).pathname;
+    if (NSFW_ADAPTERS[sourceId]?.publicProfileOnly) return !/^\/?$/.test(pathname);
+    return /\/(?:users?|profiles?|models?|pornstars?|performers?|creators?|channels?|actress|babe|girls?|tags?|porn-maker|m)\/[^/]+/i.test(pathname) ||
+      (sourceId === 'freeones' && /\/html\/[^/]+/i.test(pathname));
+  } catch {
+    return false;
+  }
 }
 
 function absolutize(candidate, baseUrl) {
@@ -783,7 +837,7 @@ function extractStructuredMedia(html, baseUrl, query, sourceId) {
   return { images, videos };
 }
 
-function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20) {
+function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
   const needle = normalizeSearchTerm(query);
@@ -792,13 +846,19 @@ function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20) {
     if (!pageMatchesAdapter(url, sourceId)) return;
     const card = $(el).closest('article, li, figure, [class*="item"], [class*="card"], [class*="thumb"], [class*="result"]');
     const context = [$(el).attr('title'), $(el).text(), card.text(), url].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-    if (needle && !textMatchesQuery(context, needle)) return;
-    const image = card.find('img').first();
+    if (needle && !options.trustedSearchResults && !textMatchesQuery(context, needle)) return;
+    const nestedImage = $(el).find('img').first();
+    const image = nestedImage.length ? nestedImage : card.find('img').first();
     const thumbnail = absolutize(bestMediaCandidate([
       image.attr('data-full'), image.attr('data-large'), image.attr('data-src'), image.attr('data-original'),
       image.attr('data-lazy-src'), image.attr('srcset'), image.attr('data-srcset'), image.attr('src')
     ]), baseUrl);
-    rows.push({ url, title: ($(el).attr('title') || $(el).text() || card.text()).replace(/\s+/g, ' ').trim(), thumbnail });
+    rows.push({
+      url,
+      title: ($(el).attr('title') || $(el).text() || card.text()).replace(/\s+/g, ' ').trim(),
+      thumbnail,
+      trustedContext: Boolean(options.trustedSearchResults)
+    });
   });
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
@@ -828,9 +888,11 @@ function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {
   const images = rawImages.map(item => rescore(item, 'image', item.thumbnail || poster || item.url));
   const videos = rawVideos.map(item => rescore(item, 'video', item.thumbnail || poster || pageMeta.thumbnail));
   const adapter = NSFW_ADAPTERS[sourceId];
-  const adapterImages = adapter?.media.includes('image') ? [...structured.images, ...images] : [];
-  const adapterVideos = adapter?.media.includes('video') ? [...structured.videos, ...videos] : [];
-  if (adapter?.media.includes('video') && poster && pageMatchesAdapter(pageUrl, sourceId) && textMatchesQuery(`${pageTitle} ${pageUrl}`, query)) {
+  const structuredImages = structured.images.map(item => rescore(item, 'image', item.thumbnail || poster || item.url));
+  const structuredVideos = structured.videos.map(item => rescore(item, 'video', item.thumbnail || poster || pageMeta.thumbnail));
+  const adapterImages = adapter?.media.includes('image') ? [...structuredImages, ...images] : [];
+  const adapterVideos = adapter?.media.includes('video') ? [...structuredVideos, ...videos] : [];
+  if (adapter?.media.includes('video') && poster && pageMatchesAdapter(pageUrl, sourceId) && (pageMeta.trustedContext || textMatchesQuery(`${pageTitle} ${pageUrl}`, query))) {
     adapterVideos.push(enrichMedia({
       url: pageUrl,
       link: pageUrl,
@@ -905,7 +967,14 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     youporn: `https://www.youporn.com/search/?query=${encoded}`,
     tube8: `https://www.tube8.com/search.html?q=${encoded}`,
     tnaflix: `https://www.tnaflix.com/search?what=${encoded}`,
-    motherless: `https://motherless.com/term/${encoded}`
+    motherless: `https://motherless.com/term/${encoded}`,
+    eporner: `https://www.eporner.com/search/${encoded}/`,
+    xnxx: `https://www.xnxx.com/search/${encoded}/0`,
+    hqporner: `https://hqporner.com/?q=${encoded}`,
+    nuvid: `https://www.nuvid.com/search/videos/${encoded}`,
+    drtuber: `https://www.drtuber.com/search/videos/${encoded}`,
+    pornone: `https://pornone.com/search/?q=${encoded}`,
+    youjizz: `https://www.youjizz.com/search/${encoded}-1.html`
   };
   const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
   if (NSFW_SOURCES.has(sourceId) || SOURCE_META[sourceId]?.category === 'social') {
@@ -919,6 +988,56 @@ function sourceSearchUrls(sourceId, query, options = {}) {
   return uniq(urls);
 }
 
+function parseEpornerApiResults(payload, query, limit = 20) {
+  const rows = Array.isArray(payload?.videos) ? payload.videos : [];
+  const videos = rows.flatMap(entry => {
+    const title = String(entry?.title || '').trim();
+    const description = String(entry?.keywords || '').trim();
+    const pageUrl = String(entry?.url || '').trim();
+    if (!pageUrl || !textMatchesQuery(`${title} ${description} ${pageUrl}`, query)) return [];
+    const thumbnails = [entry?.default_thumb, ...(Array.isArray(entry?.thumbs) ? entry.thumbs : [])]
+      .filter(thumb => thumb?.src)
+      .sort((a, b) => (Number(b.width) * Number(b.height)) - (Number(a.width) * Number(a.height)));
+    const bestThumb = thumbnails[0] || {};
+    return [enrichMedia({
+      url: pageUrl,
+      link: pageUrl,
+      embedUrl: entry?.embed || '',
+      thumbnail: bestThumb.src || '',
+      title: title || 'Eporner video',
+      description,
+      duration: formatDuration(entry?.length_sec),
+      width: Number(bestThumb.width) || 0,
+      height: Number(bestThumb.height) || 0,
+      playback: entry?.embed ? 'embed' : 'external',
+      providerVideoId: entry?.id || '',
+      apiAdapter: 'eporner-v2'
+    }, query, 'eporner', 'video')];
+  });
+  return dedupeBestMedia(videos).slice(0, Math.max(1, Math.min(Number(limit) || 20, 40)));
+}
+
+async function scrapeEpornerApi(query, options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.videoLimit) || 20, 40));
+  const params = new URLSearchParams({
+    query,
+    per_page: String(limit),
+    page: '1',
+    thumbsize: 'big',
+    order: 'latest',
+    lq: '1',
+    format: 'json'
+  });
+  const endpoint = `https://www.eporner.com/api/v2/video/search/?${params}`;
+  const payload = await fetchText(endpoint, { timeout: options.timeout || 14000 });
+  const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+  return {
+    endpoint,
+    totalAvailable: Number(parsed?.total_count) || 0,
+    videos: parseEpornerApiResults(parsed, query, limit)
+  };
+}
+
 async function scrapeNsfwSource(sourceId, query, options = {}) {
   const adapter = NSFW_ADAPTERS[sourceId];
   const images = [];
@@ -926,15 +1045,61 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   const discoveredPages = [];
   const notes = [];
   const searchUrls = sourceSearchUrls(sourceId, query, options);
+  let directReachable = false;
+  let fallbackReachable = false;
+  let successfulRequests = 0;
+  let blockedResponses = 0;
+  let rateLimitedResponses = 0;
 
-  for (const searchUrl of searchUrls) {
+  if (adapter.transport === 'eporner-api-v2') {
+    try {
+      const apiResult = await scrapeEpornerApi(query, options);
+      if (apiResult.videos.length) {
+        return {
+          images: [],
+          videos: apiResult.videos,
+          status: {
+            success: true,
+            available: true,
+            directReachable: true,
+            fallbackUsed: false,
+            adapter: 'eporner-api-v2',
+            note: `${apiResult.videos.length} videos via API publique Eporner (${apiResult.totalAvailable} correspondances annoncees)`,
+            imagesCount: 0,
+            videosCount: apiResult.videos.length,
+            pagesDiscovered: apiResult.videos.length,
+            pagesCrawled: 0,
+            pages: apiResult.videos.map(item => item.link).slice(0, 10),
+            accounts: [],
+            zeroReason: ''
+          }
+        };
+      }
+      notes.push(`api.eporner.com: 0 resultat sur ${apiResult.totalAvailable}`);
+      directReachable = true;
+      successfulRequests += 1;
+    } catch (error) {
+      notes.push(`api.eporner.com: ${error.code || error.message}`);
+      if (error.status === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
+    }
+  }
+
+  for (const [searchIndex, searchUrl] of searchUrls.entries()) {
     try {
       const page = await fetchPage(searchUrl, { timeout: options.timeout || 14000 });
       const searchHost = new URL(searchUrl).hostname;
       notes.push(`${searchHost}: HTTP ${page.statusCode}`);
+      if (page.statusCode === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(page.statusCode)) blockedResponses += 1;
       if (page.statusCode >= 400) continue;
+      successfulRequests += 1;
+      if (searchIndex === 0) directReachable = true;
+      else fallbackReachable = true;
 
-      const pageLinks = extractAdapterPageLinks(page.html, page.finalUrl, query, sourceId, 24);
+      const pageLinks = extractAdapterPageLinks(page.html, page.finalUrl, query, sourceId, 24, {
+        trustedSearchResults: searchIndex === 0 && Boolean(adapter.trustSearchResults)
+      });
       discoveredPages.push(...pageLinks);
 
       if (pageMatchesAdapter(page.finalUrl, sourceId)) {
@@ -946,6 +1111,8 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
       }
     } catch (error) {
       notes.push(`${new URL(searchUrl).hostname}: ${error.code || error.message}`);
+      if (error.status === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
     }
   }
 
@@ -972,20 +1139,33 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   const uniqueImages = dedupeBestMedia(images).slice(0, imageLimit);
   const uniqueVideos = dedupeBestMedia(videos).slice(0, videoLimit);
   const total = uniqueImages.length + uniqueVideos.length;
-  const zeroReason = total ? '' : (uniquePages.length ? 'detail_pages_without_public_media' : 'no_matching_public_pages');
+  const zeroReason = total
+    ? ''
+    : (uniquePages.length
+        ? 'detail_pages_without_public_media'
+        : (!successfulRequests
+            ? (rateLimitedResponses ? 'rate_limited' : (blockedResponses ? 'access_blocked' : 'source_unreachable'))
+            : 'no_matching_public_pages'));
   const profileNote = adapter.publicProfileOnly ? '; profils publics uniquement' : '';
   return {
     images: uniqueImages,
     videos: uniqueVideos,
     status: {
-      success: true,
+      success: successfulRequests > 0,
+      available: successfulRequests > 0,
+      directReachable,
+      fallbackUsed: !directReachable && fallbackReachable,
       adapter: 'source-crawl',
       note: `${uniquePages.length} pages correspondantes; ${crawled} ouvertes; ${notes.join('; ')}${profileNote}`,
       imagesCount: uniqueImages.length,
       videosCount: uniqueVideos.length,
       pagesDiscovered: uniquePages.length,
       pagesCrawled: crawled,
-      accounts: uniquePages.map(item => item.url).slice(0, 10),
+      attemptedUrls: searchUrls.length,
+      blockedResponses,
+      rateLimitedResponses,
+      pages: uniquePages.map(item => item.url).slice(0, 10),
+      accounts: uniquePages.filter(item => isProfileLikeSourcePage(item.url, sourceId)).map(item => item.url).slice(0, 10),
       zeroReason
     }
   };
@@ -1408,7 +1588,11 @@ function filterByMediaMetadata(items, options = {}) {
 
 function sourceHealthFromStatus(sourceId, sourceStatus) {
   const total = Number(sourceStatus.imagesCount || 0) + Number(sourceStatus.videosCount || 0);
-  const state = sourceStatus.skipped ? 'configuration_required' : (!sourceStatus.success ? 'error' : (total ? 'operational' : 'empty'));
+  let state = 'empty';
+  if (sourceStatus.skipped) state = 'configuration_required';
+  else if (!sourceStatus.success) state = sourceStatus.zeroReason || 'error';
+  else if (total && (sourceStatus.fallbackUsed || sourceStatus.directReachable === false)) state = 'degraded';
+  else if (total) state = 'operational';
   return {
     sourceId,
     state,
@@ -2030,10 +2214,11 @@ app.get('/api/sources/adapters', (req, res) => res.json({
       label: source.label,
       category: source.category,
       supports: source.supports,
-      mode: adapter ? 'source-crawl' : 'public-html-or-api',
+      mode: adapter?.transport || (adapter ? 'source-crawl' : 'public-html-or-api'),
       domains: adapter?.domains || [sourceDomain(source.id)],
       crawlLimit: adapter?.crawlLimit || 0,
       publicProfileOnly: Boolean(adapter?.publicProfileOnly),
+      availability: adapter?.transport ? 'official-public-api-with-html-fallback' : (adapter ? 'direct-html-with-search-engine-fallbacks' : 'public-html-or-api'),
       fallbacks: source.nsfw ? ['direct', 'duckduckgo-site', 'bing-site', 'brave-site'] : ['direct']
     };
   })
@@ -2531,6 +2716,7 @@ app.use((error, req, res, next) => {
 
 app.locals.testables = {
   normalizeSearchTerm,
+  repairMojibake,
   evaluateMediaMatch,
   enrichMedia,
   canonicalMediaKey,
@@ -2539,8 +2725,13 @@ app.locals.testables = {
   validatePublicMediaUrl,
   extractImagesFromHtml,
   extractLinksAsVideos,
+  extractAdapterPageLinks,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
+  parseEpornerApiResults,
+  sourceSearchUrls,
+  pageMatchesAdapter,
+  isProfileLikeSourcePage,
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
   filterBySearchMode,

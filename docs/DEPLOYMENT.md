@@ -29,7 +29,7 @@ Verifier ensuite :
 `dist/` est ignore par Git. Publier l'EXE comme asset d'une release GitHub :
 
 ```powershell
-gh release create v1.2.0 dist/MediaGatherer.exe --title "MediaGatherer 1.2.0" --generate-notes
+gh release create v1.3.0 dist/MediaGatherer.exe --title "MediaGatherer 1.3.0" --generate-notes
 ```
 
 ## Vercel
@@ -53,7 +53,7 @@ Les fonctions Vercel ont un stockage fichier temporaire dans `/tmp`. La recherch
 ```powershell
 git status --short --branch
 git add .
-git commit -m "Harden Media Finder and complete application audit"
+git commit -m "Expand public NSFW source adapters"
 git push origin master
 ```
 
