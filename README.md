@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 73 sources : 14 normales, 11 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.4 conserve les volumes utiles restaures dans le Media Finder et place les galeries photo et video dans deux zones a hauteur bornee. Chaque zone defile independamment, garde son titre et son compteur visibles et reste accessible au clavier sur ordinateur comme sur mobile. Les requetes, alias, adaptateurs, protections NSFW et resultats progressifs ne changent pas.
+La version 1.5.5 integre le moteur Google Programmable Search `155c4d451e53743c2` comme CX public par defaut. La source Google utilise l'API JSON officielle pour alimenter les cartes Media Finder, applique le niveau SafeSearch ou NSFW actif et laisse le CX modifiable dans Connexions API. Seule une cle `GOOGLE_API_KEY` personnelle reste necessaire.
 
 ## Demarrage local
 
@@ -47,7 +47,7 @@ Copier les valeurs utiles de `.env.example` dans `.env` :
 - `MEDIAGATHERER_DATA_DIR` : dossier de stockage local personnalise.
 - `CORS_ORIGINS` : origines navigateur autorisees, separees par des virgules.
 - `APP_WRITE_TOKEN` : protection facultative des routes de modification.
-- `GOOGLE_API_KEY` et `GOOGLE_CX` : Google Custom Search.
+- `GOOGLE_API_KEY` : cle requise pour Google Programmable Search. `GOOGLE_CX` est facultatif et remplace le moteur public preconfigure `155c4d451e53743c2`.
 - `BRAVE_API_KEY`, `FLICKR_API_KEY`, `YOUTUBE_API_KEY` : APIs officielles correspondantes.
 - `TMDB_API_KEY`, `IMGUR_CLIENT_ID`, `TUMBLR_API_KEY` : metadonnees et medias publics correspondants.
 - `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET` : app auth Twitch Helix pour les clips publics.

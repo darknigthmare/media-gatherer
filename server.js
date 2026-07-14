@@ -12,6 +12,7 @@ const dnsModule = require('dns');
 const dns = dnsModule.promises;
 const net = require('net');
 const { version: APP_VERSION } = require('./package.json');
+const DEFAULT_GOOGLE_CX = '155c4d451e53743c2';
 const { EXTENDED_SOURCE_DEFINITIONS, EXTENDED_SOURCE_ADAPTERS } = require('./src/sources/extendedSources');
 const {
   runExtendedApiSource,
@@ -1442,8 +1443,20 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   };
 }
 
-function connectionValue(provider, field, envName) {
-  return SESSION_CONNECTIONS.get(provider)?.[field] || process.env[envName] || '';
+function connectionValue(provider, field, envName, fallback = '') {
+  return SESSION_CONNECTIONS.get(provider)?.[field] || process.env[envName] || fallback;
+}
+
+function buildGoogleCseUrl(query, options = {}, apiKey = '', cx = DEFAULT_GOOGLE_CX) {
+  const params = new URLSearchParams({
+    searchType: 'image',
+    num: String(Math.max(1, Math.min(Number(options.imageLimit) || 10, 10))),
+    q: String(query || '').trim(),
+    key: String(apiKey || '').trim(),
+    cx: String(cx || DEFAULT_GOOGLE_CX).trim(),
+    safe: options.safe === false ? 'off' : 'active'
+  });
+  return `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
 }
 
 function formatDuration(seconds) {
@@ -1791,11 +1804,11 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
 
   if (sourceId === 'google') {
     const apiKey = connectionValue('google', 'apiKey', 'GOOGLE_API_KEY');
-    const cx = connectionValue('google', 'cx', 'GOOGLE_CX');
-    if (!apiKey || !cx) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'google-cse', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Google et CX requis dans Connexions API' } };
-    const data = await fetchText(`https://www.googleapis.com/customsearch/v1?searchType=image&num=10&q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}`);
+    const cx = connectionValue('google', 'cx', 'GOOGLE_CX', DEFAULT_GOOGLE_CX);
+    if (!apiKey) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'google-cse', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Google API requise; moteur CX deja preconfigure dans Connexions API' } };
+    const data = await fetchText(buildGoogleCseUrl(query, { ...options, imageLimit }, apiKey, cx));
     const images = (data?.items || []).map(row => enrichMedia({ url: row.link, thumbnail: row.image?.thumbnailLink || row.link, link: row.image?.contextLink, title: row.title, width: row.image?.width, height: row.image?.height, description: row.snippet }, query, 'google', 'image')).filter(item => item.url);
-    return { images, videos: [], status: { success: true, adapter: 'google-cse', imagesCount: images.length, videosCount: 0, note: 'Google Custom Search API' } };
+    return { images, videos: [], status: { success: true, adapter: 'google-cse', imagesCount: images.length, videosCount: 0, engineCx: cx, note: `Google Programmable Search API; SafeSearch ${options.safe === false ? 'inactif' : 'actif'}` } };
   }
 
   if (sourceId === 'brave') {
@@ -2642,7 +2655,7 @@ app.get('/api/proxy', proxyLimiter, async (req, res) => {
 const CONNECTION_PROVIDERS = {
   youtube: { label: 'YouTube Data API', env: ['YOUTUBE_API_KEY'], unlocks: 'Recherche officielle de videos publiques', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
   flickr: { label: 'Flickr API', env: ['FLICKR_API_KEY'], unlocks: 'Recherche officielle de photos publiques', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
-  google: { label: 'Google Custom Search', env: ['GOOGLE_API_KEY', 'GOOGLE_CX'], unlocks: 'Recherche Google Images officielle', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }, { name: 'cx', label: 'Search CX', type: 'text', required: true }] },
+  google: { label: 'Google Programmable Search', env: ['GOOGLE_API_KEY'], unlocks: 'Recherche Google Images officielle avec moteur CX preconfigure', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }, { name: 'cx', label: 'Search CX', type: 'text', required: false, defaultValue: DEFAULT_GOOGLE_CX }] },
   brave: { label: 'Brave Search API', env: ['BRAVE_API_KEY'], unlocks: 'Recherche Brave Images officielle', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
   tmdb: { label: 'TMDB API', env: ['TMDB_API_KEY'], unlocks: 'Profils, noms et portraits publics TMDB', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
   imgur: { label: 'Imgur API', env: ['IMGUR_CLIENT_ID'], unlocks: 'Galeries publiques Imgur', fields: [{ name: 'clientId', label: 'Client ID', type: 'password', required: true }] },
@@ -2679,7 +2692,7 @@ app.post('/api/connections/:id', (req, res) => {
   for (const field of definition.fields) {
     const value = String(req.body?.[field.name] || '').trim();
     if (field.required && !value) return res.status(400).json({ error: `${field.label} requis` });
-    credentials[field.name] = value;
+    credentials[field.name] = value || field.defaultValue || '';
   }
   SESSION_CONNECTIONS.set(req.params.id, credentials);
   return res.json({ ok: true, provider: req.params.id, storage: 'session-memory', note: 'Identifiants conserves uniquement dans la memoire de cette instance.' });
@@ -2694,7 +2707,7 @@ app.post('/api/connections/:id/test', async (req, res) => {
   try {
     if (id === 'youtube') await fetchText(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=1&q=test&key=${encodeURIComponent(connectionValue('youtube', 'apiKey', 'YOUTUBE_API_KEY'))}`);
     if (id === 'flickr') await fetchText(`https://www.flickr.com/services/rest/?method=flickr.test.echo&api_key=${encodeURIComponent(connectionValue('flickr', 'apiKey', 'FLICKR_API_KEY'))}&format=json&nojsoncallback=1`);
-    if (id === 'google') await fetchText(`https://www.googleapis.com/customsearch/v1?num=1&q=test&key=${encodeURIComponent(connectionValue('google', 'apiKey', 'GOOGLE_API_KEY'))}&cx=${encodeURIComponent(connectionValue('google', 'cx', 'GOOGLE_CX'))}`);
+    if (id === 'google') await fetchText(buildGoogleCseUrl('test', { imageLimit: 1, safe: true }, connectionValue('google', 'apiKey', 'GOOGLE_API_KEY'), connectionValue('google', 'cx', 'GOOGLE_CX', DEFAULT_GOOGLE_CX)));
     if (id === 'brave') await fetchText('https://api.search.brave.com/res/v1/images/search?q=test&count=1', { headers: { 'X-Subscription-Token': connectionValue('brave', 'apiKey', 'BRAVE_API_KEY'), accept: 'application/json' } });
     if (id === 'tmdb') await fetchText(`https://api.themoviedb.org/3/search/person?api_key=${encodeURIComponent(connectionValue('tmdb', 'apiKey', 'TMDB_API_KEY'))}&query=test&page=1`);
     if (id === 'imgur') await fetchText('https://api.imgur.com/3/gallery/search/time/all/0?q=test', { headers: { authorization: `Client-ID ${connectionValue('imgur', 'clientId', 'IMGUR_CLIENT_ID')}`, accept: 'application/json' } });
@@ -3454,6 +3467,7 @@ app.locals.testables = {
   parseArquivoResults,
   selectWikidataEntity,
   selectTmdbPerson,
+  buildGoogleCseUrl,
   desktopDiagnostics
 };
 

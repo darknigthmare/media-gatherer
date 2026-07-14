@@ -1,10 +1,11 @@
 # Etat et suite
 
-## Integre dans la version 1.5.4
+## Integre dans la version 1.5.5
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
 - Galeries photo et video a hauteur responsive bornee, avec defilement interne independant et navigation clavier.
+- Google Programmable Search preconfigure avec le CX fourni, surcharge possible et SafeSearch synchronise avec le mode de recherche.
 - Modes photo, video ou mixte, pertinence stricte/intelligente/large et conservation de la meilleure qualite.
 - Pertinence intelligente par defaut et seuil unique applique apres les adaptateurs, sans double filtrage en dur.
 - Recherche Wayback par terme, domaines officiels ou personnels probables et extraction CDX rapide par domaine sans filtre de nom apres validation du site.

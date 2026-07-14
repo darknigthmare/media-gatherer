@@ -426,12 +426,16 @@ function renderConnections(providers) {
     const card = document.createElement('form');
     card.className = `connection-card ${provider.configured ? 'configured' : ''}`;
     card.dataset.provider = provider.id;
-    const fieldsHtml = (provider.fields || []).map(field => `
-      <label class="connection-field">
-        <span>${escapeHtml(field.label)}</span>
-        <input type="${field.type || 'text'}" name="${escapeHtml(field.name)}" placeholder="${provider.configured ? 'Deja configure' : ''}" autocomplete="off">
-      </label>
-    `).join('');
+    const fieldsHtml = (provider.fields || []).map(field => {
+      const presetValue = field.type === 'password' ? '' : String(field.defaultValue || '');
+      const placeholder = presetValue ? 'Moteur preconfigure' : (provider.configured ? 'Deja configure' : '');
+      return `
+        <label class="connection-field">
+          <span>${escapeHtml(field.label)}</span>
+          <input type="${field.type || 'text'}" name="${escapeHtml(field.name)}" value="${escapeHtml(presetValue)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off">
+        </label>
+      `;
+    }).join('');
 
     card.innerHTML = `
       <div class="connection-card-header">

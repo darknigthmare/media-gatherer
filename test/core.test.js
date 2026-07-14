@@ -47,7 +47,8 @@ const {
   parsePeerTubeResults,
   parseArquivoResults,
   selectWikidataEntity,
-  selectTmdbPerson
+  selectTmdbPerson,
+  buildGoogleCseUrl
 } = app.locals.testables;
 
 const extendedFixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'extended-sources.json'), 'utf8'));
@@ -425,6 +426,17 @@ test('construit un plan Person Finder borne et sans doublon', () => {
   assert.ok(queries.some(query => query.includes('AliasX')));
 });
 
+test('utilise le moteur Google programmable fourni et respecte SafeSearch', () => {
+  const safeUrl = new URL(buildGoogleCseUrl('Sxysindy', { imageLimit: 35, safe: true }, 'test-key'));
+  assert.equal(safeUrl.searchParams.get('cx'), '155c4d451e53743c2');
+  assert.equal(safeUrl.searchParams.get('searchType'), 'image');
+  assert.equal(safeUrl.searchParams.get('num'), '10');
+  assert.equal(safeUrl.searchParams.get('safe'), 'active');
+
+  const adultUrl = new URL(buildGoogleCseUrl('Sxysindy', { imageLimit: 1, safe: false }, 'test-key'));
+  assert.equal(adultUrl.searchParams.get('safe'), 'off');
+});
+
 test('expose des contrats API coherents', async () => {
   const health = await fetch(`${baseUrl}/api/health`);
   assert.equal(health.status, 200);
@@ -470,6 +482,16 @@ test('expose des contrats API coherents', async () => {
   assert.equal(eporner.mode, 'eporner-api-v2');
   assert.equal(eporner.availability, 'official-public-api-with-html-fallback');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'phunforum').subtype, 'forum');
+
+  const providers = await fetch(`${baseUrl}/api/connections/providers`).then(response => response.json());
+  const google = providers.providers.find(provider => provider.id === 'google');
+  assert.equal(google.fields.find(field => field.name === 'cx').defaultValue, '155c4d451e53743c2');
+  assert.deepEqual(google.fields.filter(field => field.required).map(field => field.name), ['apiKey']);
+
+  const googleSave = await fetch(`${baseUrl}/api/connections/google`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'test-key' }) });
+  assert.equal(googleSave.status, 200);
+  const googleClear = await fetch(`${baseUrl}/api/connections/google`, { method: 'DELETE' });
+  assert.equal(googleClear.status, 200);
 });
 
 test('garde les contrats DOM et le registre de sources synchronises', async () => {
