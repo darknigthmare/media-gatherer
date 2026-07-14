@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 73 sources : 14 normales, 11 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.3 restaure les volumes utiles du Media Finder : pertinence intelligente par defaut, suppression du double filtrage des adaptateurs, cache de recherche durable dans le navigateur et requetes Wayback CDX rapides par domaine. Sur le cas de regression `sxysindy`, les domaines officiels retrouves rendent de nouveau les 722 images archivees attendues. Le hotfix exclut aussi les liens d'action dont un parametre contient une URL video. Les alias restent fusionnes avec leur preuve, les images peuvent etre dedoublonnees par dHash dans le navigateur et tout acces NSFW exige une confirmation 18+ explicite.
+La version 1.5.4 conserve les volumes utiles restaures dans le Media Finder et place les galeries photo et video dans deux zones a hauteur bornee. Chaque zone defile independamment, garde son titre et son compteur visibles et reste accessible au clavier sur ordinateur comme sur mobile. Les requetes, alias, adaptateurs, protections NSFW et resultats progressifs ne changent pas.
 
 ## Demarrage local
 

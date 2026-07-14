@@ -1005,11 +1005,13 @@ body {
    DUAL DISPLAY ZONES
    ---------------------------------------------------- */
 .media-display-grid {
+  --media-results-height: clamp(480px, 68vh, 760px);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.5rem;
   flex: 1;
-  min-height: 500px;
+  align-items: start;
+  min-height: 0;
 }
 
 .media-zone {
@@ -1022,7 +1024,8 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow-md);
   transition: var(--transition-medium);
-  min-height: 420px;
+  height: var(--media-results-height);
+  min-height: 0;
 }
 
 /* Glowing side border effect for zones */
@@ -1036,6 +1039,7 @@ body {
 
 .zone-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
@@ -1084,8 +1088,12 @@ body {
 }
 
 .zone-content-scroll {
-  flex: 1;
-  overflow: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 1.5rem;
 }
 
@@ -1669,12 +1677,8 @@ body {
    ---------------------------------------------------- */
 @media (max-width: 1024px) {
   .media-display-grid {
+    --media-results-height: clamp(440px, 64vh, 680px);
     grid-template-columns: 1fr;
-  }
-  
-  .media-zone {
-    height: auto;
-    max-height: none;
   }
 }
 
@@ -2740,8 +2744,13 @@ body {
     max-width: none;
   }
 
-  .media-zone {
-    min-height: 320px;
+  .media-display-grid {
+    --media-results-height: clamp(360px, 60vh, 560px);
+  }
+
+  .zone-content-scroll {
+    padding: 1rem;
+    scrollbar-gutter: auto;
   }
 }
 

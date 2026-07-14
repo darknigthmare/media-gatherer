@@ -475,6 +475,7 @@ test('expose des contrats API coherents', async () => {
 test('garde les contrats DOM et le registre de sources synchronises', async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'style.css'), 'utf8');
   const htmlIds = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   const duplicateIds = htmlIds.filter((id, index) => htmlIds.indexOf(id) !== index);
   assert.deepEqual(duplicateIds, []);
@@ -491,6 +492,10 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(html, /<option value="smart" selected>Intelligent<\/option>/);
   assert.match(client, /mediagatherer-search-cache-v1/);
   assert.match(client, /restoreSearchSnapshot\(lastSearchConfig\)/);
+  assert.match(html, /id="images-results-scroll" class="zone-content-scroll" role="region" aria-labelledby="images-zone-title" tabindex="0"/);
+  assert.match(html, /id="videos-results-scroll" class="zone-content-scroll" role="region" aria-labelledby="videos-zone-title" tabindex="0"/);
+  assert.match(styles, /--media-results-height:\s*clamp\(/);
+  assert.match(styles, /\.zone-content-scroll\s*\{[^}]*overflow-y:\s*auto;/s);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
   assert.equal(new Set(sourceIds).size, sourceIds.length);
 });
