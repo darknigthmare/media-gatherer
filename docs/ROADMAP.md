@@ -1,6 +1,6 @@
 # Etat et suite
 
-## Integre dans la version 1.4.0
+## Integre dans la version 1.4.1
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.

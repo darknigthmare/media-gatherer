@@ -2,7 +2,7 @@
 
 Date de verification: 2026-07-14
 
-## Registre 1.4.0
+## Registre 1.4.1
 
 - 49 sources au total: 10 normales, 7 reseaux sociaux et 32 NSFW.
 - 32 adaptateurs NSFW declares, dont une API publique Eporner et trois transports de forum public.

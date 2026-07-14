@@ -29,7 +29,7 @@ Verifier ensuite :
 `dist/` est ignore par Git. Publier l'EXE comme asset d'une release GitHub :
 
 ```powershell
-gh release create v1.4.0 dist/MediaGatherer.exe --title "MediaGatherer 1.4.0" --generate-notes
+gh release create v1.4.1 dist/MediaGatherer.exe --title "MediaGatherer 1.4.1" --generate-notes
 ```
 
 ## Vercel

@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le mode NSFW public contient 32 adaptateurs par source. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.4.0 ajoute les recherches publiques Phun Forum, PlanetSuzy et Bellazon, compacte les longues listes de sources et de diagnostics, corrige les faux positifs NSFW et fiabilise la recuperation d'alias. Chaque adaptateur conserve la meilleure image connue, la page source et, lorsqu'il existe, le lecteur public integre.
+La version 1.4.1 ajoute les recherches publiques Phun Forum, PlanetSuzy et Bellazon, compacte les longues listes de sources et de diagnostics, corrige les faux positifs NSFW et fiabilise la recuperation d'alias, y compris quand un hebergeur refuse les medias mais laisse les titres de profils publics visibles. Chaque adaptateur conserve la meilleure image connue, la page source et, lorsqu'il existe, le lecteur public integre.
 
 ## Demarrage local
 

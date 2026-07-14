@@ -239,6 +239,16 @@ test('deduit les noms publics et usernames seulement avec une preuve de profil',
   }], [], {});
   assert.ok(accountAliases.some(alias => alias.value === '@sxysindy_alt'));
   assert.ok(!accountAliases.some(alias => alias.value === '@user'));
+
+  const discoveredPageAliases = discoverAliases('sxysindy', [], [], {
+    instagram: {
+      pageSamples: [{
+        title: 'SxySindy (@sxysindy) - Photos et videos Instagram',
+        url: 'https://www.instagram.com/sxysindy/'
+      }]
+    }
+  });
+  assert.ok(discoveredPageAliases.some(alias => alias.kind === 'display_name' && alias.value === 'SxySindy'));
 });
 
 test('conserve l original plutot que sa miniature', () => {

@@ -34,7 +34,7 @@ Le mode NSFW reste volontairement limite a:
    Correction: pipeline en deux etapes. L'adaptateur decouvre d'abord une page appartenant au domaine cible et contenant le terme, puis ouvre cette page avant d'extraire le media, sa miniature et sa provenance.
 
 7. Toutes les sources adultes utilisaient auparavant le meme extracteur generique.
-   Correction initiale: registre de 22 adaptateurs NSFW avec domaines, chemins de resultats, types supportes et limite de pages. La version 1.4.0 porte ce total a 32.
+   Correction initiale: registre de 22 adaptateurs NSFW avec domaines, chemins de resultats, types supportes et limite de pages. La version 1.4.1 porte ce total a 32.
 
 8. Les pages video pouvaient remonter leurs icones, SVG et videos connexes comme resultats.
    Correction: une source video ne retourne plus d'images autonomes; les images servent de miniatures. Seuls les lecteurs, embeds, URLs video directes et donnees structurees de la page cible deviennent des videos.

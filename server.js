@@ -1725,6 +1725,7 @@ async function scrapeGenericSource(sourceId, query, options = {}) {
     videosCount: uniqueVideos.length,
     pagesDiscovered: crawled.pagesDiscovered,
     pagesCrawled: crawled.pagesCrawled,
+    pageSamples: uniquePages.map(page => ({ url: page.url, title: page.title })).slice(0, 6),
     zeroReason: uniqueImages.length + uniqueVideos.length ? '' : 'no_public_media_extracted'
   } };
 }
@@ -1792,6 +1793,21 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
     current.evidence = uniq([...current.evidence, evidence]).slice(0, 4);
     aliases.set(key, current);
   };
+  const addProfileAlias = (rawUrl, sourceId, evidence, explicitAccountUrl = false) => {
+    try {
+      const parsed = new URL(String(rawUrl || ''));
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      const first = decodeURIComponent(segments[0] || '').replace(/^@/, '');
+      const candidate = nestedProfilePrefixes.has(first.toLowerCase()) && segments[1]
+        ? decodeURIComponent(segments[1]).replace(/^@/, '')
+        : first;
+      if (candidate && !nonProfileSegments.has(candidate.toLowerCase()) && /^[a-z0-9._-]{2,32}$/i.test(candidate)) {
+        addAlias(`@${candidate}`, 'username', sourceId, evidence || rawUrl, explicitAccountUrl ? 88 : 82);
+      }
+    } catch {
+      // Some candidates have no usable public profile URL.
+    }
+  };
 
   [...images, ...videos].forEach(item => {
     const sourceId = item.sourceId || normalizeSearchTerm(item.source || 'source');
@@ -1811,31 +1827,27 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
 
     const explicitAccountUrl = String(item.accountUrl || '').trim();
     const profileUrl = explicitAccountUrl || (directProfileSources.has(sourceId) ? item.link : '');
-    try {
-      const parsed = new URL(String(profileUrl || ''));
-      const segments = parsed.pathname.split('/').filter(Boolean);
-      const first = decodeURIComponent(segments[0] || '').replace(/^@/, '');
-      const candidate = nestedProfilePrefixes.has(first.toLowerCase()) && segments[1]
-        ? decodeURIComponent(segments[1]).replace(/^@/, '')
-        : first;
-      if (candidate && !nonProfileSegments.has(candidate.toLowerCase()) && /^[a-z0-9._-]{2,32}$/i.test(candidate)) {
-        addAlias(`@${candidate}`, 'username', sourceId, profileUrl, explicitAccountUrl ? 88 : 82);
-      }
-    } catch {
-      // Some media have no public profile URL; title evidence remains usable.
-    }
+    addProfileAlias(profileUrl, sourceId, profileUrl, Boolean(explicitAccountUrl));
   });
 
   Object.entries(status || {}).forEach(([sourceId, sourceStatus]) => {
-    (sourceStatus.accounts || []).forEach(accountUrl => {
-      try {
-        const segment = new URL(accountUrl).pathname.split('/').filter(Boolean).at(-1);
-        if (segment && compactSearchTerm(accountUrl).includes(queryKey)) {
-          addAlias(`@${decodeURIComponent(segment)}`, 'username', sourceId, accountUrl, 78);
-        }
-      } catch {
-        // Ignore malformed diagnostic URLs.
+    (sourceStatus.pageSamples || []).forEach(sample => {
+      const page = typeof sample === 'string' ? { url: sample, title: '' } : sample;
+      const title = repairMojibake(String(page.title || '')).replace(/\s+/g, ' ').trim();
+      const context = `${title} ${page.url || ''}`;
+      if (!textMatchesQuery(context, query)) return;
+      const pairedIdentity = title.match(/^(.{2,60}?)\s*\(@([a-z0-9._-]{2,32})\)/i);
+      if (pairedIdentity) {
+        addAlias(pairedIdentity[1], 'display_name', sourceId, title, compactSearchTerm(pairedIdentity[2]) === queryKey ? 98 : 90);
+        addAlias(`@${pairedIdentity[2]}`, 'username', sourceId, title, 94);
       }
+      for (const match of context.matchAll(/(?:^|\s)@([a-z0-9._-]{2,32})\b/gi)) {
+        addAlias(`@${match[1]}`, 'username', sourceId, title || page.url, 86);
+      }
+      if (directProfileSources.has(sourceId)) addProfileAlias(page.url, sourceId, title || page.url);
+    });
+    (sourceStatus.accounts || []).forEach(accountUrl => {
+      if (compactSearchTerm(accountUrl).includes(queryKey)) addProfileAlias(accountUrl, sourceId, accountUrl, true);
     });
   });
 
