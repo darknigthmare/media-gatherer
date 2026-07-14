@@ -1,6 +1,6 @@
 {
   "name": "media-gatherer",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Aspirateur de medias web photos/videos avec Person Finder",
   "main": "server.js",
   "bin": "server.js",
