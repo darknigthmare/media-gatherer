@@ -34,7 +34,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-14-media-11';
+const CACHE_SCHEMA_VERSION = '2026-07-14-media-12';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -1662,7 +1662,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
       width: row.width,
       height: row.height,
       description: row.title
-    }, query, 'duckduckgo', 'image')).filter(item => item.url && item.confidenceScore >= 70 && !isLikelyUiAsset(item.url, item.title, item.width, item.height));
+    }, query, 'duckduckgo', 'image')).filter(item => item.url && !isLikelyUiAsset(item.url, item.title, item.width, item.height));
     let fallback = { images: [], videos: [], pagesDiscovered: 0, pagesCrawled: 0 };
     if (!images.length) {
       try {
@@ -1716,7 +1716,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const images = Object.values(data?.query?.pages || {}).map(page => {
       const info = page.imageinfo?.[0] || {};
       return enrichMedia({ url: info.url, thumbnail: info.thumburl || info.url, link: info.descriptionurl, title: page.title?.replace(/^File:/i, ''), width: info.width, height: info.height, description: page.title }, query, 'wikimedia', 'image');
-    }).filter(item => item.url && item.confidenceScore >= 70);
+    }).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'wikimedia-api', imagesCount: images.length, videosCount: 0, note: 'API Wikimedia Commons' } };
   }
 
@@ -1732,14 +1732,14 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
       const link = row.link || (row.id ? `https://www.flickr.com/photos/${row.owner}/${row.id}` : '');
       const title = row.title || row.ownername || '';
       return enrichMedia({ url: original, thumbnail: original, link, title, description: row.description?._content || row.tags }, query, 'flickr', 'image');
-    }).filter(item => item.url && item.confidenceScore >= 70);
+    }).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: apiKey ? 'flickr-api' : 'flickr-public-feed', imagesCount: images.length, videosCount: 0, note: apiKey ? 'API Flickr configuree' : 'Flux public Flickr' } };
   }
 
   if (sourceId === 'dailymotion') {
     const url = `https://api.dailymotion.com/videos?search=${encodeURIComponent(query)}&fields=id,title,thumbnail_720_url,url,duration&limit=${videoLimit}`;
     const data = await fetchText(url);
-    const videos = (data?.list || []).map(row => enrichMedia({ url: row.url, link: row.url, thumbnail: row.thumbnail_720_url, title: row.title, duration: formatDuration(row.duration) }, query, 'dailymotion', 'video')).filter(item => item.confidenceScore >= 70);
+    const videos = (data?.list || []).map(row => enrichMedia({ url: row.url, link: row.url, thumbnail: row.thumbnail_720_url, title: row.title, duration: formatDuration(row.duration) }, query, 'dailymotion', 'video')).filter(item => item.url);
     return { images: [], videos, status: { success: true, adapter: 'dailymotion-api', imagesCount: 0, videosCount: videos.length, note: 'API publique Dailymotion' } };
   }
 
@@ -1752,7 +1752,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
         const id = row.id?.videoId;
         const link = `https://www.youtube.com/watch?v=${id}`;
         return enrichMedia({ url: link, link, embedUrl: `https://www.youtube.com/embed/${id}`, thumbnail: row.snippet?.thumbnails?.high?.url, title: row.snippet?.title, description: row.snippet?.description, duration: 'YouTube' }, query, 'youtube', 'video');
-      }).filter(item => item.url && item.confidenceScore >= 70);
+      }).filter(item => item.url);
       return { images: [], videos, status: { success: true, adapter: 'youtube-api', imagesCount: 0, videosCount: videos.length, note: 'YouTube Data API' } };
     }
     const page = await fetchPage(sourceSearchUrls('youtube', query, options)[0]);
@@ -1793,7 +1793,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const cx = connectionValue('google', 'cx', 'GOOGLE_CX');
     if (!apiKey || !cx) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'google-cse', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Google et CX requis dans Connexions API' } };
     const data = await fetchText(`https://www.googleapis.com/customsearch/v1?searchType=image&num=10&q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}`);
-    const images = (data?.items || []).map(row => enrichMedia({ url: row.link, thumbnail: row.image?.thumbnailLink || row.link, link: row.image?.contextLink, title: row.title, width: row.image?.width, height: row.image?.height, description: row.snippet }, query, 'google', 'image')).filter(item => item.confidenceScore >= 70);
+    const images = (data?.items || []).map(row => enrichMedia({ url: row.link, thumbnail: row.image?.thumbnailLink || row.link, link: row.image?.contextLink, title: row.title, width: row.image?.width, height: row.image?.height, description: row.snippet }, query, 'google', 'image')).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'google-cse', imagesCount: images.length, videosCount: 0, note: 'Google Custom Search API' } };
   }
 
@@ -1801,7 +1801,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const apiKey = connectionValue('brave', 'apiKey', 'BRAVE_API_KEY');
     if (!apiKey) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'brave-api', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Brave Search API requise' } };
     const data = await fetchText(`https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=${Math.min(imageLimit, 20)}`, { headers: { 'X-Subscription-Token': apiKey, accept: 'application/json' } });
-    const images = (data?.results || []).map(row => enrichMedia({ url: row.properties?.url || row.url, thumbnail: row.thumbnail?.src, link: row.source, title: row.title, width: row.properties?.width, height: row.properties?.height }, query, 'brave', 'image')).filter(item => item.url && item.confidenceScore >= 70);
+    const images = (data?.results || []).map(row => enrichMedia({ url: row.properties?.url || row.url, thumbnail: row.thumbnail?.src, link: row.source, title: row.title, width: row.properties?.width, height: row.properties?.height }, query, 'brave', 'image')).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'brave-api', imagesCount: images.length, videosCount: 0, note: 'Brave Search API' } };
   }
 
@@ -1870,8 +1870,12 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   await Promise.all(workers);
 }
 
-function filterBySearchMode(items, mode = 'strict') {
-  const threshold = mode === 'broad' ? 20 : (mode === 'smart' ? 50 : 70);
+function searchModeThreshold(mode = 'smart') {
+  return mode === 'broad' ? 20 : (mode === 'strict' ? 70 : 50);
+}
+
+function filterBySearchMode(items, mode = 'smart') {
+  const threshold = searchModeThreshold(mode);
   return (items || []).filter(item => Number(item.confidenceScore || 0) >= threshold);
 }
 
@@ -2032,18 +2036,40 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
     } catch (error) {
       status[sourceId] = { success: false, error: error.message, imagesCount: 0, videosCount: 0, zeroReason: error.status === 429 ? 'rate_limited' : 'request_failed' };
     }
-    SOURCE_HEALTH.set(sourceId, sourceHealthFromStatus(sourceId, status[sourceId]));
+  });
+
+  const matchMode = ['strict', 'smart', 'broad'].includes(options.matchMode) ? options.matchMode : 'smart';
+  const relevanceImages = filterBySearchMode(images, matchMode);
+  const relevantImages = filterByMediaMetadata(relevanceImages, options);
+  const relevantVideos = filterBySearchMode(videos, matchMode);
+
+  Object.entries(status).forEach(([sourceId, sourceStatus]) => {
+    const rawImagesCount = images.filter(item => item.sourceId === sourceId).length;
+    const rawVideosCount = videos.filter(item => item.sourceId === sourceId).length;
+    const retainedImagesCount = relevantImages.filter(item => item.sourceId === sourceId).length;
+    const retainedVideosCount = relevantVideos.filter(item => item.sourceId === sourceId).length;
+    const filteredByRelevance = Math.max(0, rawImagesCount + rawVideosCount - retainedImagesCount - retainedVideosCount);
+    status[sourceId] = {
+      ...sourceStatus,
+      rawImagesCount,
+      rawVideosCount,
+      imagesCount: retainedImagesCount,
+      videosCount: retainedVideosCount,
+      filteredByRelevance,
+      zeroReason: retainedImagesCount + retainedVideosCount === 0 && filteredByRelevance > 0
+        ? 'results_filtered_by_relevance'
+        : sourceStatus.zeroReason
+    };
   });
 
   mutateStore(store => {
     store.sourceDiagnostics = store.sourceDiagnostics || {};
     Object.entries(status).forEach(([sourceId, sourceStatus]) => {
-      store.sourceDiagnostics[sourceId] = sourceHealthFromStatus(sourceId, sourceStatus);
+      const health = sourceHealthFromStatus(sourceId, sourceStatus);
+      SOURCE_HEALTH.set(sourceId, health);
+      store.sourceDiagnostics[sourceId] = health;
     });
   });
-
-  const relevantImages = filterByMediaMetadata(filterBySearchMode(images, options.matchMode), options);
-  const relevantVideos = filterBySearchMode(videos, options.matchMode);
 
   const uniqueRelevantImages = dedupeBestMedia(relevantImages);
   const uniqueRelevantVideos = dedupeBestMedia(relevantVideos);
@@ -2053,7 +2079,17 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
     images: uniqueRelevantImages,
     videos: uniqueRelevantVideos,
     aliases: discoverAliases(query, uniqueRelevantImages, uniqueRelevantVideos, status),
-    status
+    status,
+    filterDiagnostics: {
+      mode: matchMode,
+      threshold: searchModeThreshold(matchMode),
+      rawImages: images.length,
+      rawVideos: videos.length,
+      retainedImages: uniqueRelevantImages.length,
+      retainedVideos: uniqueRelevantVideos.length,
+      rejectedByRelevance: Math.max(0, images.length + videos.length - relevanceImages.length - relevantVideos.length),
+      rejectedByMediaFilters: Math.max(0, relevanceImages.length - relevantImages.length)
+    }
   };
 }
 
@@ -2241,7 +2277,7 @@ app.get('/api/search', searchLimiter, async (req, res) => {
     safe: safeRequested,
     adultConfirmed: adultGuard.adultConfirmed,
     mediaKind: req.query.media || 'both',
-    matchMode: ['strict', 'smart', 'broad'].includes(req.query.mode) ? req.query.mode : 'strict',
+    matchMode: ['strict', 'smart', 'broad'].includes(req.query.mode) ? req.query.mode : 'smart',
     riskMode: req.query.risk === 'balanced' ? 'balanced' : 'cautious',
     size: ['Small', 'Medium', 'Large', 'Wallpaper'].includes(req.query.size) ? req.query.size : '',
     type: ['photo', 'gif'].includes(req.query.type) ? req.query.type : ''
@@ -2262,10 +2298,27 @@ app.get('/api/search', searchLimiter, async (req, res) => {
     return res.json({ ...cached.payload, cached: true, historyEntry });
   }
   const payload = await scrapeImageSearchWithFallback(query, sources, options);
+  if (req.query.fresh && cached?.payload && Date.now() - cached.createdAt < CACHE_TTL_MS) {
+    payload.images = dedupeBestMedia([...(cached.payload.images || []), ...(payload.images || [])]);
+    payload.videos = dedupeBestMedia([...(cached.payload.videos || []), ...(payload.videos || [])]);
+    payload.aliases = dedupeBy([...(cached.payload.aliases || []), ...(payload.aliases || [])], alias => `${alias.kind || 'alias'}:${normalizeSearchTerm(alias.value)}`);
+    Object.entries(payload.status || {}).forEach(([sourceId, sourceStatus]) => {
+      const imagesCount = payload.images.filter(item => item.sourceId === sourceId).length;
+      const videosCount = payload.videos.filter(item => item.sourceId === sourceId).length;
+      payload.status[sourceId] = {
+        ...sourceStatus,
+        imagesCount,
+        videosCount,
+        cacheCarryForward: true,
+        note: [sourceStatus.note, 'resultats precedents conserves pendant le refresh'].filter(Boolean).join('; ')
+      };
+    });
+    payload.cacheCarryForward = true;
+  }
   filterMediaKind(payload, options.mediaKind);
   let historyEntry = null;
   mutateStore(latestStore => {
-    latestStore.cache[cacheKey] = { key: cacheKey, createdAt: Date.now(), query, sources, payload };
+    latestStore.cache[cacheKey] = { key: cacheKey, createdAt: Date.now(), query, sources, options, payload };
     if (recordHistory) {
       historyEntry = { id: makeId('hist'), query, sources: sources.split(','), createdAt: new Date().toISOString(), imagesCount: payload.images.length, videosCount: payload.videos.length, options };
       latestStore.history.unshift(historyEntry);
@@ -2275,37 +2328,134 @@ app.get('/api/search', searchLimiter, async (req, res) => {
   res.json({ ...payload, historyEntry });
 });
 
+const WAYBACK_BLOCKED_DOMAINS = [
+  'bing.com', 'duckduckgo.com', 'google.com', 'search.brave.com', 'youtube.com', 'flickr.com',
+  'wikimedia.org', 'mediawiki.org', 'gstatic.com', 'googleusercontent.com', 'archive.org'
+];
+
+function normalizeWaybackHost(value) {
+  try {
+    const candidate = /^https?:\/\//i.test(String(value || '')) ? String(value) : `https://${String(value || '')}`;
+    const host = new URL(candidate).hostname.replace(/^www\./, '').toLowerCase();
+    if (!/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(host)) return null;
+    if (WAYBACK_BLOCKED_DOMAINS.some(domain => host === domain || host.endsWith(`.${domain}`))) return null;
+    return host;
+  } catch {
+    return null;
+  }
+}
+
+function collectSourceStatusUrls(status = {}) {
+  const values = [];
+  Object.values(status || {}).forEach(sourceStatus => {
+    ['accounts', 'discoveredPageSamples', 'pageSamples', 'pages'].forEach(key => {
+      (Array.isArray(sourceStatus?.[key]) ? sourceStatus[key] : []).forEach(entry => {
+        const url = typeof entry === 'string' ? entry : entry?.url;
+        if (url) values.push(url);
+      });
+    });
+  });
+  return uniq(values);
+}
+
+function isRelevantWaybackDomain(host, query) {
+  const hostKey = compactSearchTerm(host);
+  const queryKey = compactSearchTerm(query);
+  if (!hostKey || !queryKey) return false;
+  if (hostKey.includes(queryKey)) return true;
+  const tokens = searchTokens(query).map(compactSearchTerm).filter(token => token.length >= 3);
+  return tokens.length > 1 && tokens.every(token => hostKey.includes(token));
+}
+
+function guessWaybackDomains(query) {
+  const raw = normalizeSearchTerm(query).replace(/^@/, '');
+  if (!raw || /\s/.test(raw) || !/^[a-z0-9._-]{3,40}$/i.test(raw)) return [];
+  const slug = compactSearchTerm(raw);
+  if (slug.length < 3) return [];
+  return [
+    `${slug}.com`,
+    `${slug}.tumblr.com`,
+    `the${slug}.weebly.com`,
+    `${slug}.weebly.com`,
+    `${slug}.net`,
+    `${slug}.org`,
+    `${slug}.wordpress.com`,
+    `${slug}.blogspot.com`
+  ];
+}
+
+function buildWaybackCdxUrls(domain, limit = 1000) {
+  const common = {
+    output: 'json',
+    fl: 'original,timestamp,mimetype',
+    collapse: 'urlkey',
+    limit: String(limit)
+  };
+  const build = (url, matchType = '') => {
+    const params = new URLSearchParams({ url, ...common });
+    if (matchType) params.set('matchType', matchType);
+    params.append('filter', 'statuscode:200');
+    return `https://web.archive.org/cdx/search/cdx?${params.toString()}`;
+  };
+  return [
+    build(domain, 'domain'),
+    build(`${domain}/*`),
+    build(`*.${domain}/*`)
+  ];
+}
+
+function normalizeWaybackCdxPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload !== 'string') return null;
+  try {
+    const parsed = JSON.parse(payload);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 app.get('/api/wayback/hosts', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ domains: [] });
-  const blockedDomains = ['bing.com', 'duckduckgo.com', 'google.com', 'search.brave.com', 'youtube.com', 'flickr.com', 'wikimedia.org', 'mediawiki.org', 'gstatic.com', 'googleusercontent.com'];
-  const normalizeHost = value => {
-    try {
-      const candidate = /^https?:\/\//i.test(String(value || '')) ? String(value) : `https://${String(value || '')}`;
-      const host = new URL(candidate).hostname.replace(/^www\./, '').toLowerCase();
-      if (!/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(host)) return null;
-      if (blockedDomains.some(domain => host === domain || host.endsWith(`.${domain}`))) return null;
-      return host;
-    } catch { return null; }
-  };
+  const safeRequested = String(req.query.safe || 'true') !== 'false';
+  const adultConfirmed = String(req.query.adultConfirmed || 'false') === 'true';
+  if (!safeRequested && !adultConfirmed) {
+    return res.status(403).json({ error: 'Confirmation 18+ requise pour la decouverte Wayback NSFW', code: 'adult_confirmation_required' });
+  }
 
   let officialDomains = [];
   let officialError = '';
   try {
-    const hostData = await fetchText(`https://web.archive.org/__wb/search/host?q=${encodeURIComponent(q)}`, { timeout: 15000 });
-    officialDomains = (hostData?.hosts || []).map(host => normalizeHost(host.display_name || host.host || host.url)).filter(Boolean);
+    const hostData = await fetchText(`https://web.archive.org/__wb/search/host?q=${encodeURIComponent(q)}`, { timeout: 6000 });
+    officialDomains = (hostData?.hosts || [])
+      .map(host => normalizeWaybackHost(host.display_name || host.host || host.url))
+      .filter(host => host && isRelevantWaybackDomain(host, q));
   } catch (error) {
     officialError = error.message;
   }
 
   let engineDomains = [];
+  let statusUrls = [];
   if (!officialDomains.length) {
-    const result = await scrapeImageSearchWithFallback(q, 'duckduckgo,bing', { safe: true, matchMode: 'strict', riskMode: 'cautious' });
-    engineDomains = [...result.images, ...result.videos].map(item => normalizeHost(item.link || item.url)).filter(Boolean);
+    const result = await scrapeImageSearchWithFallback(q, 'duckduckgo,bing', {
+      safe: safeRequested,
+      adultConfirmed,
+      matchMode: 'smart',
+      riskMode: 'balanced',
+      imageLimit: 12,
+      videoLimit: 6,
+      timeout: 8000
+    });
+    statusUrls = collectSourceStatusUrls(result.status);
+    engineDomains = [...result.images, ...result.videos]
+      .map(item => item.link || item.url)
+      .concat(statusUrls)
+      .map(normalizeWaybackHost)
+      .filter(host => host && isRelevantWaybackDomain(host, q));
   }
-  const compactQuery = compactSearchTerm(q);
-  const domains = uniq([...officialDomains, ...engineDomains])
-    .sort((a, b) => Number(compactSearchTerm(b).includes(compactQuery)) - Number(compactSearchTerm(a).includes(compactQuery)))
+  const guessedDomains = guessWaybackDomains(q);
+  const domains = uniq([...officialDomains, ...engineDomains, ...guessedDomains])
     .slice(0, 12);
   res.json({
     query: q,
@@ -2313,6 +2463,8 @@ app.get('/api/wayback/hosts', async (req, res) => {
     diagnostics: {
       officialWaybackHosts: officialDomains.length,
       engineCandidates: engineDomains.length,
+      statusUrlsConsidered: statusUrls.length,
+      guessedCandidates: guessedDomains.length,
       engineFallbackUsed: officialDomains.length === 0,
       officialError: officialError || null
     }
@@ -2324,8 +2476,26 @@ app.get('/api/wayback/cdx', async (req, res) => {
   if (!domain) return res.status(400).json({ error: 'domain requis' });
   if (!/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(domain)) return res.status(400).json({ error: 'domain invalide' });
   try {
-    const url = `https://web.archive.org/cdx/search/cdx?url=*.${encodeURIComponent(domain)}/*&output=json&fl=original,timestamp,mimetype&filter=statuscode:200&collapse=urlkey&limit=1000`;
-    const rows = await fetchText(url, { timeout: 35000 });
+    const candidateUrls = buildWaybackCdxUrls(domain, 1000);
+    const attempts = [];
+    let rows = null;
+    let selectedUrl = '';
+    for (let index = 0; index < candidateUrls.length; index += 1) {
+      const candidateUrl = candidateUrls[index];
+      try {
+        const payload = await fetchText(candidateUrl, { timeout: index === 0 ? 18000 : 30000 });
+        const normalized = normalizeWaybackCdxPayload(payload);
+        attempts.push({ mode: index === 0 ? 'domain' : 'wildcard', success: Boolean(normalized), rows: normalized?.length || 0 });
+        if (normalized) {
+          rows = normalized;
+          selectedUrl = candidateUrl;
+          break;
+        }
+      } catch (error) {
+        attempts.push({ mode: index === 0 ? 'domain' : 'wildcard', success: false, error: error.message });
+      }
+    }
+    if (!rows) throw new Error(attempts.at(-1)?.error || 'Reponse CDX invalide');
     const parsed = Array.isArray(rows) ? rows.slice(1) : [];
     const images = [];
     const videos = [];
@@ -2355,7 +2525,9 @@ app.get('/api/wayback/cdx', async (req, res) => {
         snapshotCount: new Set(parsed.map(row => row?.[1]).filter(Boolean)).size,
         filteredUiAssets,
         nameFilterApplied: false,
-        truncated: images.length > uniqueImages.length || videos.length > uniqueVideos.length
+        truncated: images.length > uniqueImages.length || videos.length > uniqueVideos.length,
+        queryMode: selectedUrl.includes('matchType=domain') ? 'domain' : 'wildcard-fallback',
+        attempts
       }
     });
   } catch (error) {
@@ -3264,7 +3436,12 @@ app.locals.testables = {
   isTrustedIdentityResultPage,
   discoverAliases,
   mergeIdentityEvidence,
+  searchModeThreshold,
   filterBySearchMode,
+  collectSourceStatusUrls,
+  guessWaybackDomains,
+  buildWaybackCdxUrls,
+  normalizeWaybackCdxPayload,
   buildPersonQueries,
   scorePersonMedia,
   adultSearchGuard,

@@ -32,7 +32,12 @@ const {
   isTrustedIdentityResultPage,
   discoverAliases,
   mergeIdentityEvidence,
+  searchModeThreshold,
   filterBySearchMode,
+  collectSourceStatusUrls,
+  guessWaybackDomains,
+  buildWaybackCdxUrls,
+  normalizeWaybackCdxPayload,
   buildPersonQueries,
   adultSearchGuard,
   hammingDistance,
@@ -121,6 +126,27 @@ test('applique les seuils strict et profond', () => {
   ];
   assert.deepEqual(filterBySearchMode(rows, 'strict').map(row => row.title), ['exact']);
   assert.deepEqual(filterBySearchMode(rows, 'smart').map(row => row.title), ['exact', 'trusted']);
+  assert.deepEqual(filterBySearchMode(rows).map(row => row.title), ['exact', 'trusted']);
+  assert.equal(searchModeThreshold(), 50);
+});
+
+test('construit une recherche Wayback rapide par domaine et exploite les pages decouvertes', () => {
+  const urls = buildWaybackCdxUrls('sxysindy.com');
+  assert.match(urls[0], /url=sxysindy\.com/);
+  assert.match(urls[0], /matchType=domain/);
+  assert.doesNotMatch(urls[0], /%2A/);
+  assert.deepEqual(normalizeWaybackCdxPayload('[["original","timestamp","mimetype"]]'), [['original', 'timestamp', 'mimetype']]);
+  assert.deepEqual(collectSourceStatusUrls({
+    bing: {
+      accounts: ['https://example.com/sxysindy'],
+      pageSamples: [{ url: 'https://sxysindy.com/' }]
+    }
+  }), ['https://example.com/sxysindy', 'https://sxysindy.com/']);
+  assert.deepEqual(guessWaybackDomains('sxysindy').slice(0, 3), [
+    'sxysindy.com',
+    'sxysindy.tumblr.com',
+    'thesxysindy.weebly.com'
+  ]);
 });
 
 test('lit les fallbacks web DuckDuckGo et Bing', () => {
@@ -416,6 +442,9 @@ test('expose des contrats API coherents', async () => {
   const blockedAccount = await fetch(`${baseUrl}/api/account/scrape?url=${encodeURIComponent('http://127.0.0.1/private')}`);
   assert.equal(blockedAccount.status, 400);
 
+  const blockedAdultWayback = await fetch(`${baseUrl}/api/wayback/hosts?q=sxysindy&safe=false`);
+  assert.equal(blockedAdultWayback.status, 403);
+
   const unknownJob = await fetch(`${baseUrl}/api/queue/jobs/not-found/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(unknownJob.status, 404);
 
@@ -458,6 +487,9 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
   assert.match(client, /createSourceChip\(source\)/);
   assert.match(client, /populateSourceFilter\(\)/);
+  assert.match(html, /<option value="smart" selected>Intelligent<\/option>/);
+  assert.match(client, /mediagatherer-search-cache-v1/);
+  assert.match(client, /restoreSearchSnapshot\(lastSearchConfig\)/);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
   assert.equal(new Set(sourceIds).size, sourceIds.length);
 });

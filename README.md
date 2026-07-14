@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 73 sources : 14 normales, 11 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.1 ajoute Wikidata, TMDB Person, Internet Archive, Arquivo.pt, Imgur, PeerTube, Bluesky, Mastodon, Tumblr, Twitch, quatre hubs d'identite et dix sources adultes publiques de metadonnees, profils ou forums. Les alias sont fusionnes avec leur preuve, les homonymes Wikidata/TMDB sont classes avant association, les images peuvent etre dedoublonnees par dHash dans le navigateur et tout acces NSFW exige une confirmation 18+ explicite.
+La version 1.5.2 restaure les volumes utiles du Media Finder : pertinence intelligente par defaut, suppression du double filtrage des adaptateurs, cache de recherche durable dans le navigateur et requetes Wayback CDX rapides par domaine. Sur le cas de regression `sxysindy`, les domaines officiels retrouves rendent de nouveau les 722 images archivees attendues. Les alias restent fusionnes avec leur preuve, les images peuvent etre dedoublonnees par dHash dans le navigateur et tout acces NSFW exige une confirmation 18+ explicite.
 
 ## Demarrage local
 
@@ -61,10 +61,11 @@ Les identifiants saisis dans l'onglet Connexions restent en memoire de session s
 ## Recherche et diagnostics
 
 - Les resultats arrivent source par source pendant que la recherche continue.
-- Les modes `strict`, `smart` et `broad` controlent la preuve textuelle exigee.
+- Les modes `strict`, `smart` et `broad` controlent la preuve textuelle exigee; `smart` est le mode par defaut afin de conserver les medias d'un compte public valide.
 - Une page de compte publique validee peut etre extraite entierement sans imposer le nom dans chaque media.
-- Wayback decouvre d'abord les domaines via la recherche officielle, puis lit les medias CDX sans filtre de nom.
-- Chaque source expose un statut, le nombre brut, le nombre filtre, les pages ouvertes et une raison explicite en cas de zero.
+- Wayback decouvre d'abord les domaines via la recherche officielle, complete les usernames avec des domaines personnels probables, puis lit les medias CDX avec `matchType=domain`, sans filtre de nom.
+- Chaque source expose un statut, le nombre brut, le nombre retenu, les pages ouvertes et une raison explicite en cas de zero.
+- Le navigateur conserve pendant 30 jours les resultats par requete, selection de sources et niveau adulte; une relance ou un refresh les restaure avant d'ajouter les nouveautes.
 - Les diagnostics et la longue liste NSFW sont des tiroirs a hauteur bornee avec defilement interne.
 - Les sources NSFW distinguent acces direct, fallback moteur, blocage, limitation de debit et indisponibilite reseau.
 - Phun Forum, PlanetSuzy et Bellazon utilisent leur recherche publique avant les fallbacks moteurs.

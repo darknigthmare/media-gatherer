@@ -42,6 +42,120 @@ let perceptualPassRunning = false;
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
 let sourceCatalog = [];
 let sourceCatalogById = new Map();
+const SEARCH_SNAPSHOT_DB = 'mediagatherer-search-cache-v1';
+const SEARCH_SNAPSHOT_STORE = 'snapshots';
+const SEARCH_SNAPSHOT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+let searchSnapshotWriteTimer = null;
+
+function searchSnapshotKey(config = {}) {
+  const sources = [...(config.checkedSources || [])].map(String).sort();
+  return JSON.stringify({
+    query: normalizeSearchTerm(config.query),
+    sources,
+    safe: config.safeSearch !== false,
+    adult: config.adultConfirmed === true,
+    media: config.mediaKind || 'both',
+    account: config.accountMode || 'complete',
+    size: config.sizeVal || '',
+    type: config.typeVal || ''
+  });
+}
+
+function openSearchSnapshotDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return reject(new Error('IndexedDB indisponible'));
+    const request = window.indexedDB.open(SEARCH_SNAPSHOT_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SEARCH_SNAPSHOT_STORE)) {
+        db.createObjectStore(SEARCH_SNAPSHOT_STORE, { keyPath: 'key' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Ouverture IndexedDB impossible'));
+  });
+}
+
+async function readSearchSnapshot(config) {
+  let db;
+  try {
+    db = await openSearchSnapshotDb();
+    const key = searchSnapshotKey(config);
+    const snapshot = await new Promise((resolve, reject) => {
+      const request = db.transaction(SEARCH_SNAPSHOT_STORE, 'readonly').objectStore(SEARCH_SNAPSHOT_STORE).get(key);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+    if (snapshot && Date.now() - Number(snapshot.updatedAt || 0) > SEARCH_SNAPSHOT_TTL_MS) return null;
+    return snapshot;
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
+async function writeSearchSnapshot(snapshot) {
+  let db;
+  try {
+    db = await openSearchSnapshotDb();
+    await new Promise((resolve, reject) => {
+      const request = db.transaction(SEARCH_SNAPSHOT_STORE, 'readwrite').objectStore(SEARCH_SNAPSHOT_STORE).put(snapshot);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    db?.close();
+  }
+}
+
+function filterSnapshotItems(items, matchMode) {
+  const threshold = matchMode === 'broad' ? 20 : (matchMode === 'strict' ? 70 : 50);
+  return (items || []).filter(item => Number(item.confidenceScore || item.relevanceScore || 0) >= threshold);
+}
+
+async function persistCurrentSearchSnapshot() {
+  if (!lastSearchConfig?.query) return false;
+  const previous = await readSearchSnapshot(lastSearchConfig);
+  const images = dedupeMedia([...(previous?.images || []), ...allImages])
+    .sort((a, b) => Number(b.relevanceScore || b.confidenceScore || 0) - Number(a.relevanceScore || a.confidenceScore || 0))
+    .slice(0, 2500);
+  const videos = dedupeMedia([...(previous?.videos || []), ...allVideos])
+    .sort((a, b) => Number(b.relevanceScore || b.confidenceScore || 0) - Number(a.relevanceScore || a.confidenceScore || 0))
+    .slice(0, 750);
+  return writeSearchSnapshot({
+    key: searchSnapshotKey(lastSearchConfig),
+    updatedAt: Date.now(),
+    query: lastSearchConfig.query,
+    images,
+    videos,
+    aliases: [...currentAliases].slice(0, 100)
+  });
+}
+
+function scheduleSearchSnapshotSave(delay = 700) {
+  if (!lastSearchConfig?.query) return;
+  clearTimeout(searchSnapshotWriteTimer);
+  searchSnapshotWriteTimer = setTimeout(() => {
+    searchSnapshotWriteTimer = null;
+    void persistCurrentSearchSnapshot();
+  }, delay);
+}
+
+async function restoreSearchSnapshot(config) {
+  const snapshot = await readSearchSnapshot(config);
+  if (!snapshot) return { images: 0, videos: 0 };
+  let images = filterSnapshotItems(snapshot.images, config.matchMode || 'smart');
+  let videos = filterSnapshotItems(snapshot.videos, config.matchMode || 'smart');
+  if (config.mediaKind === 'photos') videos = [];
+  if (config.mediaKind === 'videos') images = [];
+  if (!images.length && !videos.length) return { images: 0, videos: 0 };
+  mergeSearchData({ images, videos, aliases: snapshot.aliases || [], restoredSnapshot: true }, { skipSnapshot: true });
+  return { images: images.length, videos: videos.length, updatedAt: snapshot.updatedAt };
+}
 
 const SOURCE_GROUPS = {
   normal: {
@@ -772,8 +886,8 @@ function getCurrentSearchConfig() {
     safeSearch: safeSearchToggle ? safeSearchToggle.checked : true,
     adultConfirmed: adultConfirmedToggle ? adultConfirmedToggle.checked : false,
     riskMode: safetyRiskMode ? safetyRiskMode.value : 'cautious',
-    matchMode: searchMatchMode ? searchMatchMode.value : 'strict',
-    exactMode: searchMatchMode ? searchMatchMode.value === 'strict' : true,
+    matchMode: searchMatchMode ? searchMatchMode.value : 'smart',
+    exactMode: searchMatchMode ? searchMatchMode.value === 'strict' : false,
     accountMode: accountScrapeMode ? accountScrapeMode.value : 'complete',
     mediaKind: mediaKindMode ? mediaKindMode.value : 'both',
     sizeVal: document.getElementById('filter-size').value,
@@ -784,7 +898,7 @@ function getCurrentSearchConfig() {
 
 function buildSearchUrl(config, sources) {
   const freshParams = config.fresh ? `&fresh=true&since=${encodeURIComponent(config.since || '')}` : '';
-  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'broad'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}&record=false${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
+  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'smart'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}&record=false${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
 }
 
 function updateAutoRefreshButton(active) {
@@ -851,7 +965,7 @@ async function runRefreshSearch() {
 
     if (queryWayback && refreshCycleCount % 3 === 0) {
       addConsoleLog('[REFRESH:WAYBACK] Scan Wayback espacé pour limiter les appels.', 'info');
-      const hostResponse = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(config.query)}&risk=${encodeURIComponent(config.riskMode)}`);
+      const hostResponse = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(config.query)}&risk=${encodeURIComponent(config.riskMode)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}`);
       const hostData = hostResponse.ok ? await hostResponse.json() : { domains: [] };
       const extractedDomains = extractTargetDomains((hostData.domains || []).map(domain => ({ url: `https://${domain}/` })), config.query);
       const waybackData = await fetchWaybackMachineCDX(config.query, extractedDomains, (partialData) => mergeSearchData(partialData));
@@ -865,6 +979,7 @@ async function runRefreshSearch() {
     addConsoleLog(`[REFRESH] Erreur : ${error.message}`, 'error');
   } finally {
     lastSearchConfig.lastRefreshAt = refreshStartedAt;
+    await persistCurrentSearchSnapshot();
     refreshInProgress = false;
   }
 }
@@ -1259,7 +1374,7 @@ function restoreSearchConfig(config = {}) {
   if (safeSearchToggle && typeof config.safeSearch === 'boolean') safeSearchToggle.checked = config.safeSearch;
   if (adultConfirmedToggle && typeof config.adultConfirmed === 'boolean') adultConfirmedToggle.checked = config.adultConfirmed;
   if (safetyRiskMode && config.riskMode) safetyRiskMode.value = config.riskMode;
-  if (searchMatchMode) searchMatchMode.value = config.matchMode || (config.exactMode === false ? 'broad' : 'strict');
+  if (searchMatchMode) searchMatchMode.value = config.matchMode || (config.exactMode === true ? 'strict' : 'smart');
   if (accountScrapeMode && config.accountMode) accountScrapeMode.value = config.accountMode;
   if (mediaKindMode && config.mediaKind) mediaKindMode.value = config.mediaKind;
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(cb => {
@@ -1394,7 +1509,7 @@ function attachImageProxyFallback(imgElement, originalUrl) {
   });
 }
 
-function mergeSearchData(data) {
+function mergeSearchData(data, options = {}) {
   updateSourceDiagnostics(data);
   updateAliases(data);
   allImages = dedupeMedia([...allImages, ...prepareMediaItems(data.images || [])]).sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
@@ -1405,7 +1520,21 @@ function mergeSearchData(data) {
   registerDetectedAccounts(data);
   renderInsights();
   renderMedia();
+  logFilterDiagnostics(data);
   void enrichPerceptualHashes();
+  if (!options.skipSnapshot) scheduleSearchSnapshotSave();
+}
+
+function logFilterDiagnostics(data) {
+  const diagnostics = data?.filterDiagnostics;
+  if (!diagnostics) return;
+  const rejected = Number(diagnostics.rejectedByRelevance || 0);
+  const mediaFiltered = Number(diagnostics.rejectedByMediaFilters || 0);
+  if (!rejected && !mediaFiltered) return;
+  addConsoleLog(
+    `[FILTRE] ${diagnostics.mode} (${diagnostics.threshold}%): ${diagnostics.retainedImages || 0} photos et ${diagnostics.retainedVideos || 0} vidéos retenues; ${rejected} hors pertinence${mediaFiltered ? `; ${mediaFiltered} hors filtres média` : ''}.`,
+    'info'
+  );
 }
 
 function logSourceStatus(source, status) {
@@ -1692,6 +1821,8 @@ function buildWaybackRows(data, domain, type) {
 }
 
 async function discoverWaybackHostsFrontend(query, riskMode) {
+  const safeSearch = safeSearchToggle ? safeSearchToggle.checked : true;
+  const adultConfirmed = adultConfirmedToggle?.checked === true;
   try {
     // Try browser-direct first
     const controller = new AbortController();
@@ -1719,7 +1850,7 @@ async function discoverWaybackHostsFrontend(query, riskMode) {
   // Fallback to server endpoint
   try {
     addConsoleLog(`[WAYBACK] Recherche d'archives via le serveur...`, 'info');
-    const res = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`);
+    const res = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}&safe=${safeSearch}&adultConfirmed=${adultConfirmed}`);
     if (res.ok) {
       const data = await res.json();
       return data.domains || [];
@@ -1737,16 +1868,23 @@ async function fetchWaybackDomainCDX(domain, query) {
   // 1. Try browser-direct first (bypasses sandbox firewall)
   try {
     addConsoleLog(`[WAYBACK] Scan direct de *.${domain}...`, 'info');
-    const common = `output=json&fl=original,timestamp,mimetype&filter=statuscode:200&collapse=urlkey`;
-    const makeUrl = (target, mediaType, limit) => `https://web.archive.org/cdx/search/cdx?url=${target}&${common}&filter=mimetype:${mediaType}/.*&limit=${limit}`;
+    const makeUrl = (target, mediaType, limit) => {
+      const params = new URLSearchParams({
+        url: target,
+        matchType: 'domain',
+        output: 'json',
+        fl: 'original,timestamp,mimetype',
+        collapse: 'urlkey',
+        limit: String(limit)
+      });
+      params.append('filter', 'statuscode:200');
+      params.append('filter', `mimetype:${mediaType}/.*`);
+      return `https://web.archive.org/cdx/search/cdx?${params.toString()}`;
+    };
     const baseDomain = domain.replace(/^www\./, '');
-    const domainVariants = [...new Set([domain, baseDomain, `www.${baseDomain}`])];
-    const targets = domainVariants.flatMap(item => [`*.${item}/*`, `${item}/*`]);
-    
-    // We only query the first target to keep browser requests fast
-    const target = targets[0]; 
-    const imgUrl = makeUrl(target, 'image', 120);
-    const vidUrl = makeUrl(target, 'video', 40);
+    const target = baseDomain;
+    const imgUrl = makeUrl(target, 'image', 1000);
+    const vidUrl = makeUrl(target, 'video', 250);
     
     const [imgData, vidData] = await Promise.all([
       fetchWaybackJson(imgUrl, 15000),
@@ -1873,7 +2011,7 @@ async function runSearchWithCurrentControls(options = {}) {
     return;
   }
   const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
-  const matchMode = searchMatchMode ? searchMatchMode.value : 'strict';
+  const matchMode = searchMatchMode ? searchMatchMode.value : 'smart';
   const exactMode = matchMode === 'strict';
   const accountMode = accountScrapeMode ? accountScrapeMode.value : 'complete';
   const mediaKind = mediaKindMode ? mediaKindMode.value : 'both';
@@ -1933,6 +2071,11 @@ async function runSearchWithCurrentControls(options = {}) {
   statsBar.classList.add('hidden');
   filterInput.value = '';
   document.getElementById('source-filter').value = 'all';
+
+  const restoredSnapshot = await restoreSearchSnapshot(lastSearchConfig);
+  if (restoredSnapshot.images || restoredSnapshot.videos) {
+    addConsoleLog(`[CACHE LOCAL] ${restoredSnapshot.images} photos et ${restoredSnapshot.videos} vidéos restaurées pendant la recherche des nouveautés.`, 'success');
+  }
   
   let serverData = { images: [], videos: [], status: {} };
   let waybackData = { images: [], videos: [], success: false };
@@ -2032,6 +2175,7 @@ async function runSearchWithCurrentControls(options = {}) {
     }
 
     addConsoleLog(`Aspiration terminée. Total: ${allImages.length} photos, ${allVideos.length} vidéos.`, 'success');
+    await persistCurrentSearchSnapshot();
     await recordCompletedSearch();
     await refreshSearchHistory();
     if (options.monitorId) {

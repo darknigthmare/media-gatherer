@@ -1,11 +1,14 @@
 # Etat et suite
 
-## Integre dans la version 1.5.1
+## Integre dans la version 1.5.2
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
 - Modes photo, video ou mixte, pertinence stricte/intelligente/large et conservation de la meilleure qualite.
-- Recherche Wayback par terme, domaines officiels et extraction CDX sans filtre de nom apres validation du site.
+- Pertinence intelligente par defaut et seuil unique applique apres les adaptateurs, sans double filtrage en dur.
+- Recherche Wayback par terme, domaines officiels ou personnels probables et extraction CDX rapide par domaine sans filtre de nom apres validation du site.
+- Cache navigateur IndexedDB separe par requete, sources et niveau adulte, restaure pendant les recherches et complete par le refresh.
+- Diagnostics bruts/retenus/rejetes pour expliquer precisement les baisses de volume.
 - 42 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
 - Eporner API v2 prioritaire, plus XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz en HTML public.
 - Recherches publiques Phun Forum, PlanetSuzy et Bellazon, avec crawl borne des sujets correspondants.
