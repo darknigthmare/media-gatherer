@@ -8,7 +8,7 @@
   <script src="vendor/jszip.min.js" defer></script>
   <script src="vendor/FileSaver.min.js" defer></script>
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=20260630-workflows-1">
+  <link rel="stylesheet" href="css/style.css?v=20260714-audit-2">
 </head>
 <body>
   
@@ -193,8 +193,8 @@
             <div class="sources-group" style="flex: 1; min-width: 250px;">
               <span class="panel-label">Sources à interroger :</span>
               <div class="sources-list" style="margin-top: 0.5rem;">
-                <label class="source-chip" for="src-ddg">
-                  <input type="checkbox" id="src-ddg" value="duckduckgo" checked>
+                <label class="source-chip" for="src-duckduckgo">
+                  <input type="checkbox" id="src-duckduckgo" value="duckduckgo" checked>
                   <span class="chip-custom">
                     <span class="source-status-dot idle" id="dot-duckduckgo"></span>
                     <i data-lucide="image" class="chip-icon"></i>
@@ -566,7 +566,7 @@
                   <input type="checkbox" id="src-hqporner" value="hqporner">
                   <span class="chip-custom">
                     <span class="source-status-dot idle" id="dot-hqporner"></span>
-                    <i data-lucide="badge-hd" class="chip-icon"></i>
+                    <i data-lucide="shield-alert" class="chip-icon"></i>
                     HQPorner (18+)
                   </span>
                 </label>
@@ -604,6 +604,33 @@
                     <span class="source-status-dot idle" id="dot-youjizz"></span>
                     <i data-lucide="video" class="chip-icon"></i>
                     YouJizz (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-phunforum">
+                  <input type="checkbox" id="src-phunforum" value="phunforum">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-phunforum"></span>
+                    <i data-lucide="messages-square" class="chip-icon"></i>
+                    Phun Forum (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-planetsuzy">
+                  <input type="checkbox" id="src-planetsuzy" value="planetsuzy">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-planetsuzy"></span>
+                    <i data-lucide="messages-square" class="chip-icon"></i>
+                    PlanetSuzy (18+)
+                  </span>
+                </label>
+
+                <label class="source-chip adult-source hidden" for="src-bellazon">
+                  <input type="checkbox" id="src-bellazon" value="bellazon">
+                  <span class="chip-custom">
+                    <span class="source-status-dot idle" id="dot-bellazon"></span>
+                    <i data-lucide="messages-square" class="chip-icon"></i>
+                    Bellazon Forum (18+)
                   </span>
                 </label>
                 
@@ -765,6 +792,9 @@
           <option value="drtuber">DrTuber</option>
           <option value="pornone">PornOne</option>
           <option value="youjizz">YouJizz</option>
+          <option value="phunforum">Phun Forum</option>
+          <option value="planetsuzy">PlanetSuzy</option>
+          <option value="bellazon">Bellazon Forum</option>
         </select>
       </div>
 
@@ -812,15 +842,16 @@
     </section>
 
     <!-- STATISTICS & SOURCE BREAKDOWN PANEL -->
-    <section class="stats-dashboard hidden workspace-section" id="stats-dashboard">
-      <div class="dashboard-header">
+    <details class="stats-dashboard hidden workspace-section compact-dashboard-drawer" id="stats-dashboard">
+      <summary class="dashboard-header">
         <i data-lucide="bar-chart-2" class="dashboard-icon"></i>
         <h3>Répartition des sources de médias</h3>
-      </div>
+        <span class="drawer-summary-value" id="source-breakdown-summary">0 source active</span>
+      </summary>
       <div class="dashboard-body" id="stats-breakdown-bars">
         <!-- Rendu dynamique des barres statistiques -->
       </div>
-    </section>
+    </details>
 
     <section class="accounts-dashboard hidden workspace-section" id="accounts-dashboard">
       <div class="dashboard-header">
@@ -850,13 +881,22 @@
           </div>
           <div class="alias-list" id="alias-list"></div>
         </div>
-        <div class="insight-panel">
-          <div class="insight-panel-header">
-            <i data-lucide="wrench"></i>
-            <span>Diagnostics sources</span>
+        <details class="insight-panel diagnostic-drawer" id="source-diagnostic-drawer">
+          <summary class="insight-panel-header">
+            <span class="diagnostic-title"><i data-lucide="wrench"></i><span>Diagnostics sources</span></span>
+            <span class="drawer-summary-value" id="source-diagnostic-summary">Aucun test</span>
+          </summary>
+          <div class="diagnostic-toolbar">
+            <label for="source-diagnostic-filter">Afficher</label>
+            <select id="source-diagnostic-filter" class="select-custom">
+              <option value="all">Toutes les sources</option>
+              <option value="results">Avec résultats</option>
+              <option value="attention">À surveiller</option>
+              <option value="errors">En erreur</option>
+            </select>
           </div>
           <div class="diagnostic-list" id="source-diagnostic-list"></div>
-        </div>
+        </details>
       </div>
     </section>
 
@@ -1014,7 +1054,7 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260713-stabilization-1" defer></script>
+  <script src="js/app.js?v=20260714-audit-2" defer></script>
 </body>
 </html>
 

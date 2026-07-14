@@ -34,7 +34,7 @@ Le mode NSFW reste volontairement limite a:
    Correction: pipeline en deux etapes. L'adaptateur decouvre d'abord une page appartenant au domaine cible et contenant le terme, puis ouvre cette page avant d'extraire le media, sa miniature et sa provenance.
 
 7. Toutes les sources adultes utilisaient auparavant le meme extracteur generique.
-   Correction initiale: registre de 22 adaptateurs NSFW avec domaines, chemins de resultats, types supportes et limite de pages. La version 1.3.0 porte ce total a 29.
+   Correction initiale: registre de 22 adaptateurs NSFW avec domaines, chemins de resultats, types supportes et limite de pages. La version 1.4.0 porte ce total a 32.
 
 8. Les pages video pouvaient remonter leurs icones, SVG et videos connexes comme resultats.
    Correction: une source video ne retourne plus d'images autonomes; les images servent de miniatures. Seuls les lecteurs, embeds, URLs video directes et donnees structurees de la page cible deviennent des videos.
@@ -66,15 +66,31 @@ Le mode NSFW reste volontairement limite a:
 17. Une source bloquee et une recherche vide partageaient le meme statut.
     Correction: diagnostics `access_blocked`, `rate_limited`, `source_unreachable`, `fallbackUsed` et `directReachable`.
 
+18. Les diagnostics et la liste de 32 sources NSFW allongeaient fortement la page.
+    Correction: tiroirs repliables, hauteur maximale et defilement interne; les erreurs et avertissements restent affiches en premier.
+
+19. Les grands forums publics n'avaient pas d'adaptateur specialise.
+    Correction: Phun Forum et Bellazon utilisent leur recherche GET publique; PlanetSuzy utilise son formulaire public avec cookie de session, sans connexion ni contournement.
+
+20. Les liens techniques de forum pouvaient devenir de faux alias comme `@main` ou `@showthread.php`.
+    Correction: usernames deduits uniquement depuis les structures de profils connues ou un `accountUrl` explicite.
+
+21. Bellazon exposait l'original dans `data-full-image`, mais la miniature etait parfois conservee.
+    Correction: lecture de l'attribut original, rapprochement des variantes Invision et penalite qualite des URLs `thumb`.
+
+22. L'icone Lucide `badge-hd` inexistante generait des avertissements a chaque rendu.
+    Correction: icone valide et test automatique de tous les `data-lucide` declares dans le HTML.
+
 ## Verification
 
-- `npm run qa`: 14 tests sur 14 OK.
+- `npm run qa`: 18 tests sur 18 OK.
 - `npm audit`: 0 vulnerabilite.
 - `/api/health`: OK.
-- `/api/sources/adapters`: 46 sources, dont 29 adaptateurs NSFW (28 `source-crawl` et 1 `eporner-api-v2`).
+- `/api/sources/adapters`: 49 sources, dont 32 adaptateurs NSFW.
+- Matrice reelle sur `mia khalifa`: 17 sources avec medias pertinents et 15 sources joignables sans page publique correspondante.
+- Regression `sxysindy`: Instagram 1 photo et alias `SxySindy`, DrTuber 1 video; OnlyFans, HQPorner et Phun Forum restent a zero sans logo ni video hors sujet.
 - Recherche combinee Eporner, XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz sur `mia`: 102 videos publiques, toutes avec miniature, aucune photo en mode video.
-- Tests unitaires: 14 sur 14 OK, incluant l'API Eporner, les nouvelles routes, le contexte de recherche HQPorner et la distinction profil/page media.
-- `/api/search?q=sxysindy&sources=duckduckgo,bing&safe=false&mode=smart&fresh=1`: 35 images et 2 videos pertinentes.
+- Tests unitaires: contrats API/DOM, icones, API Eporner, routes de forum, contexte HQPorner, alias et distinction profil/page media.
 - `/api/sources/erome/test?q=mz&safe=false`: 5 images originales et 5 videos MP4 publiques avec miniatures distinctes.
 - `/api/wayback/hosts?q=sxysindy`: retrouve `sxysindy.tumblr.com`, `sxysindy.com`, `thesxysindy.weebly.com`, `wiccansmagic.com` et `camsoda.com`.
 - `/api/wayback/cdx?domain=sxysindy.com&q=sxysindy`: 714 images publiques, 555 timestamps, aucun filtre de nom, 5 assets UI retires.

@@ -20,7 +20,7 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-14-media-9';
+const CACHE_SCHEMA_VERSION = '2026-07-14-media-10';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
@@ -33,14 +33,14 @@ const SOURCE_IDS = [
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
   'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz'
+  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
 ];
 
 const NSFW_SOURCES = new Set([
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
   'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz'
+  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
 ]);
 
 const SOURCE_LABELS = {
@@ -72,7 +72,10 @@ const SOURCE_LABELS = {
   nuvid: 'Nuvid',
   drtuber: 'DrTuber',
   pornone: 'PornOne',
-  youjizz: 'YouJizz'
+  youjizz: 'YouJizz',
+  phunforum: 'Phun Forum',
+  planetsuzy: 'PlanetSuzy',
+  bellazon: 'Bellazon Forum'
 };
 
 const NSFW_ADAPTERS = {
@@ -106,11 +109,14 @@ const NSFW_ADAPTERS = {
     transport: 'eporner-api-v2'
   },
   xnxx: { domains: ['xnxx.com'], pagePatterns: [/\/video-[^/]+\//i], media: ['video'], crawlLimit: 5 },
-  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5, trustSearchResults: true },
+  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 },
   nuvid: { domains: ['nuvid.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
   drtuber: { domains: ['drtuber.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
   pornone: { domains: ['pornone.com'], pagePatterns: [/\/[^/]+\/[^/]*video-\d+\/\d+\/?$/i], media: ['video'], crawlLimit: 5 },
-  youjizz: { domains: ['youjizz.com'], pagePatterns: [/\/videos\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 }
+  youjizz: { domains: ['youjizz.com'], pagePatterns: [/\/videos\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 },
+  phunforum: { domains: ['forum.phun.org', 'phun.org'], pagePatterns: [/\/threads\/[^/]+\.\d+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
+  planetsuzy: { domains: ['planetsuzy.org'], pagePatterns: [/\/showthread\.php\?.*\bt=\d+/i, /\/t\d+[^/]*\.html/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-form' },
+  bellazon: { domains: ['bellazon.com'], pagePatterns: [/\/main\/topic\/\d+-[^/]+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' }
 };
 
 const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
@@ -123,7 +129,8 @@ const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
     enabled: true,
     supports: NSFW_ADAPTERS[id]?.media || (id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page']),
     adapter: NSFW_ADAPTERS[id] ? 'source-crawl' : 'generic-public',
-    publicOnly: true
+    publicOnly: true,
+    subtype: NSFW_ADAPTERS[id]?.forum ? 'forum' : (nsfw ? 'platform' : 'general')
   };
   return map;
 }, {});
@@ -373,7 +380,10 @@ function sourceDomain(sourceId) {
     nuvid: 'nuvid.com',
     drtuber: 'drtuber.com',
     pornone: 'pornone.com',
-    youjizz: 'youjizz.com'
+    youjizz: 'youjizz.com',
+    phunforum: 'forum.phun.org',
+    planetsuzy: 'planetsuzy.org',
+    bellazon: 'bellazon.com'
   };
   return domains[sourceId] || `${sourceId}.com`;
 }
@@ -474,6 +484,8 @@ function canonicalMediaKey(item = {}) {
     const parsed = new URL(rawUrl);
     const normalizedPath = decodeURIComponent(parsed.pathname)
       .replace(/\/(?:thumbs?|thumbnails?|previews?|small|medium)\//gi, '/')
+      .replace(/\.thumb(?=\.[a-z0-9]{2,5}\.[a-f0-9]{8,}\.[a-z0-9]{2,5}$)/i, '')
+      .replace(/(\.[a-z0-9]{2,5})\.[a-f0-9]{8,}(?=\.[a-z0-9]{2,5}$)/i, '$1')
       .replace(/(?:[-_.](?:thumb|thumbnail|small|medium|preview|\d{2,4}x\d{2,4}))(?=\.[a-z0-9]{2,5}$)/gi, '')
       .replace(/_(?:240p|360p|480p|720p|1080p|2160p)(?=\.[a-z0-9]{2,5}$)/i, '');
     return `${parsed.hostname.toLowerCase()}${normalizedPath.toLowerCase()}`;
@@ -488,6 +500,7 @@ function mediaQualityScore(item = {}) {
   return pixels +
     (/original|master|source|full|large|1080|2160|4k/i.test(url) ? 12 : 0) +
     (/\/(?:thumbs?|thumbnails?|previews?|small|medium)\//i.test(url) ? -20 : 0) +
+    (/(?:\/|[-_.])(?:thumb|thumbnail|preview)(?:[\/_\-.]|$)/i.test(url) ? -20 : 0) +
     (/\.(?:jpg|jpeg|png|webp|avif|mp4|webm)(?:[?#]|$)/i.test(url) ? 4 : 0) +
     (item.thumbnail && item.thumbnail !== item.url ? 2 : 0);
 }
@@ -568,8 +581,84 @@ async function fetchPage(url, options = {}) {
     html: String(response.data || ''),
     statusCode: response.status,
     finalUrl: response.finalUrl || url,
-    contentType: response.headers?.['content-type'] || ''
+    contentType: response.headers?.['content-type'] || '',
+    headers: response.headers || {}
   };
+}
+
+function cookieHeaderFromResponse(headers = {}) {
+  const values = headers['set-cookie'];
+  return (Array.isArray(values) ? values : (values ? [values] : []))
+    .map(value => String(value).split(';', 1)[0])
+    .filter(Boolean)
+    .join('; ');
+}
+
+async function postPublicForm(rawUrl, fields, initialPage, options = {}) {
+  const url = await validatePublicMediaUrl(rawUrl);
+  const cookie = cookieHeaderFromResponse(initialPage?.headers);
+  const response = await axios.post(url, new URLSearchParams(fields).toString(), {
+    timeout: options.timeout || 14000,
+    responseType: 'text',
+    maxRedirects: 0,
+    maxContentLength: MAX_HTML_BYTES,
+    maxBodyLength: MAX_HTML_BYTES,
+    headers: {
+      ...PUBLIC_REQUEST_HEADERS,
+      'content-type': 'application/x-www-form-urlencoded',
+      origin: new URL(url).origin,
+      referer: initialPage?.finalUrl || new URL(url).origin,
+      ...(cookie ? { cookie } : {})
+    },
+    lookup: safeDnsLookup,
+    validateStatus: status => status >= 200 && status < 500
+  });
+  if (response.status >= 300 && response.status < 400 && response.headers.location) {
+    return fetchPage(new URL(response.headers.location, url).toString(), {
+      timeout: options.timeout || 14000,
+      headers: cookie ? { cookie } : undefined
+    });
+  }
+  return {
+    html: String(response.data || ''),
+    statusCode: response.status,
+    finalUrl: url,
+    contentType: response.headers?.['content-type'] || '',
+    headers: response.headers || {}
+  };
+}
+
+async function fetchPublicForumSearchPage(sourceId, query, options = {}) {
+  const definitions = {
+    planetsuzy: {
+      formUrl: 'http://www.planetsuzy.org/search.php',
+      formSelector: 'form[action*="search.php?do=process"]',
+      fields: ($) => ({
+        s: $('input[name="s"]').first().attr('value') || '',
+        securitytoken: $('input[name="securitytoken"]').first().attr('value') || 'guest',
+        do: 'process',
+        searchthreadid: '',
+        query,
+        titleonly: '1',
+        searchuser: '',
+        exactname: '1',
+        replylimit: '0',
+        showposts: '0',
+        childforums: '1',
+        dosearch: 'Search Now'
+      })
+    },
+  };
+  const definition = definitions[sourceId];
+  if (!definition) throw new Error('Formulaire de forum non configure');
+  const initialPage = await fetchPage(definition.formUrl, { timeout: options.timeout || 14000 });
+  if (initialPage.statusCode >= 400) throw Object.assign(new Error(`HTTP ${initialPage.statusCode}`), { status: initialPage.statusCode });
+  const $ = cheerio.load(initialPage.html || '');
+  const form = $(definition.formSelector).first();
+  if (!form.length) throw new Error('Formulaire de recherche public introuvable');
+  const action = absolutize(form.attr('action'), initialPage.finalUrl);
+  if (!action || !hostMatchesSource(action, sourceId)) throw new Error('Action de formulaire hors source');
+  return postPublicForm(action, definition.fields($), initialPage, options);
 }
 
 function firstSrcFromSrcset(srcset) {
@@ -585,6 +674,12 @@ function firstSrcFromSrcset(srcset) {
   return candidates[0]?.url || '';
 }
 
+function mediaUrlQualityScore(value) {
+  return (looksLikeImage(value) || looksLikeVideo(value) ? 4 : 0) +
+    (/original|full|large|master|source|1080|2160|4k/i.test(value) ? 3 : 0) +
+    (/thumb|small|tiny|preview|placeholder|blank|sprite|logo|avatar/i.test(value) ? -3 : 0);
+}
+
 function bestMediaCandidate(values = []) {
   const candidates = values
     .flatMap(value => String(value || '').includes(',') ? [firstSrcFromSrcset(value), value] : [value])
@@ -592,12 +687,8 @@ function bestMediaCandidate(values = []) {
     .filter(Boolean)
     .filter(value => !/^data:/i.test(value))
     .sort((a, b) => {
-      const qualityScore = value =>
-        (looksLikeImage(value) || looksLikeVideo(value) ? 4 : 0) +
-        (/original|full|large|master|source|1080|2160|4k/i.test(value) ? 3 : 0) +
-        (/thumb|small|tiny|preview|placeholder|blank|sprite|logo|avatar/i.test(value) ? -3 : 0);
-      const aScore = qualityScore(a);
-      const bScore = qualityScore(b);
+      const aScore = mediaUrlQualityScore(a);
+      const bScore = mediaUrlQualityScore(b);
       return bScore - aScore;
     });
   return candidates[0] || '';
@@ -660,7 +751,10 @@ function looksLikeVideo(url) {
 function isLikelyUiAsset(url, title = '', width = 0, height = 0) {
   const value = `${url} ${title}`.toLowerCase();
   if (/\.(?:svg|ico)(?:[?#]|$)/i.test(url)) return true;
-  if (/(?:^|[\/_-])(logo|favicon|sprite|placeholder|blank|loading|tracking|pixel|badge|button|icon|background|bg|header|footer)(?:[\/_\-.]|$)/i.test(value)) return true;
+  if (/\/(?:rsrc\.php|sa\/simg)\//i.test(value)) return true;
+  if (/image\.php\?[^#]*\bu=\d+/i.test(value)) return true;
+  if (/\/(?:images?\/(?:misc|badges?|buttons?|statusicon|smilies?|ranks?|avatars?)|styles?\/[^/]+\/images?|themes?\/[^/]+\/(?:images?|assets?))\//i.test(value)) return true;
+  if (/(?:^|[\/_-])(logo|favicon|sprite|placeholder|blank|loading|tracking|pixel|badge|button|icon|icons|background|bg|header|footer|android-chrome|apple-touch|mstile|twitter-card)(?:[\/_\-.]|$)/i.test(value)) return true;
   if (/^(search|menu|close|fermer|english|photos?|videos?|people|personnes|groups?|groupes)$/i.test(String(title || '').trim())) return true;
   const numericWidth = Number(width) || 0;
   const numericHeight = Number(height) || 0;
@@ -717,19 +811,25 @@ async function validatePublicMediaUrl(rawUrl) {
 function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
-  const parsedBase = new URL(baseUrl);
-  const trustedDetailPage = Boolean(options.trustedContext) || (hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname));
+  const trustedDetailPage = Boolean(options.trustedContext);
   $('img').each((_, el) => {
+    const linkedHref = $(el).closest('a[href]').attr('href');
+    const linkedImage = absolutize(linkedHref, baseUrl);
     const src = bestMediaCandidate([
       $(el).attr('data-full'),
+      $(el).attr('data-full-image'),
+      $(el).attr('data-fullsrc'),
+      $(el).attr('data-file'),
       $(el).attr('data-large'),
       $(el).attr('data-src'),
       $(el).attr('data-original'),
+      $(el).attr('data-original-src'),
       $(el).attr('data-lazy-src'),
       $(el).attr('data-thumb'),
       $(el).attr('data-thumbnail'),
       $(el).attr('srcset'),
       $(el).attr('data-srcset'),
+      /\.(?:jpg|jpeg|png|gif|webp|avif)(?:[?#]|$)/i.test(linkedImage) ? linkedHref : '',
       $(el).attr('src')
     ]);
     if (!src) return;
@@ -752,7 +852,7 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
       rows.push(enrichMedia({ url, thumbnail: url, title, link: baseUrl, trustedContext: trustedDetailPage }, query, sourceId, 'image'));
     }
   });
-  if (trustedDetailPage) {
+  if (trustedDetailPage && options.scanEmbeddedUrls !== false) {
     const imageRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:jpg|jpeg|png|gif|webp|avif)(?:\?[^"'<>\\\s]*)?/gi;
     for (const match of String(html || '').matchAll(imageRegex)) {
       const url = absolutize(match[0].replace(/\\\//g, '/'), baseUrl);
@@ -767,8 +867,7 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
 function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
-  const parsedBase = new URL(baseUrl);
-  const trustedDetailPage = Boolean(options.trustedContext) || (hostMatchesSource(baseUrl, sourceId) && !/\/(?:search|results?)(?:\/|$)/i.test(parsedBase.pathname));
+  const trustedDetailPage = Boolean(options.trustedContext);
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     const text = $(el).text().trim();
@@ -784,7 +883,7 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
     if (!textMatchesQuery(context, query)) return;
     const posterElement = card.find('img').first();
     const thumbnail = absolutize(bestMediaCandidate([posterElement.attr('data-src'), posterElement.attr('srcset'), posterElement.attr('src')]), baseUrl);
-    rows.push(enrichMedia({ url, link: url, thumbnail, title: text || `${sourceLabel(sourceId)} video`, duration: 'Ouvrir la source' }, query, sourceId, 'video'));
+    rows.push(enrichMedia({ url, link: url, thumbnail, title: text || `${sourceLabel(sourceId)} video`, duration: 'Ouvrir la source', playback: 'external' }, query, sourceId, 'video'));
   });
   $('video[src], source[src], meta[property="og:video"], meta[property="og:video:url"], meta[name="twitter:player"]').each((_, el) => {
     const src = $(el).attr('src') || $(el).attr('content');
@@ -842,11 +941,16 @@ function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20, opt
   const rows = [];
   const needle = normalizeSearchTerm(query);
   $('a[href]').each((_, el) => {
-    const url = unwrapSearchResultUrl($(el).attr('href'), baseUrl);
+    const rawHref = $(el).attr('href');
+    let url = unwrapSearchResultUrl(rawHref, baseUrl);
+    if (sourceId === 'phunforum' && /^\/?threads\//i.test(String(rawHref || ''))) {
+      url = new URL(`/${String(rawHref).replace(/^\/+/, '')}`, new URL(baseUrl).origin).toString();
+    }
     if (!pageMatchesAdapter(url, sourceId)) return;
     const card = $(el).closest('article, li, figure, [class*="item"], [class*="card"], [class*="thumb"], [class*="result"]');
     const context = [$(el).attr('title'), $(el).text(), card.text(), url].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-    if (needle && !options.trustedSearchResults && !textMatchesQuery(context, needle)) return;
+    const matchesQuery = !needle || textMatchesQuery(context, needle);
+    if (needle && !options.trustedSearchResults && !matchesQuery) return;
     const nestedImage = $(el).find('img').first();
     const image = nestedImage.length ? nestedImage : card.find('img').first();
     const thumbnail = absolutize(bestMediaCandidate([
@@ -857,7 +961,7 @@ function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20, opt
       url,
       title: ($(el).attr('title') || $(el).text() || card.text()).replace(/\s+/g, ' ').trim(),
       thumbnail,
-      trustedContext: Boolean(options.trustedSearchResults)
+      trustedContext: Boolean(options.trustedSearchResults || matchesQuery)
     });
   });
   return dedupeBy(rows, item => item.url).slice(0, limit);
@@ -866,6 +970,10 @@ function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20, opt
 function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {}) {
   const $ = cheerio.load(html || '');
   const pageTitle = $('meta[property="og:title"]').attr('content') || $('title').text().trim() || pageMeta.title || `${sourceLabel(sourceId)} media`;
+  const adapter = NSFW_ADAPTERS[sourceId];
+  const trustedPage = Boolean(pageMeta.trustedContext) || isTrustedIdentityResultPage(pageUrl, pageTitle, query);
+  const pageRelevant = adapter?.publicProfileOnly ? trustedPage : (trustedPage || textMatchesQuery(`${pageTitle} ${pageUrl}`, query));
+  if (!pageRelevant) return { images: [], videos: [] };
   const poster = absolutize(bestMediaCandidate([
     $('meta[property="og:image"]').attr('content'),
     $('meta[name="twitter:image"]').attr('content'),
@@ -873,13 +981,23 @@ function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {
     pageMeta.thumbnail
   ]), pageUrl);
   const structured = extractStructuredMedia(html, pageUrl, query, sourceId);
-  const rawImages = extractImagesFromHtml(html, pageUrl, query, sourceId, 80)
+  const rawImages = extractImagesFromHtml(html, pageUrl, query, sourceId, 80, { trustedContext: pageRelevant })
     .filter(item => !/\/(?:logo|icon|avatar|sprite|favicon)[^/]*\.(?:png|jpe?g|webp|gif)/i.test(item.url))
-    .filter(item => !/\.(?:svg|ico)(?:[?#]|$)/i.test(item.url));
-  const rawVideos = extractLinksAsVideos(html, pageUrl, query, sourceId, 50)
-    .filter(item => /\.(?:mp4|webm|m3u8|mov)(?:[?#]|$)/i.test(item.url) || /\/(?:embed|player)\//i.test(item.url));
+    .filter(item => !/\.(?:svg|ico)(?:[?#]|$)/i.test(item.url))
+    .filter(item => {
+      try {
+        const basename = decodeURIComponent(new URL(item.url).pathname.split('/').at(-1) || '').replace(/\.[a-z0-9]{2,5}$/i, '');
+        const brandKeys = [sourceId, sourceLabel(sourceId), ...sourceDomains(sourceId).map(domain => domain.split('.')[0])].map(compactSearchTerm);
+        return !brandKeys.includes(compactSearchTerm(basename));
+      } catch {
+        return true;
+      }
+    });
+  const rawVideos = extractLinksAsVideos(html, pageUrl, query, sourceId, 50, { trustedContext: pageRelevant })
+    .filter(item => /\.(?:mp4|webm|m3u8|mov)(?:[?#]|$)/i.test(item.url) || /\/(?:embed|player)\//i.test(item.url))
+    .filter(item => !/\/manifest\.(?:mp4|webm)(?:[?#]|$)/i.test(String(item.url || '')));
   const rescore = (item, kind, thumbnail) => {
-    const candidate = { ...item, title: pageTitle, link: pageUrl, thumbnail, trustedContext: true };
+    const candidate = { ...item, title: pageTitle, link: pageUrl, thumbnail, trustedContext: pageRelevant };
     delete candidate.confidenceScore;
     delete candidate.confidenceLabel;
     delete candidate.matchReasons;
@@ -887,12 +1005,24 @@ function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {
   };
   const images = rawImages.map(item => rescore(item, 'image', item.thumbnail || poster || item.url));
   const videos = rawVideos.map(item => rescore(item, 'video', item.thumbnail || poster || pageMeta.thumbnail));
-  const adapter = NSFW_ADAPTERS[sourceId];
   const structuredImages = structured.images.map(item => rescore(item, 'image', item.thumbnail || poster || item.url));
   const structuredVideos = structured.videos.map(item => rescore(item, 'video', item.thumbnail || poster || pageMeta.thumbnail));
   const adapterImages = adapter?.media.includes('image') ? [...structuredImages, ...images] : [];
-  const adapterVideos = adapter?.media.includes('video') ? [...structuredVideos, ...videos] : [];
-  if (adapter?.media.includes('video') && poster && pageMatchesAdapter(pageUrl, sourceId) && (pageMeta.trustedContext || textMatchesQuery(`${pageTitle} ${pageUrl}`, query))) {
+  let adapterVideos = adapter?.media.includes('video') ? dedupeBy([...structuredVideos, ...videos], item => item.url) : [];
+  if (adapter?.media.length === 1 && adapter.media[0] === 'video' && adapterVideos.length > 1) {
+    adapterVideos = adapterVideos
+      .sort((a, b) => {
+        const previewPenalty = value => /\/(?:tmb|thumbs?|previews?|trailers?|samples?)\//i.test(String(value?.url || '')) ? 1 : 0;
+        return previewPenalty(a) - previewPenalty(b) || mediaUrlQualityScore(b.url) - mediaUrlQualityScore(a.url);
+      })
+      .slice(0, 1)
+      .map(item => ({
+        ...item,
+        playback: /\/(?:tmb|thumbs?|previews?|trailers?|samples?)\//i.test(String(item.url || '')) ? 'preview' : item.playback
+      }));
+  }
+  const videoOrientedPage = adapter?.media.length === 1 || /\b(?:video|videos|clip|clips|watch)\b/i.test(`${pageTitle} ${pageMeta.title || ''} ${pageUrl}`);
+  if (adapter?.media.includes('video') && adapterVideos.length === 0 && videoOrientedPage && poster && pageMatchesAdapter(pageUrl, sourceId) && pageRelevant) {
     adapterVideos.push(enrichMedia({
       url: pageUrl,
       link: pageUrl,
@@ -974,7 +1104,10 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     nuvid: `https://www.nuvid.com/search/videos/${encoded}`,
     drtuber: `https://www.drtuber.com/search/videos/${encoded}`,
     pornone: `https://pornone.com/search/?q=${encoded}`,
-    youjizz: `https://www.youjizz.com/search/${encoded}-1.html`
+    youjizz: `https://www.youjizz.com/search/${encoded}-1.html`,
+    phunforum: `https://forum.phun.org/search/search?keywords=${encoded}&title_only=1`,
+    planetsuzy: `https://www.planetsuzy.org/search.php?query=${encoded}`,
+    bellazon: `https://www.bellazon.com/main/search/?q=${encoded}&type=forums_topic&quick=1`
   };
   const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
   if (NSFW_SOURCES.has(sourceId) || SOURCE_META[sourceId]?.category === 'social') {
@@ -1044,12 +1177,31 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   const videos = [];
   const discoveredPages = [];
   const notes = [];
-  const searchUrls = sourceSearchUrls(sourceId, query, options);
+  let searchUrls = sourceSearchUrls(sourceId, query, options);
   let directReachable = false;
   let fallbackReachable = false;
   let successfulRequests = 0;
   let blockedResponses = 0;
   let rateLimitedResponses = 0;
+
+  if (adapter.transport === 'public-forum-form') {
+    try {
+      const forumPage = await fetchPublicForumSearchPage(sourceId, query, options);
+      notes.push(`${new URL(forumPage.finalUrl).hostname}: formulaire public HTTP ${forumPage.statusCode}`);
+      if (forumPage.statusCode === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(forumPage.statusCode)) blockedResponses += 1;
+      if (forumPage.statusCode < 400) {
+        successfulRequests += 1;
+        directReachable = true;
+        discoveredPages.push(...extractAdapterPageLinks(forumPage.html, forumPage.finalUrl, query, sourceId, 24));
+      }
+    } catch (error) {
+      notes.push(`formulaire public: ${error.code || error.message}`);
+      if (error.status === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
+    }
+    searchUrls = searchUrls.slice(1);
+  }
 
   if (adapter.transport === 'eporner-api-v2') {
     try {
@@ -1155,13 +1307,13 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
       available: successfulRequests > 0,
       directReachable,
       fallbackUsed: !directReachable && fallbackReachable,
-      adapter: 'source-crawl',
+      adapter: adapter.transport || 'source-crawl',
       note: `${uniquePages.length} pages correspondantes; ${crawled} ouvertes; ${notes.join('; ')}${profileNote}`,
       imagesCount: uniqueImages.length,
       videosCount: uniqueVideos.length,
       pagesDiscovered: uniquePages.length,
       pagesCrawled: crawled,
-      attemptedUrls: searchUrls.length,
+      attemptedUrls: searchUrls.length + (adapter.transport === 'public-forum-form' ? 1 : 0),
       blockedResponses,
       rateLimitedResponses,
       pages: uniquePages.map(item => item.url).slice(0, 10),
@@ -1303,7 +1455,7 @@ async function crawlWebResultPages(pages, query, sourceId, options = {}) {
       const pageTitle = $('title').text().replace(/\s+/g, ' ').trim();
       if (!textMatchesQuery(`${result.title} ${result.snippet} ${pageTitle} ${page.finalUrl}`, query)) continue;
       const trustedIdentityPage = isTrustedIdentityResultPage(page.finalUrl, pageTitle, query);
-      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, imageLimit, { trustedContext: trustedIdentityPage }));
+      images.push(...extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, imageLimit, { trustedContext: trustedIdentityPage, scanEmbeddedUrls: false }));
       videos.push(...extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, videoLimit, { trustedContext: trustedIdentityPage }));
       if (looksLikeVideo(page.finalUrl)) {
         const poster = absolutize(bestMediaCandidate([
@@ -1539,20 +1691,42 @@ async function scrapeGenericSource(sourceId, query, options = {}) {
     const page = await fetchPage(url, { timeout: options.timeout || 14000 });
     notes.push(`${new URL(url).hostname}: HTTP ${page.statusCode}`);
     if (page.statusCode >= 400) continue;
-    const pageImages = extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, options.imageLimit || 35);
-    const pageVideos = extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, options.videoLimit || 20);
+    const $ = cheerio.load(page.html || '');
+    const pageTitle = $('meta[property="og:title"]').attr('content') || $('title').text().replace(/\s+/g, ' ').trim();
+    const trustedContext = hostMatchesSource(page.finalUrl, sourceId) && isTrustedIdentityResultPage(page.finalUrl, pageTitle, query);
+    const isDirectSourcePage = hostMatchesSource(page.finalUrl, sourceId);
+    const pageImages = isDirectSourcePage
+      ? extractImagesFromHtml(page.html, page.finalUrl, query, sourceId, options.imageLimit || 35, { trustedContext, scanEmbeddedUrls: false })
+      : [];
+    const pageVideos = isDirectSourcePage
+      ? extractLinksAsVideos(page.html, page.finalUrl, query, sourceId, options.videoLimit || 20, { trustedContext })
+      : [];
     const pageLinks = extractSearchResultPages(page.html, page.finalUrl, query, sourceId, 20);
     images.push(...pageImages);
-    videos.push(...pageVideos, ...pageLinks.filter(item => inferMediaType(item) === 'video'));
-    pages.push(...pageLinks.filter(item => inferMediaType(item) !== 'video'));
+    videos.push(...pageVideos);
+    pages.push(...pageLinks);
     if (images.length + videos.length >= 8 && !NSFW_SOURCES.has(sourceId)) break;
   }
+  const uniquePages = dedupeBy(pages, item => item.url).slice(0, 6);
+  const crawled = uniquePages.length
+    ? await crawlWebResultPages(uniquePages, query, sourceId, options)
+    : { images: [], videos: [], pagesDiscovered: 0, pagesCrawled: 0 };
+  images.push(...crawled.images);
+  videos.push(...crawled.videos, ...discoveredVideoPageCandidates(uniquePages, query, sourceId));
   const uniqueImages = dedupeBestMedia(images).slice(0, options.imageLimit || 35);
-  const uniqueVideos = dedupeBestMedia([...videos, ...pages]).slice(0, options.videoLimit || 20);
+  const uniqueVideos = dedupeBestMedia(videos).slice(0, options.videoLimit || 20);
   const note = uniqueImages.length + uniqueVideos.length
     ? `scan public; ${notes.join('; ')}`
     : `0 media public extractible; ${notes.join('; ')}; site possiblement JS, login ou anti-bot`;
-  return { images: uniqueImages, videos: uniqueVideos, status: { success: true, note, imagesCount: uniqueImages.length, videosCount: uniqueVideos.length, zeroReason: uniqueImages.length + uniqueVideos.length ? '' : 'no_public_media_extracted' } };
+  return { images: uniqueImages, videos: uniqueVideos, status: {
+    success: true,
+    note,
+    imagesCount: uniqueImages.length,
+    videosCount: uniqueVideos.length,
+    pagesDiscovered: crawled.pagesDiscovered,
+    pagesCrawled: crawled.pagesCrawled,
+    zeroReason: uniqueImages.length + uniqueVideos.length ? '' : 'no_public_media_extracted'
+  } };
 }
 
 async function mapWithConcurrency(items, concurrency, mapper) {
@@ -1584,6 +1758,90 @@ function filterByMediaMetadata(items, options = {}) {
     if (options.type === 'photo' && /\.gif(?:[?#]|$)/i.test(item.url || '')) return false;
     return true;
   });
+}
+
+function discoverAliases(query, images = [], videos = [], status = {}) {
+  const queryKey = compactSearchTerm(query);
+  const aliases = new Map();
+  const directProfileSources = new Set(['instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'telegram', 'onlyfans', 'fansly', 'mym']);
+  const nestedProfilePrefixes = new Set(['user', 'users', 'u', 'profile', 'profiles', 'channel', 'channels', 'c', 's']);
+  const nonProfileSegments = new Set([
+    'search', 'results', 'watch', 'video', 'videos', 'embed', 'threads', 'thread', 'topic', 'main',
+    'showthread.php', 'p', 'pin', 'reel', 'reels', 'stories', 'explore', 'status', 'photo', 'photos',
+    'media', 'groups', 'r', 'home', 'hashtag'
+  ]);
+  const genericLabels = new Set([
+    'photo', 'photos', 'video', 'videos', 'media', 'profile', 'profil', 'search', 'result', 'results',
+    'instagram', 'facebook', 'tiktok', 'twitter', 'onlyfans', 'fansly', 'reddit', 'pinterest', 'youtube'
+  ]);
+  const addAlias = (rawValue, kind, sourceId, evidence, confidence) => {
+    let value = repairMojibake(String(rawValue || ''))
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s|\-:]+|[\s|\-:]+$/g, '')
+      .trim();
+    if (kind === 'username') value = `@${value.replace(/^@+/, '')}`;
+    const normalized = normalizeSearchTerm(value.replace(/^@/, ''));
+    if (!value || value.length < 2 || value.length > 72 || genericLabels.has(normalized)) return;
+    if (!/[a-z0-9]/i.test(value) || /https?:\/\//i.test(value)) return;
+    if (kind === 'username' && compactSearchTerm(value) === queryKey) return;
+    const key = `${kind}:${normalized}`;
+    const current = aliases.get(key) || { value, kind, count: 0, sources: [], evidence: [], confidence: 0 };
+    current.count += 1;
+    current.confidence = Math.max(current.confidence, confidence);
+    current.sources = uniq([...current.sources, sourceId]).slice(0, 8);
+    current.evidence = uniq([...current.evidence, evidence]).slice(0, 4);
+    aliases.set(key, current);
+  };
+
+  [...images, ...videos].forEach(item => {
+    const sourceId = item.sourceId || normalizeSearchTerm(item.source || 'source');
+    const title = String(item.title || '').replace(/\s+/g, ' ').trim();
+    const context = `${title} ${item.description || ''} ${item.link || ''} ${item.accountUrl || ''}`;
+    if (!textMatchesQuery(context, query)) return;
+
+    const pairedIdentity = title.match(/^(.{2,60}?)\s*\(@([a-z0-9._-]{2,32})\)/i);
+    if (pairedIdentity) {
+      addAlias(pairedIdentity[1], 'display_name', sourceId, title, compactSearchTerm(pairedIdentity[2]) === queryKey ? 98 : 90);
+      addAlias(`@${pairedIdentity[2]}`, 'username', sourceId, title, 94);
+    }
+
+    for (const match of context.matchAll(/(?:^|\s)@([a-z0-9._-]{2,32})\b/gi)) {
+      addAlias(`@${match[1]}`, 'username', sourceId, title || item.link || item.url, 86);
+    }
+
+    const explicitAccountUrl = String(item.accountUrl || '').trim();
+    const profileUrl = explicitAccountUrl || (directProfileSources.has(sourceId) ? item.link : '');
+    try {
+      const parsed = new URL(String(profileUrl || ''));
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      const first = decodeURIComponent(segments[0] || '').replace(/^@/, '');
+      const candidate = nestedProfilePrefixes.has(first.toLowerCase()) && segments[1]
+        ? decodeURIComponent(segments[1]).replace(/^@/, '')
+        : first;
+      if (candidate && !nonProfileSegments.has(candidate.toLowerCase()) && /^[a-z0-9._-]{2,32}$/i.test(candidate)) {
+        addAlias(`@${candidate}`, 'username', sourceId, profileUrl, explicitAccountUrl ? 88 : 82);
+      }
+    } catch {
+      // Some media have no public profile URL; title evidence remains usable.
+    }
+  });
+
+  Object.entries(status || {}).forEach(([sourceId, sourceStatus]) => {
+    (sourceStatus.accounts || []).forEach(accountUrl => {
+      try {
+        const segment = new URL(accountUrl).pathname.split('/').filter(Boolean).at(-1);
+        if (segment && compactSearchTerm(accountUrl).includes(queryKey)) {
+          addAlias(`@${decodeURIComponent(segment)}`, 'username', sourceId, accountUrl, 78);
+        }
+      } catch {
+        // Ignore malformed diagnostic URLs.
+      }
+    });
+  });
+
+  return [...aliases.values()]
+    .sort((a, b) => b.confidence - a.confidence || b.sources.length - a.sources.length || b.count - a.count)
+    .slice(0, 24);
 }
 
 function sourceHealthFromStatus(sourceId, sourceStatus) {
@@ -1642,11 +1900,14 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
   const relevantImages = filterByMediaMetadata(filterBySearchMode(images, options.matchMode), options);
   const relevantVideos = filterBySearchMode(videos, options.matchMode);
 
+  const uniqueRelevantImages = dedupeBestMedia(relevantImages);
+  const uniqueRelevantVideos = dedupeBestMedia(relevantVideos);
   return {
     success: true,
     query,
-    images: dedupeBestMedia(relevantImages),
-    videos: dedupeBestMedia(relevantVideos),
+    images: uniqueRelevantImages,
+    videos: uniqueRelevantVideos,
+    aliases: discoverAliases(query, uniqueRelevantImages, uniqueRelevantVideos, status),
     status
   };
 }
@@ -2213,12 +2474,17 @@ app.get('/api/sources/adapters', (req, res) => res.json({
       id: source.id,
       label: source.label,
       category: source.category,
+      subtype: source.subtype,
       supports: source.supports,
       mode: adapter?.transport || (adapter ? 'source-crawl' : 'public-html-or-api'),
       domains: adapter?.domains || [sourceDomain(source.id)],
       crawlLimit: adapter?.crawlLimit || 0,
       publicProfileOnly: Boolean(adapter?.publicProfileOnly),
-      availability: adapter?.transport ? 'official-public-api-with-html-fallback' : (adapter ? 'direct-html-with-search-engine-fallbacks' : 'public-html-or-api'),
+      availability: adapter?.transport === 'eporner-api-v2'
+        ? 'official-public-api-with-html-fallback'
+        : (adapter?.transport === 'public-forum-form'
+            ? 'public-form-with-search-engine-fallbacks'
+            : (adapter ? 'direct-html-with-search-engine-fallbacks' : 'public-html-or-api')),
       fallbacks: source.nsfw ? ['direct', 'duckduckgo-site', 'bing-site', 'brave-site'] : ['direct']
     };
   })
@@ -2726,6 +2992,7 @@ app.locals.testables = {
   extractImagesFromHtml,
   extractLinksAsVideos,
   extractAdapterPageLinks,
+  extractMediaFromSourcePage,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
   parseEpornerApiResults,
@@ -2734,6 +3001,7 @@ app.locals.testables = {
   isProfileLikeSourcePage,
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
+  discoverAliases,
   filterBySearchMode,
   buildPersonQueries,
   scorePersonMedia,

@@ -419,7 +419,7 @@ body {
   width: 100%;
   background: rgba(15, 23, 42, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
+  border-radius: 8px;
   padding: 1.125rem 8rem 1.125rem 3.5rem;
   color: #ffffff;
   font-size: 1.05rem;
@@ -556,6 +556,13 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
   gap: 0.75rem;
   padding: 0 0.85rem 0.85rem;
+}
+
+.source-drawer-nsfw[open] .source-drawer-body {
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .source-drawer-body .source-chip,
@@ -1809,6 +1816,68 @@ body {
   justify-content: flex-start;
 }
 
+.compact-dashboard-drawer > summary,
+.diagnostic-drawer > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.compact-dashboard-drawer > summary::-webkit-details-marker,
+.diagnostic-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.compact-dashboard-drawer > .dashboard-header {
+  justify-content: flex-start;
+  margin-bottom: 0;
+}
+
+.compact-dashboard-drawer[open] > .dashboard-header {
+  margin-bottom: 0.85rem;
+}
+
+.drawer-summary-value {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+.diagnostic-drawer {
+  grid-column: 1 / -1;
+}
+
+.diagnostic-drawer > .insight-panel-header {
+  justify-content: space-between;
+}
+
+.diagnostic-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.diagnostic-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding: 0 0.9rem 0.65rem;
+}
+
+.diagnostic-toolbar label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.diagnostic-toolbar .select-custom {
+  min-width: 190px;
+  padding: 0.4rem 0.65rem;
+}
+
 .workflow-drawer summary {
   cursor: pointer;
   user-select: none;
@@ -1834,6 +1903,13 @@ body {
   padding: 0 0.9rem 0.9rem;
 }
 
+.diagnostic-list {
+  max-height: min(42vh, 380px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .workflow-body textarea {
   width: 100%;
   resize: vertical;
@@ -1854,13 +1930,21 @@ body {
 }
 
 .workflow-row,
-.diagnostic-row,
 .insight-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
   padding: 0.55rem 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.diagnostic-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(170px, 0.9fr) minmax(240px, 1.8fr);
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.62rem 0;
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 
@@ -1875,6 +1959,16 @@ body {
 .diagnostic-row span,
 .diagnostic-row small {
   display: block;
+}
+
+.diagnostic-row-main {
+  min-width: 0;
+}
+
+.diagnostic-row-main strong,
+.diagnostic-row-main span,
+.diagnostic-row small {
+  overflow-wrap: anywhere;
 }
 
 .workflow-row span,
@@ -1914,6 +2008,7 @@ body {
 .diagnostic-row.ok { border-left: 2px solid rgba(34, 197, 94, 0.55); padding-left: 0.55rem; }
 .diagnostic-row.warning { border-left: 2px solid rgba(245, 158, 11, 0.65); padding-left: 0.55rem; }
 .diagnostic-row.fail { border-left: 2px solid rgba(239, 68, 68, 0.55); padding-left: 0.55rem; }
+.diagnostic-row.source-group-nsfw { border-left-color: rgba(244, 63, 94, 0.7); }
 
 .dashboard-header {
   display: flex;
@@ -1942,6 +2037,11 @@ body {
 
 #stats-breakdown-bars.dashboard-body {
   grid-template-columns: 1fr;
+  max-height: min(48vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 0.2rem;
 }
 
 .stats-drawer {
@@ -2096,14 +2196,32 @@ body {
 .stat-bar-fill.babepedia,
 .stat-bar-fill.camwhores,
 .stat-bar-fill.pornzog,
+.stat-bar-fill.erome,
+.stat-bar-fill.redgifs,
+.stat-bar-fill.imagebam,
+.stat-bar-fill.imagefap,
+.stat-bar-fill.pornpics,
 .stat-bar-fill.onlyfans,
 .stat-bar-fill.fansly,
 .stat-bar-fill.mym,
+.stat-bar-fill.xhamster,
+.stat-bar-fill.xvideos,
+.stat-bar-fill.spankbang,
 .stat-bar-fill.pornhub,
 .stat-bar-fill.youporn,
 .stat-bar-fill.tube8,
 .stat-bar-fill.tnaflix,
-.stat-bar-fill.motherless { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
+.stat-bar-fill.motherless,
+.stat-bar-fill.eporner,
+.stat-bar-fill.xnxx,
+.stat-bar-fill.hqporner,
+.stat-bar-fill.nuvid,
+.stat-bar-fill.drtuber,
+.stat-bar-fill.pornone,
+.stat-bar-fill.youjizz,
+.stat-bar-fill.phunforum,
+.stat-bar-fill.planetsuzy,
+.stat-bar-fill.bellazon { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); }
 
 .accounts-list {
   display: grid;
@@ -2537,6 +2655,28 @@ body {
   .person-rule-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .diagnostic-drawer > .insight-panel-header,
+  .compact-dashboard-drawer > .dashboard-header,
+  .diagnostic-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .drawer-summary-value {
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .diagnostic-toolbar .select-custom {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .diagnostic-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
   }
 
   .person-search-controls input,

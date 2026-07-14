@@ -57,7 +57,7 @@ const SOURCE_GROUPS = {
       'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
       'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
       'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-      'drtuber', 'pornone', 'youjizz'
+      'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
     ]
   }
 };
@@ -107,6 +107,9 @@ const insightsDashboard = document.getElementById('insights-dashboard');
 const confidenceSummary = document.getElementById('confidence-summary');
 const aliasList = document.getElementById('alias-list');
 const sourceDiagnosticList = document.getElementById('source-diagnostic-list');
+const sourceDiagnosticFilter = document.getElementById('source-diagnostic-filter');
+const sourceDiagnosticSummary = document.getElementById('source-diagnostic-summary');
+const sourceBreakdownSummary = document.getElementById('source-breakdown-summary');
 const batchInput = document.getElementById('batch-input');
 const batchList = document.getElementById('batch-list');
 const batchCount = document.getElementById('batch-count');
@@ -411,7 +414,12 @@ function openReverseSearch(engine) {
     alert('Ajoutez une URL image pour la recherche inversée.');
     return;
   }
-  window.open(getReverseUrl(engine, imageUrl), '_blank', 'noopener,noreferrer');
+  const publicImageUrl = safeHttpUrl(imageUrl);
+  if (!publicImageUrl) {
+    alert('Utilisez une URL publique HTTP(S) valide.');
+    return;
+  }
+  window.open(getReverseUrl(engine, publicImageUrl), '_blank', 'noopener,noreferrer');
 }
 
 function prepareReverseSearch(imageUrl) {
@@ -917,12 +925,59 @@ function updateAliases(data) {
   (data.aliases || []).forEach(alias => {
     const key = normalizeForScore(alias.value);
     if (!key) return;
-    const existing = map.get(key) || { value: alias.value, count: 0, sources: [] };
-    existing.count += alias.count || 1;
+    const existing = map.get(key) || { value: alias.value, kind: alias.kind || 'alias', count: 0, sources: [], evidence: [], confidence: 0 };
     existing.sources = [...new Set([...(existing.sources || []), ...(alias.sources || [])])].slice(0, 6);
+    existing.evidence = [...new Set([...(existing.evidence || []), ...(alias.evidence || [])])].slice(0, 4);
+    existing.confidence = Math.max(existing.confidence || 0, alias.confidence || 0);
+    existing.count = Math.max(existing.count || 0, alias.count || 1, existing.sources.length, existing.evidence.length);
     map.set(key, existing);
   });
-  currentAliases = [...map.values()].sort((a, b) => b.count - a.count).slice(0, 24);
+  currentAliases = [...map.values()].sort((a, b) => (b.confidence || 0) - (a.confidence || 0) || b.count - a.count).slice(0, 24);
+}
+
+function diagnosticState(item) {
+  const total = Number(item.imagesCount || 0) + Number(item.videosCount || 0);
+  if (total > 0) return 'results';
+  if (!item.success && !item.skipped) return 'errors';
+  return 'attention';
+}
+
+function sourceDisplayName(source) {
+  const chip = document.getElementById(`src-${source}`)?.closest('.source-chip');
+  return chip ? chip.textContent.replace('(18+)', '').replace(/\s+/g, ' ').trim() : source;
+}
+
+function renderSourceDiagnostics() {
+  if (!sourceDiagnosticList) return;
+  const allEntries = Object.entries(sourceDiagnostics);
+  const selectedFilter = sourceDiagnosticFilter?.value || 'all';
+  const entries = allEntries
+    .filter(([, item]) => selectedFilter === 'all' || diagnosticState(item) === selectedFilter)
+    .sort(([, a], [, b]) => {
+      const order = { errors: 0, attention: 1, results: 2 };
+      return order[diagnosticState(a)] - order[diagnosticState(b)];
+    });
+  const resultCount = allEntries.filter(([, item]) => diagnosticState(item) === 'results').length;
+  const issueCount = allEntries.length - resultCount;
+  if (sourceDiagnosticSummary) {
+    sourceDiagnosticSummary.textContent = `${allEntries.length} testées · ${resultCount} avec médias · ${issueCount} à vérifier`;
+  }
+  sourceDiagnosticList.innerHTML = entries.length
+    ? entries.map(([source, item]) => {
+      const state = diagnosticState(item);
+      const stateClass = state === 'results' ? (item.fallbackUsed ? 'warning' : 'ok') : (state === 'errors' ? 'fail' : 'warning');
+      const statusText = item.skipped ? 'Configuration ou SafeSearch requis' : (item.note || item.zeroReason || (state === 'results' ? 'Médias publics extraits' : 'Aucun média public correspondant'));
+      return `
+        <div class="diagnostic-row ${stateClass} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}" data-diagnostic-state="${state}">
+          <div class="diagnostic-row-main">
+            <strong>${escapeHtml(sourceDisplayName(source))}</strong>
+            <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
+          </div>
+          ${item.adapter ? `<small>${escapeHtml(item.adapter)} · ${item.pagesCrawled}/${item.pagesDiscovered} pages ouvertes${item.fallbackUsed ? ' · repli actif' : ''}</small>` : ''}
+          <small>${escapeHtml(statusText)}</small>
+        </div>`;
+    }).join('')
+    : `<div class="muted-line">${allEntries.length ? 'Aucune source dans ce filtre.' : 'Aucun diagnostic encore disponible.'}</div>`;
 }
 
 function renderInsights() {
@@ -952,9 +1007,9 @@ function renderInsights() {
   if (aliasList) {
     aliasList.innerHTML = currentAliases.length
       ? currentAliases.map(alias => `
-        <button type="button" class="alias-chip" data-alias="${escapeHtml(alias.value)}" title="${escapeHtml((alias.sources || []).join(', '))}">
+        <button type="button" class="alias-chip" data-alias="${escapeHtml(alias.value)}" title="${escapeHtml([alias.kind === 'display_name' ? 'Nom public' : 'Username', ...(alias.evidence || []), ...(alias.sources || [])].join(' · '))}">
           ${escapeHtml(alias.value)}
-          <span>${alias.count}</span>
+          <span>${(alias.sources || []).length || alias.count} src</span>
         </button>
       `).join('')
       : '<div class="muted-line">Aucun alias inféré pour le moment.</div>';
@@ -966,23 +1021,13 @@ function renderInsights() {
     });
   }
 
-  if (sourceDiagnosticList) {
-    const entries = Object.entries(sourceDiagnostics);
-    sourceDiagnosticList.innerHTML = entries.length
-      ? entries.map(([source, item]) => `
-        <div class="diagnostic-row ${item.success ? (item.fallbackUsed ? 'warning' : 'ok') : 'fail'} ${getSourceGroup(source) === 'nsfw' ? 'source-group-nsfw' : ''}">
-          <strong>${escapeHtml(source)}</strong>
-          <span>${item.imagesCount || 0} photos · ${item.videosCount || 0} vidéos</span>
-          ${item.adapter ? `<small>${escapeHtml(item.adapter)} · ${item.pagesCrawled}/${item.pagesDiscovered} pages ouvertes${item.fallbackUsed ? ' · fallback actif' : ''}</small>` : ''}
-          <small>${escapeHtml(item.skipped ? 'Bloqué par SafeSearch' : (item.note || item.zeroReason || (item.success ? 'OK' : 'Indisponible')))}</small>
-        </div>
-      `).join('')
-      : '<div class="muted-line">Aucun diagnostic encore disponible.</div>';
-  }
+  renderSourceDiagnostics();
 
   insightsDashboard.classList.remove('hidden');
   lucide.createIcons();
 }
+
+if (sourceDiagnosticFilter) sourceDiagnosticFilter.addEventListener('change', renderSourceDiagnostics);
 
 function mergeHistoryEntries(...lists) {
   const merged = lists.flat().filter(item => item?.query).sort((a, b) => new Date(b.createdAt || b.at || 0) - new Date(a.createdAt || a.at || 0));
@@ -1237,7 +1282,7 @@ function logSourceStatus(source, status) {
     updateSourceStatusDot(source, isZero ? 'warning' : 'success');
     const noteSuffix = status.note ? ` - ${status.note}` : '';
     const logType = isZero ? 'warning' : 'success';
-    if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram') {
+    if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram' || source === 'phunforum' || source === 'planetsuzy' || source === 'bellazon') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
     } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix' || source === 'eporner' || source === 'xnxx' || source === 'hqporner' || source === 'nuvid' || source === 'drtuber' || source === 'pornone' || source === 'youjizz') {
       addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
@@ -2022,6 +2067,12 @@ function safeCssToken(value) {
   return String(value || 'source').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
 }
 
+function mediaSourceId(item) {
+  if (item?.sourceId) return String(item.sourceId).toLowerCase();
+  const normalized = normalizeForScore(item?.source);
+  return Object.keys(SOURCE_TO_GROUP).find(source => normalizeForScore(source) === normalized) || normalized;
+}
+
 // ----------------------------------------------------
 // LIVE FILTERING LOGIC
 // ----------------------------------------------------
@@ -2036,8 +2087,7 @@ function applyFilters() {
       (img.title && img.title.toLowerCase().includes(textTerm)) || 
       (img.source && img.source.toLowerCase().includes(textTerm));
       
-    const matchesSource = sourceTerm === 'all' || 
-      (img.source && img.source.toLowerCase() === sourceTerm);
+    const matchesSource = sourceTerm === 'all' || mediaSourceId(img) === sourceTerm;
       
     return matchesText && matchesSource;
   });
@@ -2048,8 +2098,7 @@ function applyFilters() {
       (vid.title && vid.title.toLowerCase().includes(textTerm)) || 
       (vid.source && vid.source.toLowerCase().includes(textTerm));
       
-    const matchesSource = sourceTerm === 'all' || 
-      (vid.source && vid.source.toLowerCase() === sourceTerm);
+    const matchesSource = sourceTerm === 'all' || mediaSourceId(vid) === sourceTerm;
       
     return matchesText && matchesSource;
   });
@@ -2343,6 +2392,7 @@ function updateStatsDashboard() {
   const totalCount = filteredImages.length + filteredVideos.length;
   if (totalCount === 0) {
     statsDashboard.classList.add('hidden');
+    if (sourceBreakdownSummary) sourceBreakdownSummary.textContent = '0 source active';
     return;
   }
   
@@ -2359,7 +2409,7 @@ function updateStatsDashboard() {
   
   const allMedia = [...filteredImages, ...filteredVideos];
   allMedia.forEach(item => {
-    const src = item.source.toLowerCase();
+    const src = mediaSourceId(item);
     // If the source is in our counts, increment it
     sourceCounts[src] = (sourceCounts[src] || 0) + 1;
   });
@@ -2383,6 +2433,10 @@ function updateStatsDashboard() {
   Object.keys(sourceCounts).forEach(source => {
     groupedSources[getSourceGroup(source)].push(source);
   });
+
+  if (sourceBreakdownSummary) {
+    sourceBreakdownSummary.textContent = `${Object.keys(sourceCounts).length} sources · ${totalCount} médias`;
+  }
 
   Object.entries(SOURCE_GROUPS).forEach(([groupKey, config]) => {
     const sources = groupedSources[groupKey] || [];
@@ -2764,7 +2818,7 @@ function activateNsfwPreset() {
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
   setNsfwVisibility();
-  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz']);
+  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon']);
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
     if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
   });
