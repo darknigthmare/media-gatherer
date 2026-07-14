@@ -1048,7 +1048,10 @@ function extractSearchResultPages(html, baseUrl, query, sourceId, limit = 20) {
     const url = unwrapSearchResultUrl(href, baseUrl);
     if (!/^https?:\/\//.test(url)) return;
     if (!hostMatchesSource(url, sourceId)) return;
-    if (!mediaText({ title: text, url }).includes(normalizeSearchTerm(query))) return;
+    let pathname = '';
+    try { pathname = decodeURIComponent(new URL(url).pathname); } catch { return; }
+    if (/\/(?:accounts?|legal|about|directory|challenge|explore)(?:\/|$)/i.test(pathname)) return;
+    if (!textMatchesQuery(text, query) && !textMatchesQuery(pathname, query)) return;
     const type = looksLikeVideo(url) ? 'video' : 'page';
     rows.push(enrichMedia({ url, link: url, title: text || `${sourceLabel(sourceId)} page publique`, thumbnail: '' }, query, sourceId, type));
   });
@@ -1769,7 +1772,7 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
   const nonProfileSegments = new Set([
     'search', 'results', 'watch', 'video', 'videos', 'embed', 'threads', 'thread', 'topic', 'main',
     'showthread.php', 'p', 'pin', 'reel', 'reels', 'stories', 'explore', 'status', 'photo', 'photos',
-    'media', 'groups', 'r', 'home', 'hashtag'
+    'media', 'groups', 'r', 'home', 'hashtag', 'accounts', 'legal', 'about', 'directory', 'challenge'
   ]);
   const genericLabels = new Set([
     'photo', 'photos', 'video', 'videos', 'media', 'profile', 'profil', 'search', 'result', 'results',
@@ -1834,8 +1837,10 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
     (sourceStatus.pageSamples || []).forEach(sample => {
       const page = typeof sample === 'string' ? { url: sample, title: '' } : sample;
       const title = repairMojibake(String(page.title || '')).replace(/\s+/g, ' ').trim();
-      const context = `${title} ${page.url || ''}`;
-      if (!textMatchesQuery(context, query)) return;
+      let pathname = '';
+      try { pathname = decodeURIComponent(new URL(String(page.url || '')).pathname); } catch { pathname = ''; }
+      if (!textMatchesQuery(title, query) && !textMatchesQuery(pathname, query)) return;
+      const context = `${title} ${pathname}`;
       const pairedIdentity = title.match(/^(.{2,60}?)\s*\(@([a-z0-9._-]{2,32})\)/i);
       if (pairedIdentity) {
         addAlias(pairedIdentity[1], 'display_name', sourceId, title, compactSearchTerm(pairedIdentity[2]) === queryKey ? 98 : 90);
@@ -3004,6 +3009,7 @@ app.locals.testables = {
   extractImagesFromHtml,
   extractLinksAsVideos,
   extractAdapterPageLinks,
+  extractSearchResultPages,
   extractMediaFromSourcePage,
   parseDuckDuckGoWebResults,
   parseBingWebResults,

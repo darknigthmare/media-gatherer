@@ -20,6 +20,7 @@ const {
   extractImagesFromHtml,
   extractLinksAsVideos,
   extractAdapterPageLinks,
+  extractSearchResultPages,
   extractMediaFromSourcePage,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
@@ -249,6 +250,28 @@ test('deduit les noms publics et usernames seulement avec une preuve de profil',
     }
   });
   assert.ok(discoveredPageAliases.some(alias => alias.kind === 'display_name' && alias.value === 'SxySindy'));
+
+  const technicalAliases = discoverAliases('sxysindy', [], [], {
+    instagram: {
+      pageSamples: [{
+        title: 'Mot de passe oublie ?',
+        url: 'https://www.instagram.com/accounts/password/reset/?next=https%3A%2F%2Fwww.instagram.com%2Fsxysindy%2F'
+      }, {
+        title: 'Confidentialite',
+        url: 'https://www.instagram.com/legal/privacy/?next=https%3A%2F%2Fwww.instagram.com%2Fsxysindy%2F'
+      }]
+    }
+  });
+  assert.deepEqual(technicalAliases, []);
+
+  const technicalPages = extractSearchResultPages(
+    '<a href="/accounts/password/reset/?next=https%3A%2F%2Fwww.instagram.com%2Fsxysindy%2F">Mot de passe oublie ?</a><a href="/sxysindy/">SxySindy (@sxysindy)</a>',
+    'https://www.instagram.com/sxysindy/',
+    'sxysindy',
+    'instagram'
+  );
+  assert.equal(technicalPages.length, 1);
+  assert.equal(technicalPages[0].url, 'https://www.instagram.com/sxysindy/');
 });
 
 test('conserve l original plutot que sa miniature', () => {
