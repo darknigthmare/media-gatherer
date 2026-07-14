@@ -29,7 +29,7 @@ Verifier ensuite :
 `dist/` est ignore par Git. Publier l'EXE comme asset d'une release GitHub :
 
 ```powershell
-gh release create v1.4.2 dist/MediaGatherer.exe --title "MediaGatherer 1.4.2" --generate-notes
+gh release create v1.5.0 dist/MediaGatherer.exe --title "MediaGatherer 1.5.0" --generate-notes
 ```
 
 ## Vercel
@@ -46,14 +46,22 @@ Verification minimale apres publication :
 Invoke-RestMethod https://VOTRE-DOMAINE/api/health
 ```
 
-Les fonctions Vercel ont un stockage fichier temporaire dans `/tmp`. La recherche fonctionne, mais collection, historique, profils, cache, queue et veilles ne sont pas garantis entre les instances. Une base externe est necessaire pour une vraie persistance web.
+Les fonctions Vercel ont un stockage fichier temporaire dans `/tmp`. Pour rendre collection, historique, profils, cache, queue et veilles durables, configurer une base Upstash Redis REST puis ajouter :
+
+```text
+KV_REST_API_URL=https://...
+KV_REST_API_TOKEN=...
+MEDIAGATHERER_REMOTE_KEY=mediagatherer:store
+```
+
+Sans ces variables, la recherche reste fonctionnelle mais `/api/health` signale explicitement le stockage volatil.
 
 ## GitHub
 
 ```powershell
 git status --short --branch
 git add .
-git commit -m "Harden source diagnostics and public forum adapters"
+git commit -m "Expand identity and public source adapters"
 git push origin master
 ```
 

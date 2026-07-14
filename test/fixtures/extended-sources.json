@@ -1,0 +1,67 @@
+{
+  "bluesky": {
+    "posts": [
+      {
+        "uri": "at://did:plc:test/app.bsky.feed.post/abc123",
+        "record": { "text": "Sxysindy public post" },
+        "author": { "handle": "sxysindy.bsky.social", "displayName": "Sxy Sindy" },
+        "embed": {
+          "images": [
+            { "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/test/photo.jpg", "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/test/photo.jpg", "alt": "Sxysindy portrait" }
+          ]
+        }
+      }
+    ]
+  },
+  "tumblr": {
+    "response": [
+      {
+        "blog_name": "sxysindy",
+        "post_url": "https://sxysindy.tumblr.com/post/123",
+        "summary": "Sxysindy public photo",
+        "photos": [
+          {
+            "original_size": { "url": "https://64.media.tumblr.com/photo.jpg", "width": 1600, "height": 1200 },
+            "alt_sizes": [{ "url": "https://64.media.tumblr.com/photo-500.jpg", "width": 500, "height": 375 }]
+          }
+        ]
+      }
+    ]
+  },
+  "imgur": {
+    "data": [
+      {
+        "id": "album1",
+        "title": "Sxysindy gallery",
+        "link": "https://imgur.com/a/album1",
+        "images": [
+          { "link": "https://i.imgur.com/photo.jpg", "type": "image/jpeg", "width": 1400, "height": 1000 },
+          { "link": "https://i.imgur.com/clip.gifv", "mp4": "https://i.imgur.com/clip.mp4", "type": "video/mp4", "animated": true }
+        ]
+      }
+    ]
+  },
+  "peertube": {
+    "data": [
+      {
+        "uuid": "video-uuid",
+        "name": "Sxysindy interview",
+        "previewPath": "/lazy-static/previews/video.jpg",
+        "duration": 125,
+        "account": { "url": "https://peertube.example/accounts/sxysindy" }
+      }
+    ]
+  },
+  "arquivo": {
+    "responseItems": [
+      {
+        "imgLinkToArchive": "https://arquivo.pt/wayback/cdx/photo.jpg",
+        "imgThumbnail": "https://arquivo.pt/thumb/photo.jpg",
+        "pageLinkToArchive": "https://arquivo.pt/wayback/page",
+        "pageTitle": "Sxysindy archived gallery",
+        "imgWidth": 1280,
+        "imgHeight": 960
+      }
+    ]
+  }
+}

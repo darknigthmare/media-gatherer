@@ -31,9 +31,19 @@ const {
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
   discoverAliases,
+  mergeIdentityEvidence,
   filterBySearchMode,
-  buildPersonQueries
+  buildPersonQueries,
+  adultSearchGuard,
+  hammingDistance,
+  parseBlueskyResults,
+  parseTumblrResults,
+  parseImgurResults,
+  parsePeerTubeResults,
+  parseArquivoResults
 } = app.locals.testables;
+
+const extendedFixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'extended-sources.json'), 'utf8'));
 
 let server;
 let baseUrl;
@@ -274,6 +284,46 @@ test('deduit les noms publics et usernames seulement avec une preuve de profil',
   assert.equal(technicalPages[0].url, 'https://www.instagram.com/sxysindy/');
 });
 
+test('normalise les nouveaux adaptateurs API avec medias et preuves identite', () => {
+  const bluesky = parseBlueskyResults(extendedFixtures.bluesky);
+  assert.equal(bluesky.media.length, 1);
+  assert.equal(bluesky.media[0].type, 'image');
+  assert.ok(bluesky.aliases.some(alias => alias.value === '@sxysindy.bsky.social'));
+
+  const tumblr = parseTumblrResults(extendedFixtures.tumblr);
+  assert.equal(tumblr.media[0].url, 'https://64.media.tumblr.com/photo.jpg');
+  assert.ok(tumblr.aliases.some(alias => alias.value === '@sxysindy'));
+
+  const imgur = parseImgurResults(extendedFixtures.imgur);
+  assert.deepEqual(imgur.media.map(item => item.type), ['image', 'video']);
+  assert.equal(imgur.media[1].url, 'https://i.imgur.com/clip.mp4');
+
+  const peertube = parsePeerTubeResults(extendedFixtures.peertube, 'https://peertube.example');
+  assert.equal(peertube.media[0].thumbnail, 'https://peertube.example/lazy-static/previews/video.jpg');
+
+  const arquivo = parseArquivoResults(extendedFixtures.arquivo);
+  assert.equal(arquivo.media[0].width, 1280);
+});
+
+test('fusionne les preuves identite et applique le garde-fou adulte', () => {
+  const aliases = mergeIdentityEvidence('sxysindy', [], {
+    wikidata: { identityAliases: [{ value: 'Sxy Sindy', kind: 'display_name', confidence: 91, evidence: ['Q1'] }] },
+    bluesky: { identityAliases: [{ value: '@sindy-alt', kind: 'username', confidence: 94, evidence: ['bsky'] }] }
+  });
+  assert.ok(aliases.some(alias => alias.value === 'Sxy Sindy'));
+  assert.ok(aliases.some(alias => alias.value === '@sindy-alt'));
+  const nsfwSources = new Set(['erome']);
+  assert.equal(adultSearchGuard({ safe: false, selectedSources: ['erome'], nsfwSources, adultConfirmed: false }).allowed, false);
+  assert.equal(adultSearchGuard({ safe: false, selectedSources: ['erome'], nsfwSources, adultConfirmed: true }).allowed, true);
+  assert.equal(adultSearchGuard({ safe: true, selectedSources: ['wikidata'], nsfwSources, adultConfirmed: false }).allowed, true);
+});
+
+test('calcule la distance de Hamming des empreintes perceptuelles', () => {
+  assert.equal(hammingDistance('0000000000000000', '0000000000000000'), 0);
+  assert.equal(hammingDistance('0000000000000000', 'ffffffffffffffff'), 64);
+  assert.equal(hammingDistance('invalid', 'ffffffffffffffff'), Number.POSITIVE_INFINITY);
+});
+
 test('conserve l original plutot que sa miniature', () => {
   const extracted = extractImagesFromHtml(
     '<img src="https://cdn.example/photo.thumb.jpg" data-full-image="https://cdn.example/photo-original.jpg" alt="Mia portrait" width="300" height="300">',
@@ -372,11 +422,25 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
 
   const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
   const sourceIds = sourcePayload.sources.map(source => source.id);
-  const sourceInputs = [...html.matchAll(/<input[^>]+id="src-([^"]+)"[^>]+value="([^"]+)"/g)].map(match => ({ id: match[1], value: match[2] }));
-  const sourceOptions = [...html.matchAll(/<option value="([^"]+)">/g)].map(match => match[1]);
-  assert.deepEqual(sourceInputs.map(input => input.id).sort(), sourceIds.slice().sort());
-  assert.ok(sourceInputs.every(input => input.id === input.value));
-  assert.ok(sourceIds.every(id => sourceOptions.includes(id)));
+  assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
+  assert.match(client, /createSourceChip\(source\)/);
+  assert.match(client, /populateSourceFilter\(\)/);
+  assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
+  assert.equal(new Set(sourceIds).size, sourceIds.length);
+});
+
+test('chaque source expose un contrat de transport public testable', async () => {
+  const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
+  const adapterPayload = await fetch(`${baseUrl}/api/sources/adapters`).then(response => response.json());
+  assert.equal(adapterPayload.adapters.length, sourcePayload.sources.length);
+  for (const source of sourcePayload.sources) {
+    const adapter = adapterPayload.adapters.find(row => row.id === source.id);
+    assert.ok(adapter, `adaptateur absent: ${source.id}`);
+    assert.ok(Array.isArray(adapter.supports) && adapter.supports.length > 0, `supports absents: ${source.id}`);
+    assert.ok(Array.isArray(adapter.domains) && adapter.domains.length > 0, `domaine absent: ${source.id}`);
+    const urls = sourceSearchUrls(source.id, 'test');
+    assert.ok(urls.length > 0 && urls.every(url => /^https:\/\//.test(url)), `transport invalide: ${source.id}`);
+  }
 });
 
 test('utilise uniquement des icones Lucide disponibles', () => {

@@ -12,6 +12,18 @@ const dnsModule = require('dns');
 const dns = dnsModule.promises;
 const net = require('net');
 const { version: APP_VERSION } = require('./package.json');
+const { EXTENDED_SOURCE_DEFINITIONS, EXTENDED_SOURCE_ADAPTERS } = require('./src/sources/extendedSources');
+const {
+  runExtendedApiSource,
+  parseBlueskyResults,
+  parseTumblrResults,
+  parseImgurResults,
+  parsePeerTubeResults,
+  parseArquivoResults
+} = require('./src/sources/publicApiAdapters');
+const { mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
+const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
+const { createRemoteStore } = require('./src/storage/remoteStore');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -20,12 +32,19 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-14-media-10';
+const CACHE_SCHEMA_VERSION = '2026-07-14-media-11';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 100 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
 const SESSION_CONNECTIONS = new Map();
 const SOURCE_HEALTH = new Map();
+const REMOTE_STORE = createRemoteStore({
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN,
+  key: process.env.MEDIAGATHERER_REMOTE_KEY || 'mediagatherer:store'
+});
+let remoteHydrationPromise = null;
+const DEFAULT_SELECTED_SOURCES = new Set(['duckduckgo', 'bing', 'flickr', 'wikimedia', 'youtube', 'reddit', 'wayback', 'vimeo', 'dailymotion', 'wikidata', 'internetarchive', 'bluesky']);
 
 const SOURCE_IDS = [
   'duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'reddit', 'telegram',
@@ -33,14 +52,16 @@ const SOURCE_IDS = [
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
   'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
+  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon',
+  ...EXTENDED_SOURCE_DEFINITIONS.map(source => source.id)
 ];
 
 const NSFW_SOURCES = new Set([
   'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
   'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
   'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
+  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon',
+  ...EXTENDED_SOURCE_DEFINITIONS.filter(source => source.nsfw).map(source => source.id)
 ]);
 
 const SOURCE_LABELS = {
@@ -75,10 +96,11 @@ const SOURCE_LABELS = {
   youjizz: 'YouJizz',
   phunforum: 'Phun Forum',
   planetsuzy: 'PlanetSuzy',
-  bellazon: 'Bellazon Forum'
+  bellazon: 'Bellazon Forum',
+  ...Object.fromEntries(EXTENDED_SOURCE_DEFINITIONS.map(source => [source.id, source.label]))
 };
 
-const NSFW_ADAPTERS = {
+const SOURCE_CRAWL_ADAPTERS = {
   freeones: { domains: ['freeones.com'], pagePatterns: [/\/html\//i, /\/forums\//i], media: ['image', 'page'] },
   freeonesforum: { domains: ['freeones.com'], pagePatterns: [/\/forums\//i, /\/threads\//i], media: ['image', 'page'] },
   babesource: { domains: ['babesource.com'], pagePatterns: [/\/(?:model|babe|gallery|video)\//i], media: ['image', 'video'] },
@@ -116,21 +138,26 @@ const NSFW_ADAPTERS = {
   youjizz: { domains: ['youjizz.com'], pagePatterns: [/\/videos\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 },
   phunforum: { domains: ['forum.phun.org', 'phun.org'], pagePatterns: [/\/threads\/[^/]+\.\d+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
   planetsuzy: { domains: ['planetsuzy.org'], pagePatterns: [/\/showthread\.php\?.*\bt=\d+/i, /\/t\d+[^/]*\.html/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-form' },
-  bellazon: { domains: ['bellazon.com'], pagePatterns: [/\/main\/topic\/\d+-[^/]+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' }
+  bellazon: { domains: ['bellazon.com'], pagePatterns: [/\/main\/topic\/\d+-[^/]+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
+  ...EXTENDED_SOURCE_ADAPTERS
 };
 
 const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
-  const nsfw = NSFW_SOURCES.has(id);
+  const definition = EXTENDED_SOURCE_DEFINITIONS.find(source => source.id === id) || {};
+  const nsfw = definition.nsfw === true || NSFW_SOURCES.has(id);
   map[id] = {
     id,
     label: SOURCE_LABELS[id] || id.replace(/\b\w/g, char => char.toUpperCase()),
-    category: nsfw ? 'nsfw' : (['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest'].includes(id) ? 'social' : 'normal'),
+    category: definition.category || (nsfw ? 'nsfw' : (['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest'].includes(id) ? 'social' : 'normal')),
     nsfw,
     enabled: true,
-    supports: NSFW_ADAPTERS[id]?.media || (id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page']),
-    adapter: NSFW_ADAPTERS[id] ? 'source-crawl' : 'generic-public',
+    supports: definition.supports || SOURCE_CRAWL_ADAPTERS[id]?.media || (id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page']),
+    adapter: definition.adapter || (SOURCE_CRAWL_ADAPTERS[id] ? 'source-crawl' : 'generic-public'),
     publicOnly: true,
-    subtype: NSFW_ADAPTERS[id]?.forum ? 'forum' : (nsfw ? 'platform' : 'general')
+    subtype: definition.subtype || (SOURCE_CRAWL_ADAPTERS[id]?.forum ? 'forum' : (nsfw ? 'platform' : 'general')),
+    purpose: definition.purpose || 'media',
+    auth: definition.auth || 'none',
+    defaultSelected: definition.defaultSelected === true || DEFAULT_SELECTED_SOURCES.has(id)
   };
   return map;
 }, {});
@@ -236,7 +263,7 @@ function readStore() {
   }
 }
 
-function writeStore(store) {
+function writeLocalStore(store) {
   ensureLocalDirs();
   const payload = JSON.stringify({ ...defaultStore(), ...store }, null, 2);
   const temporaryPath = `${STORE_PATH}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
@@ -249,12 +276,50 @@ function writeStore(store) {
   }
 }
 
+function writeStore(store) {
+  const normalized = { ...defaultStore(), ...store };
+  writeLocalStore(normalized);
+  if (REMOTE_STORE.enabled) {
+    REMOTE_STORE.persist(normalized).catch(error => console.warn('[STORE] Persistance distante impossible:', error.message));
+  }
+}
+
+function ensureRemoteStoreReady() {
+  if (!REMOTE_STORE.enabled) return Promise.resolve();
+  if (!remoteHydrationPromise) {
+    remoteHydrationPromise = REMOTE_STORE.load()
+      .then(remotePayload => {
+        if (remotePayload) writeLocalStore({ ...defaultStore(), ...remotePayload });
+        else if (fs.existsSync(STORE_PATH)) return REMOTE_STORE.persist(readStore());
+        return null;
+      })
+      .catch(error => console.warn('[STORE] Hydratation distante impossible, fallback local:', error.message));
+  }
+  return remoteHydrationPromise;
+}
+
 function mutateStore(mutator) {
   const store = readStore();
   const result = mutator(store);
   writeStore(store);
   return result;
 }
+
+app.use('/api', async (req, res, next) => {
+  await ensureRemoteStoreReady();
+  if (!REMOTE_STORE.enabled) return next();
+  const originalJson = res.json.bind(res);
+  let responseScheduled = false;
+  res.json = body => {
+    if (responseScheduled) return res;
+    responseScheduled = true;
+    REMOTE_STORE.flush().finally(() => {
+      if (!res.headersSent) originalJson(body);
+    });
+    return res;
+  };
+  return next();
+});
 
 function makeId(prefix = 'id') {
   return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -352,6 +417,20 @@ function sourceDomain(sourceId) {
     wayback: 'web.archive.org',
     vimeo: 'vimeo.com',
     dailymotion: 'dailymotion.com',
+    wikidata: 'wikidata.org',
+    tmdb: 'themoviedb.org',
+    internetarchive: 'archive.org',
+    arquivo: 'arquivo.pt',
+    imgur: 'imgur.com',
+    peertube: 'peertube.tv',
+    bluesky: 'bsky.app',
+    mastodon: 'mastodon.social',
+    tumblr: 'tumblr.com',
+    twitch: 'twitch.tv',
+    linktree: 'linktr.ee',
+    beacons: 'beacons.ai',
+    allmylinks: 'allmylinks.com',
+    carrd: 'carrd.co',
     erome: 'erome.com',
     redgifs: 'redgifs.com',
     imagebam: 'imagebam.com',
@@ -383,13 +462,23 @@ function sourceDomain(sourceId) {
     youjizz: 'youjizz.com',
     phunforum: 'forum.phun.org',
     planetsuzy: 'planetsuzy.org',
-    bellazon: 'bellazon.com'
+    bellazon: 'bellazon.com',
+    stashdb: 'stashdb.org',
+    iafd: 'iafd.com',
+    adultdatabase: 'adultdatabase.com',
+    theporndb: 'theporndb.net',
+    fancentro: 'fancentro.com',
+    loyalfans: 'loyalfans.com',
+    manyvids: 'manyvids.com',
+    clips4sale: 'clips4sale.com',
+    lpsg: 'lpsg.com',
+    adultdvdtalk: 'adultdvdtalk.com'
   };
   return domains[sourceId] || `${sourceId}.com`;
 }
 
 function sourceDomains(sourceId) {
-  return NSFW_ADAPTERS[sourceId]?.domains || [sourceDomain(sourceId)];
+  return SOURCE_CRAWL_ADAPTERS[sourceId]?.domains || [sourceDomain(sourceId)];
 }
 
 function hostMatchesSource(rawUrl, sourceId) {
@@ -512,7 +601,7 @@ function dedupeBestMedia(items = []) {
     const current = best.get(key);
     if (!current || mediaQualityScore(item) > mediaQualityScore(current)) best.set(key, item);
   }
-  return [...best.values()];
+  return dedupePerceptual([...best.values()], 6);
 }
 
 const PUBLIC_REQUEST_HEADERS = {
@@ -713,7 +802,7 @@ function unwrapSearchResultUrl(candidate, baseUrl) {
 }
 
 function pageMatchesAdapter(url, sourceId) {
-  const adapter = NSFW_ADAPTERS[sourceId];
+  const adapter = SOURCE_CRAWL_ADAPTERS[sourceId];
   if (!adapter || !hostMatchesSource(url, sourceId)) return false;
   return !adapter.pagePatterns?.length || adapter.pagePatterns.some(pattern => pattern.test(new URL(url).pathname + new URL(url).search));
 }
@@ -722,7 +811,7 @@ function isProfileLikeSourcePage(rawUrl, sourceId) {
   try {
     if (!hostMatchesSource(rawUrl, sourceId)) return false;
     const pathname = new URL(rawUrl).pathname;
-    if (NSFW_ADAPTERS[sourceId]?.publicProfileOnly) return !/^\/?$/.test(pathname);
+    if (SOURCE_CRAWL_ADAPTERS[sourceId]?.publicProfileOnly) return !/^\/?$/.test(pathname);
     return /\/(?:users?|profiles?|models?|pornstars?|performers?|creators?|channels?|actress|babe|girls?|tags?|porn-maker|m)\/[^/]+/i.test(pathname) ||
       (sourceId === 'freeones' && /\/html\/[^/]+/i.test(pathname));
   } catch {
@@ -970,7 +1059,7 @@ function extractAdapterPageLinks(html, baseUrl, query, sourceId, limit = 20, opt
 function extractMediaFromSourcePage(html, pageUrl, query, sourceId, pageMeta = {}) {
   const $ = cheerio.load(html || '');
   const pageTitle = $('meta[property="og:title"]').attr('content') || $('title').text().trim() || pageMeta.title || `${sourceLabel(sourceId)} media`;
-  const adapter = NSFW_ADAPTERS[sourceId];
+  const adapter = SOURCE_CRAWL_ADAPTERS[sourceId];
   const trustedPage = Boolean(pageMeta.trustedContext) || isTrustedIdentityResultPage(pageUrl, pageTitle, query);
   const pageRelevant = adapter?.publicProfileOnly ? trustedPage : (trustedPage || textMatchesQuery(`${pageTitle} ${pageUrl}`, query));
   if (!pageRelevant) return { images: [], videos: [] };
@@ -1073,6 +1162,20 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     reddit: `https://www.reddit.com/search/?q=${encoded}&type=media`,
     vimeo: `https://vimeo.com/search?q=${encoded}`,
     dailymotion: `https://www.dailymotion.com/search/${encoded}/videos`,
+    wikidata: `https://www.wikidata.org/w/index.php?search=${encoded}`,
+    tmdb: `https://www.themoviedb.org/search/person?query=${encoded}`,
+    internetarchive: `https://archive.org/search?query=${encoded}`,
+    arquivo: `https://arquivo.pt/imagesearch?q=${encoded}`,
+    imgur: `https://imgur.com/search?q=${encoded}`,
+    peertube: `https://peertube.tv/search?search=${encoded}`,
+    bluesky: `https://bsky.app/search?q=${encoded}`,
+    mastodon: `https://mastodon.social/search?q=${encoded}`,
+    tumblr: `https://www.tumblr.com/search/${encoded}`,
+    twitch: username ? `https://www.twitch.tv/${username}/clips` : `https://www.twitch.tv/search?term=${encoded}`,
+    linktree: username ? `https://linktr.ee/${username}` : 'https://linktr.ee/',
+    beacons: username ? `https://beacons.ai/${username}` : 'https://beacons.ai/',
+    allmylinks: username ? `https://allmylinks.com/${username}` : 'https://allmylinks.com/',
+    carrd: username ? `https://${username}.carrd.co/` : 'https://carrd.co/',
     telegram: username ? `https://t.me/s/${username}` : 'https://t.me/',
     instagram: username ? `https://www.instagram.com/${username}/` : 'https://www.instagram.com/',
     facebook: `https://www.facebook.com/search/top?q=${encoded}`,
@@ -1110,10 +1213,20 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     youjizz: `https://www.youjizz.com/search/${encoded}-1.html`,
     phunforum: `https://forum.phun.org/search/search?keywords=${encoded}&title_only=1`,
     planetsuzy: `https://www.planetsuzy.org/search.php?query=${encoded}`,
-    bellazon: `https://www.bellazon.com/main/search/?q=${encoded}&type=forums_topic&quick=1`
+    bellazon: `https://www.bellazon.com/main/search/?q=${encoded}&type=forums_topic&quick=1`,
+    stashdb: `https://stashdb.org/search?query=${encoded}`,
+    iafd: `https://www.iafd.com/results.asp?searchtype=comprehensive&searchstring=${encoded}`,
+    adultdatabase: `https://adultdatabase.com/search?q=${encoded}`,
+    theporndb: `https://theporndb.net/search?q=${encoded}`,
+    fancentro: username ? `https://fancentro.com/${username}` : `https://fancentro.com/search?q=${encoded}`,
+    loyalfans: username ? `https://www.loyalfans.com/${username}` : `https://www.loyalfans.com/search?q=${encoded}`,
+    manyvids: `https://www.manyvids.com/Search/${encoded}/`,
+    clips4sale: `https://www.clips4sale.com/clips/search/${encoded}`,
+    lpsg: `https://www.lpsg.com/search/?q=${encoded}&t=post`,
+    adultdvdtalk: `https://forum.adultdvdtalk.com/search?q=${encoded}`
   };
   const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
-  if (NSFW_SOURCES.has(sourceId) || SOURCE_META[sourceId]?.category === 'social') {
+  if (NSFW_SOURCES.has(sourceId) || ['social', 'identity'].includes(SOURCE_META[sourceId]?.category)) {
     const domain = sourceDomain(sourceId);
     urls.push(`https://duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
     urls.push(`https://www.bing.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
@@ -1175,7 +1288,7 @@ async function scrapeEpornerApi(query, options = {}) {
 }
 
 async function scrapeNsfwSource(sourceId, query, options = {}) {
-  const adapter = NSFW_ADAPTERS[sourceId];
+  const adapter = SOURCE_CRAWL_ADAPTERS[sourceId];
   const images = [];
   const videos = [];
   const discoveredPages = [];
@@ -1511,6 +1624,17 @@ async function scrapeBingHtmlFallback(query, options = {}) {
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
   const imageLimit = options.imageLimit || 35;
   const videoLimit = options.videoLimit || 20;
+  const extended = await runExtendedApiSource(sourceId, query, options, {
+    fetchText,
+    enrichMedia,
+    dedupeBestMedia,
+    connectionValue,
+    formatDuration,
+    imageLimit,
+    videoLimit
+  });
+  if (extended) return extended;
+
   if (sourceId === 'duckduckgo') {
     let rawResults = [];
     let imageApiNote = '';
@@ -1767,7 +1891,11 @@ function filterByMediaMetadata(items, options = {}) {
 function discoverAliases(query, images = [], videos = [], status = {}) {
   const queryKey = compactSearchTerm(query);
   const aliases = new Map();
-  const directProfileSources = new Set(['instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'telegram', 'onlyfans', 'fansly', 'mym']);
+  const directProfileSources = new Set([
+    'instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'telegram', 'bluesky', 'mastodon', 'tumblr', 'twitch',
+    'linktree', 'beacons', 'allmylinks', 'carrd', 'onlyfans', 'fansly', 'mym', 'fancentro', 'loyalfans',
+    'manyvids', 'clips4sale'
+  ]);
   const nestedProfilePrefixes = new Set(['user', 'users', 'u', 'profile', 'profiles', 'channel', 'channels', 'c', 's']);
   const nonProfileSegments = new Set([
     'search', 'results', 'watch', 'video', 'videos', 'embed', 'threads', 'thread', 'topic', 'main',
@@ -1856,9 +1984,7 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
     });
   });
 
-  return [...aliases.values()]
-    .sort((a, b) => b.confidence - a.confidence || b.sources.length - a.sources.length || b.count - a.count)
-    .slice(0, 24);
+  return mergeIdentityEvidence(query, [...aliases.values()], status).slice(0, 40);
 }
 
 function sourceHealthFromStatus(sourceId, sourceStatus) {
@@ -1895,7 +2021,7 @@ async function scrapeImageSearchWithFallback(query, sources, options = {}) {
       return;
     }
     try {
-      const result = NSFW_ADAPTERS[sourceId]
+      const result = SOURCE_CRAWL_ADAPTERS[sourceId]
         ? await scrapeNsfwSource(sourceId, query, options)
         : await scrapeGenericSource(sourceId, query, options);
       images.push(...result.images);
@@ -2021,12 +2147,37 @@ function applyPersonRules(store, personId, link) {
 }
 
 function publicOnlyPersonGuard(person = {}) {
+  const adultConfirmed = person.adultConfirmed === true;
   return {
     publicOnly: person.publicOnly !== false,
     consentMode: person.consentMode || 'public_or_consented',
     safeMode: person.safeMode !== false,
-    blocked: ['private_accounts', 'login_bypass', 'private_address', 'private_phone', 'live_location']
+    adultConfirmed,
+    nsfwAllowed: adultConfirmed && person.publicOnly !== false && person.safeMode !== false,
+    blocked: ['private_accounts', 'login_bypass', 'private_address', 'private_phone', 'live_location', 'minors']
   };
+}
+
+const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
+
+async function resolveIdentityProfile(person, options = {}) {
+  const defaults = options.includeNsfw === true ? [...DEFAULT_IDENTITY_SOURCES, 'stashdb', 'iafd', 'theporndb'] : DEFAULT_IDENTITY_SOURCES;
+  const requested = uniq(String(options.sources || defaults.join(',')).split(',')).filter(source => SOURCE_META[source]);
+  const selected = requested.filter(source => !NSFW_SOURCES.has(source) || (options.includeNsfw === true && person.adultConfirmed === true));
+  const payload = await scrapeImageSearchWithFallback(person.displayName || person.name, selected.join(','), {
+    safe: !selected.some(source => NSFW_SOURCES.has(source)),
+    adultConfirmed: person.adultConfirmed === true,
+    matchMode: 'smart',
+    riskMode: 'cautious',
+    imageLimit: 12,
+    videoLimit: 8
+  });
+  const accounts = uniq(Object.values(payload.status || {}).flatMap(status => status.accounts || []));
+  const updated = applyIdentityEvidenceToPerson(person, payload.aliases || [], accounts);
+  mutateStore(store => {
+    store.persons = store.persons.map(row => row.id === person.id ? updated : row);
+  });
+  return { person: updated, aliases: payload.aliases || [], accounts, status: payload.status, media: { images: payload.images, videos: payload.videos } };
 }
 
 app.get('/api/health', (req, res) => {
@@ -2036,9 +2187,10 @@ app.get('/api/health', (req, res) => {
     app: 'MediaGatherer',
     version: APP_VERSION,
     storage: {
-      mode: 'json',
-      persistent: !IS_VOLATILE_STORAGE,
-      warning: IS_VOLATILE_STORAGE ? 'Stockage Vercel temporaire; configurez un volume durable ou utilisez le mode local.' : null,
+      mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json',
+      persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE,
+      warning: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled ? 'Stockage Vercel temporaire; configurez KV_REST_API_URL et KV_REST_API_TOKEN.' : null,
+      remote: REMOTE_STORE.status(),
       historyCount: store.history.length,
       collectionCount: store.collection.length,
       personCount: store.persons.length,
@@ -2060,7 +2212,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/storage/status', (req, res) => {
   const store = readStore();
-  res.json({ mode: 'json', persistent: !IS_VOLATILE_STORAGE, volatile: IS_VOLATILE_STORAGE, path: process.env.VERCEL ? null : STORE_PATH, exportDir: process.env.VERCEL ? null : EXPORT_DIR, counts: {
+  res.json({ mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json', persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE, volatile: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled, remote: REMOTE_STORE.status(), path: process.env.VERCEL ? null : STORE_PATH, exportDir: process.env.VERCEL ? null : EXPORT_DIR, counts: {
     history: store.history.length,
     collection: store.collection.length,
     persons: store.persons.length,
@@ -2072,9 +2224,14 @@ app.get('/api/search', searchLimiter, async (req, res) => {
   const query = String(req.query.q || '').trim();
   if (!query) return res.status(400).json({ error: 'Parametre q requis' });
   if (query.length > 160) return res.status(400).json({ error: 'Requete trop longue' });
-  const sources = uniq(String(req.query.sources || 'duckduckgo').split(',')).filter(source => SOURCE_META[source]).join(',') || 'duckduckgo';
+  const selectedSourceIds = uniq(String(req.query.sources || 'duckduckgo').split(',')).filter(source => SOURCE_META[source]);
+  const sources = selectedSourceIds.join(',') || 'duckduckgo';
+  const safeRequested = String(req.query.safe || 'true') !== 'false';
+  const adultGuard = adultSearchGuard({ safe: safeRequested, selectedSources: selectedSourceIds, nsfwSources: NSFW_SOURCES, adultConfirmed: String(req.query.adultConfirmed || 'false') === 'true' });
+  if (!adultGuard.allowed) return res.status(403).json({ error: adultGuard.reason, code: 'adult_confirmation_required' });
   const options = {
-    safe: String(req.query.safe || 'true') !== 'false',
+    safe: safeRequested,
+    adultConfirmed: adultGuard.adultConfirmed,
     mediaKind: req.query.media || 'both',
     matchMode: ['strict', 'smart', 'broad'].includes(req.query.mode) ? req.query.mode : 'strict',
     riskMode: req.query.risk === 'balanced' ? 'balanced' : 'cautious',
@@ -2228,6 +2385,9 @@ app.get('/api/account/scrape', searchLimiter, async (req, res) => {
   const requestedUrl = String(req.query.url || '');
   try {
     const url = await validatePublicMediaUrl(requestedUrl);
+    const requestedSource = SOURCE_IDS.find(id => hostMatchesSource(url, id));
+    const accountGuard = adultSearchGuard({ safe: String(req.query.safe || 'true') !== 'false', selectedSources: requestedSource ? [requestedSource] : [], nsfwSources: NSFW_SOURCES, adultConfirmed: String(req.query.adultConfirmed || 'false') === 'true' });
+    if (!accountGuard.allowed) return res.status(403).json({ error: accountGuard.reason, code: 'adult_confirmation_required' });
     const page = await fetchPage(url, { timeout: 15000 });
     const query = String(req.query.q || '').trim();
     const accountMode = req.query.accountMode === 'strict' ? 'strict' : 'complete';
@@ -2303,6 +2463,13 @@ const CONNECTION_PROVIDERS = {
   flickr: { label: 'Flickr API', env: ['FLICKR_API_KEY'], unlocks: 'Recherche officielle de photos publiques', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
   google: { label: 'Google Custom Search', env: ['GOOGLE_API_KEY', 'GOOGLE_CX'], unlocks: 'Recherche Google Images officielle', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }, { name: 'cx', label: 'Search CX', type: 'text', required: true }] },
   brave: { label: 'Brave Search API', env: ['BRAVE_API_KEY'], unlocks: 'Recherche Brave Images officielle', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
+  tmdb: { label: 'TMDB API', env: ['TMDB_API_KEY'], unlocks: 'Profils, noms et portraits publics TMDB', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
+  imgur: { label: 'Imgur API', env: ['IMGUR_CLIENT_ID'], unlocks: 'Galeries publiques Imgur', fields: [{ name: 'clientId', label: 'Client ID', type: 'password', required: true }] },
+  tumblr: { label: 'Tumblr API', env: ['TUMBLR_API_KEY'], unlocks: 'Posts et medias publics Tumblr', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
+  twitch: { label: 'Twitch Helix', env: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'], unlocks: 'Comptes et clips publics Twitch via app auth', fields: [{ name: 'clientId', label: 'Client ID', type: 'password', required: true }, { name: 'clientSecret', label: 'Client secret', type: 'password', required: true }] },
+  mastodon: { label: 'Mastodon', env: ['MASTODON_ACCESS_TOKEN'], unlocks: 'Recherche de comptes et medias publics selon l instance', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: true }, { name: 'accessToken', label: 'Access token personnel', type: 'password', required: false }] },
+  peertube: { label: 'PeerTube', env: ['PEERTUBE_INSTANCE'], unlocks: 'Recherche video sur une instance PeerTube', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: true }] },
+  stashdb: { label: 'StashDB GraphQL', env: ['STASHDB_API_KEY'], unlocks: 'Metadonnees et alias avec votre propre cle StashDB', fields: [{ name: 'apiKey', label: 'API key personnelle', type: 'password', required: true }] },
   telegram: { label: 'Telegram', env: [], unlocks: 'Non disponible: OAuth/session MTProto non integre', fields: [], available: false }
 };
 
@@ -2348,6 +2515,27 @@ app.post('/api/connections/:id/test', async (req, res) => {
     if (id === 'flickr') await fetchText(`https://www.flickr.com/services/rest/?method=flickr.test.echo&api_key=${encodeURIComponent(connectionValue('flickr', 'apiKey', 'FLICKR_API_KEY'))}&format=json&nojsoncallback=1`);
     if (id === 'google') await fetchText(`https://www.googleapis.com/customsearch/v1?num=1&q=test&key=${encodeURIComponent(connectionValue('google', 'apiKey', 'GOOGLE_API_KEY'))}&cx=${encodeURIComponent(connectionValue('google', 'cx', 'GOOGLE_CX'))}`);
     if (id === 'brave') await fetchText('https://api.search.brave.com/res/v1/images/search?q=test&count=1', { headers: { 'X-Subscription-Token': connectionValue('brave', 'apiKey', 'BRAVE_API_KEY'), accept: 'application/json' } });
+    if (id === 'tmdb') await fetchText(`https://api.themoviedb.org/3/search/person?api_key=${encodeURIComponent(connectionValue('tmdb', 'apiKey', 'TMDB_API_KEY'))}&query=test&page=1`);
+    if (id === 'imgur') await fetchText('https://api.imgur.com/3/gallery/search/time/all/0?q=test', { headers: { authorization: `Client-ID ${connectionValue('imgur', 'clientId', 'IMGUR_CLIENT_ID')}`, accept: 'application/json' } });
+    if (id === 'tumblr') await fetchText(`https://api.tumblr.com/v2/tagged?tag=test&limit=1&api_key=${encodeURIComponent(connectionValue('tumblr', 'apiKey', 'TUMBLR_API_KEY'))}`);
+    if (id === 'mastodon') {
+      const instanceValue = connectionValue('mastodon', 'instance', 'MASTODON_INSTANCE') || 'mastodon.social';
+      const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
+      await fetchText(`${instance}/api/v2/instance`, { headers: connectionValue('mastodon', 'accessToken', 'MASTODON_ACCESS_TOKEN') ? { authorization: `Bearer ${connectionValue('mastodon', 'accessToken', 'MASTODON_ACCESS_TOKEN')}` } : undefined });
+    }
+    if (id === 'peertube') {
+      const instanceValue = connectionValue('peertube', 'instance', 'PEERTUBE_INSTANCE') || 'https://peertube.tv';
+      const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
+      await fetchText(`${instance}/api/v1/config`);
+    }
+    if (id === 'twitch') {
+      const tokenResponse = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(connectionValue('twitch', 'clientId', 'TWITCH_CLIENT_ID'))}&client_secret=${encodeURIComponent(connectionValue('twitch', 'clientSecret', 'TWITCH_CLIENT_SECRET'))}&grant_type=client_credentials`, { method: 'POST' });
+      if (!tokenResponse.ok) throw new Error(`Twitch OAuth HTTP ${tokenResponse.status}`);
+    }
+    if (id === 'stashdb') {
+      const graphResponse = await fetch('https://stashdb.org/graphql', { method: 'POST', headers: { 'content-type': 'application/json', apikey: connectionValue('stashdb', 'apiKey', 'STASHDB_API_KEY') }, body: JSON.stringify({ query: 'query { __typename }' }) });
+      if (!graphResponse.ok) throw new Error(`StashDB HTTP ${graphResponse.status}`);
+    }
     return res.json({ ok: true, provider: id, testedAt: new Date().toISOString() });
   } catch (error) {
     return res.status(error.status || 502).json({ ok: false, provider: id, error: error.message });
@@ -2366,6 +2554,18 @@ app.get('/api/safety/policy', (req, res) => {
     allowed: ['contenus publics', 'APIs officielles', 'pages archivees publiques', 'profils fournis avec consentement'],
     blocked: ['contournement login', 'paywall prive', 'adresses privees', 'telephone prive', 'localisation temps reel', 'mineurs']
   });
+});
+
+app.get('/api/identity/resolve', searchLimiter, async (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'Parametre q requis' });
+  const selected = uniq(String(req.query.sources || DEFAULT_IDENTITY_SOURCES.join(',')).split(',')).filter(source => SOURCE_META[source]);
+  const safe = !selected.some(source => NSFW_SOURCES.has(source));
+  const guard = adultSearchGuard({ safe, selectedSources: selected, nsfwSources: NSFW_SOURCES, adultConfirmed: String(req.query.adultConfirmed || 'false') === 'true' });
+  if (!guard.allowed) return res.status(403).json({ error: guard.reason, code: 'adult_confirmation_required' });
+  const payload = await scrapeImageSearchWithFallback(query, selected.join(','), { safe, adultConfirmed: guard.adultConfirmed, matchMode: 'smart', riskMode: 'cautious', imageLimit: 16, videoLimit: 8 });
+  const accounts = uniq(Object.values(payload.status || {}).flatMap(status => status.accounts || []));
+  return res.json({ query, sources: selected, aliases: payload.aliases || [], accounts, evidence: payload.status, images: payload.images, videos: payload.videos });
 });
 
 app.get('/api/history', (req, res) => res.json({ items: readStore().history }));
@@ -2486,23 +2686,27 @@ app.get('/api/sources/diagnostics', (req, res) => {
 });
 app.get('/api/sources/adapters', (req, res) => res.json({
   adapters: Object.values(SOURCE_META).map(source => {
-    const adapter = NSFW_ADAPTERS[source.id];
+    const adapter = SOURCE_CRAWL_ADAPTERS[source.id];
     return {
       id: source.id,
       label: source.label,
       category: source.category,
       subtype: source.subtype,
+      purpose: source.purpose,
+      auth: source.auth,
       supports: source.supports,
-      mode: adapter?.transport || (adapter ? 'source-crawl' : 'public-html-or-api'),
+      mode: adapter?.transport || source.adapter || (adapter ? 'source-crawl' : 'public-html-or-api'),
       domains: adapter?.domains || [sourceDomain(source.id)],
       crawlLimit: adapter?.crawlLimit || 0,
       publicProfileOnly: Boolean(adapter?.publicProfileOnly),
-      availability: adapter?.transport === 'eporner-api-v2'
+      availability: source.auth !== 'none'
+        ? 'official-api-configuration-required'
+        : (adapter?.transport === 'eporner-api-v2'
         ? 'official-public-api-with-html-fallback'
         : (adapter?.transport === 'public-forum-form'
             ? 'public-form-with-search-engine-fallbacks'
-            : (adapter ? 'direct-html-with-search-engine-fallbacks' : 'public-html-or-api')),
-      fallbacks: source.nsfw ? ['direct', 'duckduckgo-site', 'bing-site', 'brave-site'] : ['direct']
+            : (adapter ? 'direct-html-with-search-engine-fallbacks' : 'public-html-or-api'))),
+      fallbacks: source.nsfw || ['social', 'identity'].includes(source.category) ? ['direct', 'duckduckgo-site', 'bing-site', 'brave-site'] : ['direct']
     };
   })
 }));
@@ -2514,9 +2718,12 @@ app.get('/api/sources/:id/test', async (req, res) => {
   if (SOURCE_META[sourceId].nsfw && String(req.query.safe || 'true') !== 'false') {
     return res.status(400).json({ error: 'safe=false requis pour tester une source NSFW publique' });
   }
+  if (SOURCE_META[sourceId].nsfw && String(req.query.adultConfirmed || 'false') !== 'true') {
+    return res.status(403).json({ error: 'Confirmation 18+ requise', code: 'adult_confirmation_required' });
+  }
   try {
     const testOptions = { imageLimit: 5, videoLimit: 5, safe: String(req.query.safe || 'true') !== 'false', riskMode: 'cautious' };
-    const result = NSFW_ADAPTERS[sourceId]
+    const result = SOURCE_CRAWL_ADAPTERS[sourceId]
       ? await scrapeNsfwSource(sourceId, query, testOptions)
       : await scrapeGenericSource(sourceId, query, testOptions);
     const health = sourceHealthFromStatus(sourceId, result.status);
@@ -2569,13 +2776,18 @@ app.get('/api/queue/jobs', (req, res) => res.json({ jobs: readStore().queue || [
 app.post('/api/queue/jobs', (req, res) => {
   const queries = uniq(req.body?.queries || (req.body?.query ? [req.body.query] : [])).slice(0, 20);
   if (!queries.length) return res.status(400).json({ error: 'Au moins une requete est requise' });
+  const jobSources = uniq(String(req.body?.sources || 'duckduckgo').split(',')).filter(source => SOURCE_META[source]);
+  const safe = req.body?.safe !== false;
+  const adultGuard = adultSearchGuard({ safe, selectedSources: jobSources, nsfwSources: NSFW_SOURCES, adultConfirmed: req.body?.adultConfirmed === true });
+  if (!adultGuard.allowed) return res.status(403).json({ error: adultGuard.reason, code: 'adult_confirmation_required' });
   const job = {
     id: makeId('job'),
     status: 'pending',
     createdAt: new Date().toISOString(),
     queries,
-    sources: String(req.body?.sources || 'duckduckgo'),
-    safe: req.body?.safe !== false,
+    sources: jobSources.join(',') || 'duckduckgo',
+    safe,
+    adultConfirmed: adultGuard.adultConfirmed,
     media: req.body?.media || 'both',
     mode: req.body?.mode || 'strict',
     completed: 0,
@@ -2598,7 +2810,7 @@ async function processQueueJob(jobId) {
     if (!job || ['paused', 'cancelled'].includes(job.status)) break;
     const query = job.queries[index];
     try {
-      const payload = await scrapeImageSearchWithFallback(query, job.sources, { safe: job.safe, mediaKind: job.media, matchMode: job.mode, riskMode: 'cautious' });
+      const payload = await scrapeImageSearchWithFallback(query, job.sources, { safe: job.safe, adultConfirmed: job.adultConfirmed === true, mediaKind: job.media, matchMode: job.mode, riskMode: 'cautious' });
       filterMediaKind(payload, job.media);
       mutateStore(store => {
         store.queue = store.queue.map(item => item.id === jobId ? {
@@ -2660,9 +2872,13 @@ app.post('/api/imports/batch', (req, res) => {
 app.post('/api/search/batch', async (req, res) => {
   const queries = uniq(req.body.queries || []);
   if (req.body.dryRun) return res.json({ dryRun: true, queries });
+  const selectedSourceIds = uniq(String(req.body.sources || 'duckduckgo').split(',')).filter(source => SOURCE_META[source]);
+  const safe = req.body.safe !== false;
+  const adultGuard = adultSearchGuard({ safe, selectedSources: selectedSourceIds, nsfwSources: NSFW_SOURCES, adultConfirmed: req.body.adultConfirmed === true });
+  if (!adultGuard.allowed) return res.status(403).json({ error: adultGuard.reason, code: 'adult_confirmation_required' });
   const results = [];
   for (const query of queries.slice(0, 20)) {
-    results.push(await scrapeImageSearchWithFallback(query, req.body.sources || 'duckduckgo', { safe: req.body.safe !== false }));
+    results.push(await scrapeImageSearchWithFallback(query, selectedSourceIds.join(',') || 'duckduckgo', { safe, adultConfirmed: adultGuard.adultConfirmed }));
   }
   res.json({ results });
 });
@@ -2722,6 +2938,8 @@ app.post('/api/persons', (req, res) => {
     excludeKeywords: uniq(req.body.excludeKeywords || []),
     publicOnly: req.body.publicOnly !== false,
     safeMode: req.body.safeMode !== false,
+    adultConfirmed: req.body.adultConfirmed === true,
+    birthYear: Number.isInteger(Number(req.body.birthYear)) && Number(req.body.birthYear) >= 1900 && Number(req.body.birthYear) <= new Date().getFullYear() ? Number(req.body.birthYear) : null,
     notes: req.body.notes || '',
     createdAt: new Date().toISOString()
   };
@@ -2777,20 +2995,37 @@ app.get('/api/persons/:id/queries', (req, res) => {
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   res.json({ queries: buildPersonQueries(person, req.query.depth || 'normal'), guard: publicOnlyPersonGuard(person) });
 });
+app.post('/api/persons/:id/identity/resolve', async (req, res) => {
+  const person = readStore().persons.find(item => item.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  if (person.publicOnly === false || person.safeMode === false) return res.status(400).json({ error: 'Person Finder exige publicOnly et safeMode actifs' });
+  if (req.body.includeNsfw === true && person.adultConfirmed !== true) return res.status(403).json({ error: 'Confirmation 18+ requise sur la fiche personne', code: 'adult_confirmation_required' });
+  const result = await resolveIdentityProfile(person, { includeNsfw: req.body.includeNsfw === true, sources: req.body.sources });
+  return res.json(result);
+});
 app.get('/api/persons/:id/search-plan', (req, res) => {
   const person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   res.json({ personId: person.id, depth: req.query.depth || 'normal', queries: buildPersonQueries(person, req.query.depth || 'normal'), sources: req.query.sources || 'duckduckgo,bing,wikimedia,reddit,wayback', guard: publicOnlyPersonGuard(person) });
 });
 app.post('/api/persons/:id/search', async (req, res) => {
-  const person = readStore().persons.find(item => item.id === req.params.id);
+  let person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   if (person.publicOnly === false || person.safeMode === false) return res.status(400).json({ error: 'Person Finder exige publicOnly et safeMode actifs' });
+  const selectedSourceIds = uniq(String(req.body.sources || 'duckduckgo,bing,wikimedia,wikidata,bluesky,mastodon,reddit').split(',')).filter(source => SOURCE_META[source]);
+  const safe = !selectedSourceIds.some(source => NSFW_SOURCES.has(source));
+  const adultGuard = adultSearchGuard({ safe, selectedSources: selectedSourceIds, nsfwSources: NSFW_SOURCES, adultConfirmed: person.adultConfirmed === true && req.body.adultConfirmed === true });
+  if (!adultGuard.allowed) return res.status(403).json({ error: adultGuard.reason, code: 'adult_confirmation_required' });
+  let identityResolution = null;
+  if (req.body.resolveIdentity !== false) {
+    identityResolution = await resolveIdentityProfile(person, { includeNsfw: adultGuard.wantsNsfw, sources: req.body.identitySources });
+    person = identityResolution.person;
+  }
   const queries = buildPersonQueries(person, req.body.depth || 'normal').slice(0, Number(req.body.maxQueries || 10));
   if (req.body.dryRun) return res.json({ dryRun: true, queries });
   const created = [];
   for (const query of queries) {
-    const payload = await scrapeImageSearchWithFallback(query, req.body.sources || 'duckduckgo,bing,wikimedia,reddit', { safe: true, matchMode: 'strict', riskMode: 'cautious' });
+    const payload = await scrapeImageSearchWithFallback(query, selectedSourceIds.join(','), { safe, adultConfirmed: adultGuard.adultConfirmed, matchMode: 'strict', riskMode: 'cautious' });
     const items = [...payload.images, ...payload.videos];
     items.forEach(item => {
       const score = scorePersonMedia(person, item);
@@ -2814,7 +3049,7 @@ app.post('/api/persons/:id/search', async (req, res) => {
   mutateStore(store => {
     store.personMediaLinks = dedupeBy([...created, ...store.personMediaLinks], link => `${link.personId}:${link.media?.visualSignature || link.media?.url}`);
   });
-  res.json({ personId: person.id, queries, created: created.length, links: created });
+  res.json({ personId: person.id, queries, created: created.length, links: created, identityResolution });
 });
 app.get('/api/persons/:id/media', (req, res) => {
   const store = readStore();
@@ -3020,9 +3255,17 @@ app.locals.testables = {
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
   discoverAliases,
+  mergeIdentityEvidence,
   filterBySearchMode,
   buildPersonQueries,
   scorePersonMedia,
+  adultSearchGuard,
+  hammingDistance,
+  parseBlueskyResults,
+  parseTumblrResults,
+  parseImgurResults,
+  parsePeerTubeResults,
+  parseArquivoResults,
   desktopDiagnostics
 };
 

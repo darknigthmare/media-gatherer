@@ -56,3 +56,13 @@ Sur `sxysindy`:
 ## Politique d'acces
 
 Les adaptateurs utilisent uniquement les pages et APIs publiques. Ils ne contournent pas les connexions, paywalls, comptes prives, verifications d'age, restrictions regionales ni protections anti-bot. Une source tierce ne peut pas etre garantie disponible en permanence; MediaGatherer garantit un fallback borne, un diagnostic explicite et la poursuite des autres sources.
+
+## Extension 1.5.0
+
+Le registre NSFW passe de 32 a 42 sources. Les dix ajouts sont `stashdb`, `iafd`, `adultdatabase`, `theporndb`, `fancentro`, `loyalfans`, `manyvids`, `clips4sale`, `lpsg` et `adultdvdtalk`.
+
+- StashDB utilise GraphQL avec la cle personnelle de l'utilisateur.
+- IAFD, Adult Database et ThePornDB servent a confirmer une identite et des alias publics.
+- FanCentro, LoyalFans, ManyVids et Clips4Sale restent limites aux profils et apercus publics.
+- LPSG et Adult DVD Talk servent a decouvrir des sujets publics; aucune piece jointe reservee aux membres n'est contournee.
+- Toute route de test, recherche, batch, compte ou Person Finder impliquant ces sources exige une confirmation 18+.

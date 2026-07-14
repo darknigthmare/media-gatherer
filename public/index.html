@@ -96,6 +96,9 @@
               <option value="unknown_public">Profil public a verifier</option>
             </select>
           </label>
+          <label>Année de naissance déclarée
+            <input type="number" id="person-birth-year" min="1900" max="2100" placeholder="Optionnel">
+          </label>
           <label>Alias / anciens pseudos
             <textarea id="person-aliases" rows="3" placeholder="Un par ligne"></textarea>
           </label>
@@ -117,6 +120,7 @@
           <div class="person-checks">
             <label><input type="checkbox" id="person-public-only" checked> Public only</label>
             <label><input type="checkbox" id="person-safe-mode" checked> Safe mode</label>
+            <label><input type="checkbox" id="person-adult-confirmed"> Identité adulte confirmée</label>
           </div>
           <button type="submit" class="btn btn-primary"><i data-lucide="save"></i><span>Enregistrer</span></button>
         </form>
@@ -140,6 +144,8 @@
             </select></label>
             <label>Requêtes max<input type="number" id="person-max-queries" min="1" max="40" value="10"></label>
             <label>Score minimum<input type="number" id="person-min-score" min="0" max="100" value="35"></label>
+            <label class="person-inline-check"><input type="checkbox" id="person-include-nsfw"> Sources 18+ publiques</label>
+            <button id="btn-person-resolve" class="btn btn-secondary" type="button" disabled><i data-lucide="contact"></i><span>Résoudre les alias</span></button>
             <button id="btn-person-plan" class="btn btn-secondary" type="button" disabled><i data-lucide="list-checks"></i><span>Plan</span></button>
             <button id="btn-person-search" class="btn btn-primary" type="button" disabled><i data-lucide="radar"></i><span>Lancer</span></button>
           </div>
@@ -646,6 +652,13 @@
                     Filtre Adulte (SafeSearch)
                   </span>
                 </label>
+                <label class="source-chip adult-confirmation" for="adult-confirmed-toggle">
+                  <input type="checkbox" id="adult-confirmed-toggle">
+                  <span class="chip-custom">
+                    <i data-lucide="badge-check" class="chip-icon"></i>
+                    Je confirme avoir 18 ans
+                  </span>
+                </label>
                 <button type="button" id="btn-nsfw-preset" class="nsfw-preset-btn">
                   <i data-lucide="badge-alert"></i>
                   <span>Mode NSFW public</span>
@@ -1054,7 +1067,7 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260714-audit-2" defer></script>
+  <script src="js/app.js?v=20260714-identity-1" defer></script>
 </body>
 </html>
 

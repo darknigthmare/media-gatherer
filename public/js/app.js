@@ -37,38 +37,33 @@ let batchQueue = [];
 let currentAliases = [];
 let sourceDiagnostics = {};
 let runtimePersistentStorage = true;
+const perceptualHashCache = new Map();
+let perceptualPassRunning = false;
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
+let sourceCatalog = [];
+let sourceCatalogById = new Map();
 
 const SOURCE_GROUPS = {
   normal: {
     title: 'Sources normales',
-    icon: 'image',
-    sources: ['duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'wayback', 'vimeo', 'dailymotion']
+    icon: 'image'
   },
   social: {
     title: 'Réseaux sociaux',
-    icon: 'share-2',
-    sources: ['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest']
+    icon: 'share-2'
+  },
+  identity: {
+    title: 'Identité et alias',
+    icon: 'contact'
   },
   nsfw: {
     title: 'Sources NSFW',
-    icon: 'badge-alert',
-    sources: [
-      'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-      'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-      'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-      'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon'
-    ]
+    icon: 'badge-alert'
   }
 };
 
-const SOURCE_TO_GROUP = Object.entries(SOURCE_GROUPS).reduce((map, [group, config]) => {
-  config.sources.forEach(source => { map[source] = group; });
-  return map;
-}, {});
-
 function getSourceGroup(source) {
-  return SOURCE_TO_GROUP[String(source || '').toLowerCase()] || 'normal';
+  return sourceCatalogById.get(String(source || '').toLowerCase())?.category || 'normal';
 }
 
 // ----------------------------------------------------
@@ -86,6 +81,7 @@ const countImages = document.getElementById('count-images');
 const countVideos = document.getElementById('count-videos');
 const filterInput = document.getElementById('filter-input');
 const safeSearchToggle = document.getElementById('safe-search-toggle');
+const adultConfirmedToggle = document.getElementById('adult-confirmed-toggle');
 const safetyRiskMode = document.getElementById('safety-risk-mode');
 const searchMatchMode = document.getElementById('search-match-mode');
 const accountScrapeMode = document.getElementById('account-scrape-mode');
@@ -137,6 +133,7 @@ const personSection = document.getElementById('person-section');
 const personForm = document.getElementById('person-form');
 const personName = document.getElementById('person-name');
 const personType = document.getElementById('person-type');
+const personBirthYear = document.getElementById('person-birth-year');
 const personAliases = document.getElementById('person-aliases');
 const personUsernames = document.getElementById('person-usernames');
 const personAccounts = document.getElementById('person-accounts');
@@ -145,13 +142,16 @@ const personExclude = document.getElementById('person-exclude');
 const personNotes = document.getElementById('person-notes');
 const personPublicOnly = document.getElementById('person-public-only');
 const personSafeMode = document.getElementById('person-safe-mode');
+const personAdultConfirmed = document.getElementById('person-adult-confirmed');
 const personList = document.getElementById('person-list');
 const personDetail = document.getElementById('person-detail');
 const personDepth = document.getElementById('person-depth');
 const personMaxQueries = document.getElementById('person-max-queries');
 const personMinScore = document.getElementById('person-min-score');
+const personIncludeNsfw = document.getElementById('person-include-nsfw');
 const btnPersonRefresh = document.getElementById('btn-person-refresh');
 const btnPersonPlan = document.getElementById('btn-person-plan');
+const btnPersonResolve = document.getElementById('btn-person-resolve');
 const btnPersonSearch = document.getElementById('btn-person-search');
 const personQueryPlan = document.getElementById('person-query-plan');
 const personMediaList = document.getElementById('person-media-list');
@@ -167,7 +167,13 @@ let selectedPersonId = null;
 function updatePersonActions() {
   const disabled = !selectedPersonId;
   if (btnPersonPlan) btnPersonPlan.disabled = disabled;
+  if (btnPersonResolve) btnPersonResolve.disabled = disabled;
   if (btnPersonSearch) btnPersonSearch.disabled = disabled;
+  const selected = personProfiles.find(person => person.id === selectedPersonId);
+  if (personIncludeNsfw) {
+    personIncludeNsfw.disabled = disabled || selected?.adultConfirmed !== true;
+    if (personIncludeNsfw.disabled) personIncludeNsfw.checked = false;
+  }
   if (personRuleForm) personRuleForm.querySelectorAll('input, select, button').forEach(control => { control.disabled = disabled; });
 }
 
@@ -445,6 +451,7 @@ function readPersonForm() {
     name: personName?.value.trim() || '',
     displayName: personName?.value.trim() || '',
     type: personType?.value || 'creator',
+    birthYear: personBirthYear?.value ? Number(personBirthYear.value) : null,
     aliases: splitPersonLines(personAliases?.value),
     usernames: splitPersonLines(personUsernames?.value),
     accounts: splitPersonLines(personAccounts?.value).map(url => ({ url })),
@@ -452,7 +459,8 @@ function readPersonForm() {
     excludeKeywords: splitPersonLines(personExclude?.value),
     notes: personNotes?.value || '',
     publicOnly: personPublicOnly ? personPublicOnly.checked : true,
-    safeMode: personSafeMode ? personSafeMode.checked : true
+    safeMode: personSafeMode ? personSafeMode.checked : true,
+    adultConfirmed: personAdultConfirmed ? personAdultConfirmed.checked : false
   };
 }
 
@@ -505,6 +513,7 @@ function renderPersonDetail(person) {
       </div>
       <div class="person-detail-actions">
         <span class="person-safe-badge">${person.publicOnly !== false && person.safeMode !== false ? 'Public only' : 'Bloque'}</span>
+        ${person.adultConfirmed ? '<span class="person-safe-badge person-adult-badge">18+ confirmé</span>' : ''}
         <button type="button" class="btn btn-danger btn-small" data-person-delete="${escapeHtml(person.id)}"><i data-lucide="trash-2"></i><span>Supprimer</span></button>
       </div>
     </div>
@@ -591,7 +600,13 @@ async function selectPerson(id, rerenderList = true) {
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/timeline`),
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`)
   ]);
-  if (personRes.ok) renderPersonDetail(await personRes.json());
+  if (personRes.ok) {
+    const latestPerson = await personRes.json();
+    personProfiles = personProfiles.map(person => person.id === latestPerson.id ? latestPerson : person);
+    localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    renderPersonDetail(latestPerson);
+    updatePersonActions();
+  }
   if (planRes.ok) renderPersonPlan((await planRes.json()).queries || []);
   if (galleryRes.ok) renderPersonMedia((await galleryRes.json()).links || []);
   if (timelineRes.ok) renderPersonTimeline((await timelineRes.json()).events || []);
@@ -618,6 +633,7 @@ async function savePersonProfile(event) {
   personForm.reset();
   if (personPublicOnly) personPublicOnly.checked = true;
   if (personSafeMode) personSafeMode.checked = true;
+  if (personAdultConfirmed) personAdultConfirmed.checked = false;
   await loadPersons();
 }
 
@@ -651,17 +667,53 @@ async function previewPersonPlan() {
   if (response.ok) renderPersonPlan((await response.json()).queries || []);
 }
 
+async function resolvePersonIdentity() {
+  if (!selectedPersonId) return;
+  const selected = personProfiles.find(person => person.id === selectedPersonId);
+  const includeNsfw = Boolean(personIncludeNsfw?.checked);
+  if (includeNsfw && selected?.adultConfirmed !== true) {
+    alert('Confirmez d abord que la fiche concerne une personne adulte.');
+    return;
+  }
+  if (btnPersonResolve) btnPersonResolve.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/identity/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ includeNsfw })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    addConsoleLog(`[IDENTITE] ${data.aliases?.length || 0} alias et ${data.accounts?.length || 0} comptes publics vérifiés.`, 'success');
+    await loadPersons();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    updatePersonActions();
+  }
+}
+
 async function runPersonSearch() {
   if (!selectedPersonId) return;
+  const selected = personProfiles.find(person => person.id === selectedPersonId);
+  const includeNsfw = Boolean(personIncludeNsfw?.checked);
+  if (includeNsfw && selected?.adultConfirmed !== true) {
+    alert('La confirmation adulte est requise sur cette fiche.');
+    return;
+  }
   if (personMediaList) personMediaList.innerHTML = '<div class="person-empty">Recherche Person Finder en cours...</div>';
+  const safeSources = ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'bluesky', 'mastodon', 'reddit'];
+  const adultSources = ['stashdb', 'iafd', 'babepedia', 'erome', 'redgifs', 'eporner', 'phunforum', 'planetsuzy', 'bellazon'];
   const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       depth: personDepth?.value || 'normal',
-      maxQueries: Number(personMaxQueries?.value || 10),
+      maxQueries: Math.min(Number(personMaxQueries?.value || 10), includeNsfw ? 6 : 10),
       minScore: Number(personMinScore?.value || 35),
-      sources: 'duckduckgo,bing,wikimedia,reddit'
+      sources: [...safeSources, ...(includeNsfw ? adultSources : [])].join(','),
+      adultConfirmed: includeNsfw && selected?.adultConfirmed === true,
+      resolveIdentity: true
     })
   });
   if (!response.ok) {
@@ -703,6 +755,7 @@ async function deletePersonRule(ruleId) {
 if (personForm) personForm.addEventListener('submit', savePersonProfile);
 if (btnPersonRefresh) btnPersonRefresh.addEventListener('click', loadPersons);
 if (btnPersonPlan) btnPersonPlan.addEventListener('click', previewPersonPlan);
+if (btnPersonResolve) btnPersonResolve.addEventListener('click', resolvePersonIdentity);
 if (btnPersonSearch) btnPersonSearch.addEventListener('click', runPersonSearch);
 if (personDepth) personDepth.addEventListener('change', previewPersonPlan);
 if (personRuleForm) personRuleForm.addEventListener('submit', savePersonRule);
@@ -717,6 +770,7 @@ function getCurrentSearchConfig() {
     query: searchInput.value.trim(),
     checkedSources,
     safeSearch: safeSearchToggle ? safeSearchToggle.checked : true,
+    adultConfirmed: adultConfirmedToggle ? adultConfirmedToggle.checked : false,
     riskMode: safetyRiskMode ? safetyRiskMode.value : 'cautious',
     matchMode: searchMatchMode ? searchMatchMode.value : 'strict',
     exactMode: searchMatchMode ? searchMatchMode.value === 'strict' : true,
@@ -730,7 +784,7 @@ function getCurrentSearchConfig() {
 
 function buildSearchUrl(config, sources) {
   const freshParams = config.fresh ? `&fresh=true&since=${encodeURIComponent(config.since || '')}` : '';
-  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'broad'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}&record=false${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
+  return `${API_BASE}/api/search?q=${encodeURIComponent(config.query)}&sources=${encodeURIComponent(sources)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}&risk=${encodeURIComponent(config.riskMode)}&exact=${config.exactMode ? 'true' : 'false'}&mode=${encodeURIComponent(config.matchMode || (config.exactMode ? 'strict' : 'broad'))}&accountMode=${encodeURIComponent(config.accountMode || 'complete')}&media=${encodeURIComponent(config.mediaKind || 'both')}&record=false${freshParams}&size=${config.sizeVal}&type=${config.typeVal}&color=${config.colorVal}`;
 }
 
 function updateAutoRefreshButton(active) {
@@ -853,12 +907,90 @@ function renderEmptyState(gridEl, type = 'media') {
 
 function dedupeMedia(items) {
   const seen = new Set();
-  return (items || []).filter(item => {
+  const exact = (items || []).filter(item => {
     const key = item && (item.visualSignature || item.url || item.thumbnail || item.link);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+  const kept = [];
+  exact.forEach(item => {
+    const duplicateIndex = item.perceptualHash
+      ? kept.findIndex(candidate => candidate.perceptualHash && perceptualHammingDistance(item.perceptualHash, candidate.perceptualHash) <= 6)
+      : -1;
+    if (duplicateIndex === -1) {
+      kept.push(item);
+      return;
+    }
+    const current = kept[duplicateIndex];
+    const pixels = media => (Number(media.width) || 0) * (Number(media.height) || 0);
+    if (pixels(item) > pixels(current)) kept[duplicateIndex] = item;
+  });
+  return kept;
+}
+
+function perceptualHammingDistance(left, right) {
+  if (!/^[a-f0-9]{16}$/i.test(left || '') || !/^[a-f0-9]{16}$/i.test(right || '')) return Number.POSITIVE_INFINITY;
+  let distance = 0;
+  for (let index = 0; index < 16; index += 1) {
+    let value = parseInt(left[index], 16) ^ parseInt(right[index], 16);
+    while (value) {
+      distance += value & 1;
+      value >>= 1;
+    }
+  }
+  return distance;
+}
+
+async function computeImageDHash(url) {
+  if (perceptualHashCache.has(url)) return perceptualHashCache.get(url);
+  try {
+    const response = await fetch(`${API_BASE}/api/proxy?url=${encodeURIComponent(url)}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bitmap = await createImageBitmap(await response.blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = 9;
+    canvas.height = 8;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0, 9, 8);
+    bitmap.close();
+    const pixels = context.getImageData(0, 0, 9, 8).data;
+    let hash = 0n;
+    for (let row = 0; row < 8; row += 1) {
+      for (let column = 0; column < 8; column += 1) {
+        const offset = (row * 9 + column) * 4;
+        const nextOffset = offset + 4;
+        const luminance = pixels[offset] * 0.299 + pixels[offset + 1] * 0.587 + pixels[offset + 2] * 0.114;
+        const nextLuminance = pixels[nextOffset] * 0.299 + pixels[nextOffset + 1] * 0.587 + pixels[nextOffset + 2] * 0.114;
+        hash = (hash << 1n) | (luminance > nextLuminance ? 1n : 0n);
+      }
+    }
+    const value = hash.toString(16).padStart(16, '0');
+    perceptualHashCache.set(url, value);
+    return value;
+  } catch {
+    perceptualHashCache.set(url, '');
+    return '';
+  }
+}
+
+async function enrichPerceptualHashes() {
+  if (perceptualPassRunning) return;
+  const candidates = allImages.filter(item => !item.perceptualHash && safeHttpUrl(item.url || item.thumbnail)).slice(0, 60);
+  if (!candidates.length) return;
+  perceptualPassRunning = true;
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(3, candidates.length) }, async () => {
+    while (cursor < candidates.length) {
+      const item = candidates[cursor];
+      cursor += 1;
+      item.perceptualHash = await computeImageDHash(item.url || item.thumbnail);
+    }
+  });
+  await Promise.allSettled(workers);
+  perceptualPassRunning = false;
+  allImages = dedupeMedia(allImages);
+  applyFilters();
 }
 
 function normalizeForScore(text) {
@@ -1125,6 +1257,7 @@ function renderHistory() {
 function restoreSearchConfig(config = {}) {
   if (config.query) searchInput.value = config.query;
   if (safeSearchToggle && typeof config.safeSearch === 'boolean') safeSearchToggle.checked = config.safeSearch;
+  if (adultConfirmedToggle && typeof config.adultConfirmed === 'boolean') adultConfirmedToggle.checked = config.adultConfirmed;
   if (safetyRiskMode && config.riskMode) safetyRiskMode.value = config.riskMode;
   if (searchMatchMode) searchMatchMode.value = config.matchMode || (config.exactMode === false ? 'broad' : 'strict');
   if (accountScrapeMode && config.accountMode) accountScrapeMode.value = config.accountMode;
@@ -1132,7 +1265,8 @@ function restoreSearchConfig(config = {}) {
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(cb => {
     cb.checked = (config.checkedSources || []).includes(cb.value);
   });
-  initAdultSources();
+  setNsfwVisibility();
+  updateSourceDrawerCounts();
 }
 
 function renderBatchQueue() {
@@ -1164,7 +1298,7 @@ async function runBatchQueue() {
     const createResponse = await fetch(`${API_BASE}/api/queue/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queries: batchQueue.map(item => item.query), sources: config.checkedSources.filter(source => source !== 'wayback').join(','), safe: config.safeSearch, media: config.mediaKind, mode: config.matchMode })
+      body: JSON.stringify({ queries: batchQueue.map(item => item.query), sources: config.checkedSources.filter(source => source !== 'wayback').join(','), safe: config.safeSearch, adultConfirmed: config.adultConfirmed === true, media: config.mediaKind, mode: config.matchMode })
     });
     const job = await createResponse.json();
     if (!createResponse.ok) throw new Error(job.error || `HTTP ${createResponse.status}`);
@@ -1271,6 +1405,7 @@ function mergeSearchData(data) {
   registerDetectedAccounts(data);
   renderInsights();
   renderMedia();
+  void enrichPerceptualHashes();
 }
 
 function logSourceStatus(source, status) {
@@ -1408,7 +1543,7 @@ async function scrapeDetectedAccount(accountUrl) {
     const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
     const accountMode = accountScrapeMode ? accountScrapeMode.value : 'complete';
     const mediaKind = mediaKindMode ? mediaKindMode.value : 'both';
-    const response = await fetch(`${API_BASE}/api/account/scrape?url=${encodeURIComponent(accountUrl)}&q=${encodeURIComponent(currentSearchQuery)}&safe=${safeSearch}&risk=${encodeURIComponent(riskMode)}&accountMode=${encodeURIComponent(accountMode)}&media=${encodeURIComponent(mediaKind)}`);
+    const response = await fetch(`${API_BASE}/api/account/scrape?url=${encodeURIComponent(accountUrl)}&q=${encodeURIComponent(currentSearchQuery)}&safe=${safeSearch}&adultConfirmed=${adultConfirmedToggle?.checked === true}&risk=${encodeURIComponent(riskMode)}&accountMode=${encodeURIComponent(accountMode)}&media=${encodeURIComponent(mediaKind)}`);
     if (!response.ok) throw new Error(`Erreur serveur (${response.status})`);
     const data = await response.json();
     mergeSearchData(data);
@@ -1730,6 +1865,13 @@ async function runSearchWithCurrentControls(options = {}) {
   
   // Prepare UI
   const safeSearch = safeSearchToggle ? safeSearchToggle.checked : true;
+  const adultConfirmed = adultConfirmedToggle ? adultConfirmedToggle.checked : false;
+  const requestsAdultSources = !safeSearch || checkedSources.some(source => getSourceGroup(source) === 'nsfw');
+  if (requestsAdultSources && !adultConfirmed) {
+    alert('Confirmez que vous avez 18 ans avant d utiliser les sources NSFW publiques.');
+    adultConfirmedToggle?.focus();
+    return;
+  }
   const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
   const matchMode = searchMatchMode ? searchMatchMode.value : 'strict';
   const exactMode = matchMode === 'strict';
@@ -1743,6 +1885,7 @@ async function runSearchWithCurrentControls(options = {}) {
     query,
     checkedSources,
     safeSearch,
+    adultConfirmed,
     riskMode,
     matchMode,
     exactMode,
@@ -1759,6 +1902,7 @@ async function runSearchWithCurrentControls(options = {}) {
   addConsoleLog(`Initialisation de la recherche pour : "${query}"`, 'info');
   addConsoleLog(`Sources sélectionnées : ${checkedSources.join(', ')}`, 'info');
   addConsoleLog(`Filtre adulte (SafeSearch) : ${safeSearch ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`, 'info');
+  if (!safeSearch) addConsoleLog('Confirmation 18+ : validée pour cette installation.', 'warning');
   addConsoleLog(`Mode anti-ban : ${riskMode === 'balanced' ? 'Equilibre' : 'Prudent'}`, 'info');
   addConsoleLog(`Pertinence : ${matchMode} ; comptes : ${accountMode === 'strict' ? 'strict terme' : 'compte complet'}`, 'info');
   addConsoleLog(`Médias : ${mediaKind === 'photos' ? 'photos seulement' : (mediaKind === 'videos' ? 'vidéos seulement' : 'photos + vidéos')}`, 'info');
@@ -2070,7 +2214,7 @@ function safeCssToken(value) {
 function mediaSourceId(item) {
   if (item?.sourceId) return String(item.sourceId).toLowerCase();
   const normalized = normalizeForScore(item?.source);
-  return Object.keys(SOURCE_TO_GROUP).find(source => normalizeForScore(source) === normalized) || normalized;
+  return sourceCatalog.find(source => normalizeForScore(source.id) === normalized || normalizeForScore(source.label) === normalized)?.id || normalized;
 }
 
 // ----------------------------------------------------
@@ -2424,11 +2568,7 @@ function updateStatsDashboard() {
     statsBreakdownBars.classList.remove('has-active-filter');
   }
   
-  const groupedSources = {
-    normal: [],
-    social: [],
-    nsfw: []
-  };
+  const groupedSources = Object.fromEntries(Object.keys(SOURCE_GROUPS).map(group => [group, []]));
 
   Object.keys(sourceCounts).forEach(source => {
     groupedSources[getSourceGroup(source)].push(source);
@@ -2726,21 +2866,68 @@ function updateSourceDrawerCounts() {
   });
 }
 
-function initializeSourceDrawers() {
+function sourceIconFor(source) {
+  if (source.subtype === 'forum') return 'messages-square';
+  if (source.subtype === 'archive') return 'archive';
+  if (source.purpose === 'identity') return 'contact';
+  if (source.supports?.length === 1 && source.supports[0] === 'video') return 'video';
+  if (source.category === 'social') return 'share-2';
+  if (source.nsfw) return 'badge-alert';
+  return 'image';
+}
+
+function createSourceChip(source) {
+  const chip = document.createElement('label');
+  chip.className = `source-chip${source.nsfw ? ' adult-source hidden' : ''}`;
+  chip.htmlFor = `src-${source.id}`;
+  chip.innerHTML = `
+    <input type="checkbox" id="src-${escapeHtml(source.id)}" value="${escapeHtml(source.id)}"${source.defaultSelected ? ' checked' : ''}>
+    <span class="chip-custom">
+      <span class="source-status-dot idle" id="dot-${escapeHtml(source.id)}"></span>
+      <i data-lucide="${sourceIconFor(source)}" class="chip-icon"></i>
+      ${escapeHtml(source.label)}${source.nsfw ? ' (18+)' : ''}
+    </span>
+  `;
+  return chip;
+}
+
+function populateSourceFilter() {
+  const select = document.getElementById('source-filter');
+  if (!select) return;
+  const selected = select.value || 'all';
+  select.innerHTML = '<option value="all">Toutes sources</option>' + sourceCatalog
+    .map(source => `<option value="${escapeHtml(source.id)}">${escapeHtml(source.label)}</option>`)
+    .join('');
+  select.value = sourceCatalogById.has(selected) ? selected : 'all';
+}
+
+async function initializeSourceDrawers() {
   const sourcesList = document.querySelector('.sources-list');
   if (!sourcesList || sourcesList.dataset.grouped === 'true') return;
 
-  const allChips = [...sourcesList.querySelectorAll('.source-chip')];
-  const groupedChips = {
-    normal: [],
-    social: [],
-    nsfw: []
-  };
+  try {
+    const response = await fetch(`${API_BASE}/api/sources`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    sourceCatalog = Array.isArray(payload.sources) ? payload.sources : [];
+  } catch (error) {
+    const socialFallback = new Set(['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest']);
+    sourceCatalog = [...sourcesList.querySelectorAll('.source-chip input[type="checkbox"]')].map(input => ({
+      id: input.value,
+      label: input.closest('.source-chip')?.textContent?.replace(/\s+/g, ' ').trim() || input.value,
+      category: input.closest('.source-chip')?.classList.contains('adult-source') ? 'nsfw' : (socialFallback.has(input.value) ? 'social' : 'normal'),
+      nsfw: input.closest('.source-chip')?.classList.contains('adult-source'),
+      supports: ['image', 'video', 'page'],
+      defaultSelected: input.checked
+    }));
+    addConsoleLog(`[SOURCES] Catalogue serveur indisponible : ${error.message}`, 'warning');
+  }
 
-  allChips.forEach(chip => {
-    const input = chip.querySelector('input[type="checkbox"]');
-    if (!input) return;
-    groupedChips[getSourceGroup(input.value)].push(chip);
+  sourceCatalogById = new Map(sourceCatalog.map(source => [source.id, source]));
+  const groupedChips = Object.fromEntries(Object.keys(SOURCE_GROUPS).map(group => [group, []]));
+  sourceCatalog.forEach(source => {
+    const group = SOURCE_GROUPS[source.category] ? source.category : (source.nsfw ? 'nsfw' : 'normal');
+    groupedChips[group].push(createSourceChip(source));
   });
 
   sourcesList.innerHTML = '';
@@ -2765,7 +2952,9 @@ function initializeSourceDrawers() {
 
   sourcesList.addEventListener('change', updateSourceDrawerCounts);
   sourcesList.dataset.grouped = 'true';
+  populateSourceFilter();
   updateSourceDrawerCounts();
+  lucide.createIcons();
 }
 
 function updateSourceStatusDot(source, state) {
@@ -2788,7 +2977,11 @@ function resetAllStatusDots() {
 }
 
 function setNsfwVisibility() {
-  const safeEnabled = safeSearchToggle ? safeSearchToggle.checked : true;
+  let safeEnabled = safeSearchToggle ? safeSearchToggle.checked : true;
+  if (!safeEnabled && adultConfirmedToggle?.checked !== true) {
+    safeSearchToggle.checked = true;
+    safeEnabled = true;
+  }
   const adultChips = document.querySelectorAll('.source-chip.adult-source');
   const nsfwDrawer = document.querySelector('.source-drawer-nsfw');
   adultChips.forEach(chip => {
@@ -2814,6 +3007,11 @@ function setNsfwVisibility() {
 }
 
 function activateNsfwPreset() {
+  if (adultConfirmedToggle?.checked !== true) {
+    alert('Confirmez que vous avez 18 ans avant d activer le mode NSFW public.');
+    adultConfirmedToggle?.focus();
+    return;
+  }
   if (safeSearchToggle) safeSearchToggle.checked = false;
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
@@ -2825,10 +3023,24 @@ function activateNsfwPreset() {
   updateSourceDrawerCounts();
   addConsoleLog('[NSFW] Mode public activé : SafeSearch désactivé, sources adultes publiques sélectionnées.', 'warning');
 }
-if (safeSearchToggle) safeSearchToggle.addEventListener('change', setNsfwVisibility);
+if (adultConfirmedToggle) {
+  adultConfirmedToggle.checked = localStorage.getItem('mediagatherer_adult_confirmed') === 'true';
+  adultConfirmedToggle.addEventListener('change', () => {
+    localStorage.setItem('mediagatherer_adult_confirmed', String(adultConfirmedToggle.checked));
+    if (!adultConfirmedToggle.checked && safeSearchToggle) safeSearchToggle.checked = true;
+    setNsfwVisibility();
+  });
+}
+if (safeSearchToggle) safeSearchToggle.addEventListener('change', () => {
+  if (!safeSearchToggle.checked && adultConfirmedToggle?.checked !== true) {
+    safeSearchToggle.checked = true;
+    alert('La confirmation 18+ est requise pour désactiver SafeSearch.');
+    adultConfirmedToggle?.focus();
+  }
+  setNsfwVisibility();
+});
 if (btnNsfwPreset) btnNsfwPreset.addEventListener('click', activateNsfwPreset);
-initializeSourceDrawers();
-setNsfwVisibility();
+initializeSourceDrawers().then(setNsfwVisibility);
 
 // Grid layout size selector
 const layoutButtons = document.querySelectorAll('.btn-layout');

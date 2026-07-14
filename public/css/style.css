@@ -529,6 +529,11 @@ body {
   color: #fb7185;
 }
 
+.source-drawer-identity .drawer-title i,
+.source-drawer-identity .drawer-title {
+  color: #34d399;
+}
+
 .drawer-count {
   color: var(--text-muted);
   font-size: 0.78rem;
@@ -563,6 +568,21 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.source-drawer-normal[open] .source-drawer-body,
+.source-drawer-social[open] .source-drawer-body,
+.source-drawer-identity[open] .source-drawer-body {
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.adult-confirmation input:checked + .chip-custom {
+  border-color: rgba(244, 63, 94, 0.62);
+  background: rgba(159, 18, 57, 0.2);
+  color: #fecdd3;
 }
 
 .source-drawer-body .source-chip,
@@ -2512,6 +2532,12 @@ body {
   font-size: 0.76rem;
 }
 
+.person-adult-badge {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(159, 18, 57, 0.2);
+  color: #fecdd3;
+}
+
 .person-search-controls {
   flex-wrap: wrap;
   margin: 1rem 0;
@@ -2519,6 +2545,19 @@ body {
 
 .person-search-controls input {
   max-width: 6rem;
+}
+
+.person-search-controls .person-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.person-search-controls .person-inline-check input {
+  width: auto;
+  margin: 0;
 }
 
 .person-query-plan {
