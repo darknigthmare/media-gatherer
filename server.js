@@ -962,7 +962,8 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     const text = $(el).text().trim();
-    if (!href || !/(watch|video|\/v\/|embed|mp4|webm|clip|shorts)/i.test(href)) return;
+    const hrefPath = String(href || '').split(/[?#]/, 1)[0];
+    if (!href || !/(watch|video|\/v\/|embed|mp4|webm|clip|shorts)/i.test(hrefPath)) return;
     let url;
     try {
       url = new URL(href, baseUrl).toString();

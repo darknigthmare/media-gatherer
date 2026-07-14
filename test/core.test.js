@@ -89,6 +89,7 @@ test('rejette les assets UI et les cartes hors sujet sur une page de recherche',
       <article><h2>Another person</h2><img src="https://cdn.example/random.jpg" alt="Random portrait" width="1200" height="1600"></article>
       <video src="https://cdn.example/random.mp4"></video>
       <article><a href="/video/sxysindy">Sxysindy video</a><img src="/sxysindy-poster.jpg" alt="Sxysindy"></article>
+      <a href="/feedback/?ref=https://example.com/video/sxysindy">Report Sxysindy video</a>
     </body></html>`;
   const images = extractImagesFromHtml(html, 'https://erome.com/search?q=sxysindy', 'sxysindy', 'erome');
   const videos = extractLinksAsVideos(html, 'https://erome.com/search?q=sxysindy', 'sxysindy', 'erome');

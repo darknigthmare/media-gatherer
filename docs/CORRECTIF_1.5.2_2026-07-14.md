@@ -33,9 +33,9 @@ La baisse de volume venait de trois causes distinctes :
 ## Executable Windows
 
 - Version: 1.5.2.
-- Taille: 131 994 146 octets.
+- Taille: 131 997 687 octets.
 - Signature: `MZ`.
-- SHA-256: `4268B61A5A75137EAEFE311FC83EC1F00C2D649C22ADC4FAC7562B98B271BE86`.
+- SHA-256: `582D149C9B917DF2FACBA15C4E4D33811260AA83FEA6D52B5DF5E9B06CBAE860`.
 - Smoke test EXE: accueil et API HTTP 200, version 1.5.2, 73 sources, puis 714 images Wayback sur `sxysindy.com`.
 
 ## Limite externe restante
