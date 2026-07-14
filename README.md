@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 73 sources : 14 normales, 11 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.0 ajoute Wikidata, TMDB Person, Internet Archive, Arquivo.pt, Imgur, PeerTube, Bluesky, Mastodon, Tumblr, Twitch, quatre hubs d'identite et dix sources adultes publiques de metadonnees, profils ou forums. Les alias sont fusionnes avec leur preuve, les images peuvent etre dedoublonnees par dHash dans le navigateur et tout acces NSFW exige une confirmation 18+ explicite.
+La version 1.5.1 ajoute Wikidata, TMDB Person, Internet Archive, Arquivo.pt, Imgur, PeerTube, Bluesky, Mastodon, Tumblr, Twitch, quatre hubs d'identite et dix sources adultes publiques de metadonnees, profils ou forums. Les alias sont fusionnes avec leur preuve, les homonymes Wikidata/TMDB sont classes avant association, les images peuvent etre dedoublonnees par dHash dans le navigateur et tout acces NSFW exige une confirmation 18+ explicite.
 
 ## Demarrage local
 

@@ -40,7 +40,9 @@ const {
   parseTumblrResults,
   parseImgurResults,
   parsePeerTubeResults,
-  parseArquivoResults
+  parseArquivoResults,
+  selectWikidataEntity,
+  selectTmdbPerson
 } = app.locals.testables;
 
 const extendedFixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'extended-sources.json'), 'utf8'));
@@ -303,6 +305,37 @@ test('normalise les nouveaux adaptateurs API avec medias et preuves identite', (
 
   const arquivo = parseArquivoResults(extendedFixtures.arquivo);
   assert.equal(arquivo.media[0].width, 1280);
+});
+
+test('selectionne une seule identite Wikidata et rejette les homonymes', () => {
+  const rows = [
+    { id: 'QENGINEER', label: 'Douglas Adams', description: 'ingenieur americain', match: { text: 'Douglas Adams' } },
+    { id: 'Q42', label: 'Douglas Adams', description: 'ecrivain britannique', match: { text: 'Douglas Adams' } },
+    { id: 'QDISAMBIG', label: 'Douglas Adams', description: 'page homonymie', match: { text: 'Douglas Adams' } }
+  ];
+  const entities = {
+    QENGINEER: { labels: { fr: { value: 'Douglas Adams' } }, descriptions: { fr: { value: 'ingenieur americain' } }, claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }] }, sitelinks: { enwiki: {} } },
+    Q42: {
+      labels: { fr: { value: 'Douglas Adams' } },
+      descriptions: { fr: { value: 'ecrivain de science-fiction britannique' } },
+      claims: {
+        P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }],
+        P569: [{ mainsnak: { datavalue: { value: { time: '+1952-03-11T00:00:00Z' } } } }],
+        P18: [{ mainsnak: { datavalue: { value: 'Douglas adams portrait cropped.jpg' } } }]
+      },
+      sitelinks: Object.fromEntries(Array.from({ length: 90 }, (_, index) => [`wiki${index}`, {}]))
+    },
+    QDISAMBIG: { labels: { fr: { value: 'Douglas Adams' } }, claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q4167410' } } } }] }, sitelinks: {} }
+  };
+  const selected = selectWikidataEntity(rows, entities, 'Douglas Adams', { birthYear: 1952, positiveKeywords: ['science-fiction'] });
+  assert.equal(selected.row.id, 'Q42');
+  assert.ok(selected.score > 200);
+
+  const tmdb = selectTmdbPerson([
+    { id: 1, name: 'Alex Smith', popularity: 2, known_for: [{ title: 'News' }] },
+    { id: 2, name: 'Alex Smith', popularity: 80, profile_path: '/alex.jpg', known_for: [{ title: 'Science Fiction Story' }] }
+  ], 'Alex Smith', { positiveKeywords: ['science fiction'] });
+  assert.equal(tmdb.person.id, 2);
 });
 
 test('fusionne les preuves identite et applique le garde-fou adulte', () => {

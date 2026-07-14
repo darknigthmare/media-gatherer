@@ -1,6 +1,6 @@
 # Etat et suite
 
-## Integre dans la version 1.5.0
+## Integre dans la version 1.5.1
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
@@ -13,6 +13,7 @@
 - Adaptateurs API publics pour Wikidata, Internet Archive, Arquivo.pt, Bluesky, Mastodon et PeerTube.
 - Adaptateurs optionnels avec identifiants personnels pour TMDB, Imgur, Tumblr, Twitch et StashDB.
 - Resolution d'identite centralisee : alias, comptes publics, preuves et fusion avec Person Finder.
+- Anti-homonymes Wikidata/TMDB : une seule identite principale est retenue selon le nom, l'annee, les mots-cles, les exclusions et la qualite de l'entite.
 - Confirmation explicite de majorite avant toute recherche NSFW, y compris en batch, queue et diagnostic de source.
 - Dedoublonnage perceptuel optionnel des images en plus des URL et signatures visuelles.
 - Tiroirs defilables pour la liste NSFW, la repartition des sources et les diagnostics.

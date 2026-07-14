@@ -19,7 +19,9 @@ const {
   parseTumblrResults,
   parseImgurResults,
   parsePeerTubeResults,
-  parseArquivoResults
+  parseArquivoResults,
+  selectWikidataEntity,
+  selectTmdbPerson
 } = require('./src/sources/publicApiAdapters');
 const { mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
@@ -2170,7 +2172,13 @@ async function resolveIdentityProfile(person, options = {}) {
     matchMode: 'smart',
     riskMode: 'cautious',
     imageLimit: 12,
-    videoLimit: 8
+    videoLimit: 8,
+    identityContext: {
+      birthYear: person.birthYear,
+      type: person.type,
+      positiveKeywords: person.positiveKeywords || [],
+      excludeKeywords: person.excludeKeywords || []
+    }
   });
   const accounts = uniq(Object.values(payload.status || {}).flatMap(status => status.accounts || []));
   const updated = applyIdentityEvidenceToPerson(person, payload.aliases || [], accounts);
@@ -3266,6 +3274,8 @@ app.locals.testables = {
   parseImgurResults,
   parsePeerTubeResults,
   parseArquivoResults,
+  selectWikidataEntity,
+  selectTmdbPerson,
   desktopDiagnostics
 };
 

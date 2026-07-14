@@ -1,5 +1,7 @@
 # Audit MediaGatherer 1.5.0 - 2026-07-14
 
+Correctif 1.5.1: Wikidata et TMDB classent maintenant les homonymes avant d'ajouter des alias. Les noms de naissance, pseudonymes, noms officiels et comptes sociaux Wikidata proviennent uniquement de l'entite retenue.
+
 ## Portee
 
 Cette passe couvre la recherche publique multi-source, Person Finder, NSFW, alias, dedoublonnage, persistance Vercel, connexions officielles, frontend dynamique, tests, EXE et deploiement.
@@ -48,9 +50,9 @@ Resultat final: 22 tests sur 22, `npm audit` sans vulnerabilite et build Vercel 
 
 - `dist/MediaGatherer.exe` construit avec Node 24 x64.
 - Signature de fichier Windows `MZ` valide.
-- Taille: 131 948 992 octets.
-- SHA-256: `1622AEF8E6B02FB6CB29DCA3C9820413A5EE68528B2C9DB0C44186D923C272BB`.
-- Demarrage reel sur un port isole: accueil HTTP 200, version 1.5.0 et 73 sources exposees.
+- Taille 1.5.1: 131 970 021 octets.
+- SHA-256 1.5.1: `8EAE26CF1011B666DAAD7126571DBF652990931BBB930143B065AFF0A3682025`.
+- Demarrage reel sur un port isole: accueil HTTP 200, version 1.5.1 et 73 sources exposees.
 
 ## Limites explicites
 

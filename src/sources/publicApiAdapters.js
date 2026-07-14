@@ -2,6 +2,101 @@ function unique(values) {
   return [...new Set((values || []).filter(Boolean))];
 }
 
+function normalizeIdentityText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function uniqueAliasCandidates(candidates = []) {
+  const map = new Map();
+  for (const candidate of candidates) {
+    const key = `${candidate.kind || 'display_name'}:${normalizeIdentityText(String(candidate.value || '').replace(/^@/, ''))}`;
+    if (!key.endsWith(':') && !map.has(key)) map.set(key, candidate);
+  }
+  return [...map.values()];
+}
+
+function claimEntityIds(entity, property) {
+  return (entity?.claims?.[property] || [])
+    .map(claim => claim?.mainsnak?.datavalue?.value?.id || claim?.mainsnak?.datavalue?.value)
+    .filter(value => typeof value === 'string');
+}
+
+function claimYear(entity, property) {
+  const time = entity?.claims?.[property]?.[0]?.mainsnak?.datavalue?.value?.time;
+  const match = String(time || '').match(/[+-](\d{4,})-/);
+  return match ? Number(match[1]) : null;
+}
+
+function claimTextValues(entity, property) {
+  return (entity?.claims?.[property] || []).map(claim => {
+    const value = claim?.mainsnak?.datavalue?.value;
+    if (typeof value === 'string') return value;
+    return typeof value?.text === 'string' ? value.text : '';
+  }).filter(Boolean);
+}
+
+function selectWikidataEntity(searchRows = [], entities = {}, query = '', identityContext = {}) {
+  const queryKey = normalizeIdentityText(query);
+  const positiveKeywords = (identityContext.positiveKeywords || []).map(normalizeIdentityText).filter(Boolean);
+  const excludeKeywords = (identityContext.excludeKeywords || []).map(normalizeIdentityText).filter(Boolean);
+  const expectedBirthYear = Number(identityContext.birthYear) || null;
+  const socialProperties = ['P2002', 'P2003', 'P7085', 'P5797', 'P8604'];
+
+  const ranked = searchRows.map((row, index) => {
+    const entity = entities[row.id];
+    if (!entity || entity.missing) return null;
+    const label = entity.labels?.fr?.value || entity.labels?.en?.value || row.label || '';
+    const labelKey = normalizeIdentityText(label);
+    const matchKey = normalizeIdentityText(row.match?.text);
+    const description = entity.descriptions?.fr?.value || entity.descriptions?.en?.value || row.description || '';
+    const contextText = normalizeIdentityText(`${label} ${description}`);
+    const instanceOf = claimEntityIds(entity, 'P31');
+    const birthYear = claimYear(entity, 'P569');
+    let score = Math.max(0, 28 - (index * 3));
+
+    if (labelKey === queryKey) score += 110;
+    else if (labelKey.includes(queryKey) || queryKey.includes(labelKey)) score += 45;
+    if (matchKey === queryKey) score += 30;
+    if (instanceOf.includes('Q5')) score += 24;
+    if (instanceOf.includes('Q4167410')) score -= 220;
+    if (entity.claims?.P18?.length) score += 10;
+    score += Math.min(50, Math.floor(Object.keys(entity.sitelinks || {}).length / 3));
+    score += Math.min(15, socialProperties.filter(property => entity.claims?.[property]?.length).length * 3);
+
+    if (expectedBirthYear && birthYear === expectedBirthYear) score += 100;
+    else if (expectedBirthYear && birthYear && birthYear !== expectedBirthYear) score -= 35;
+    positiveKeywords.forEach(keyword => { if (contextText.includes(keyword)) score += 35; });
+    excludeKeywords.forEach(keyword => { if (contextText.includes(keyword)) score -= 90; });
+
+    return { row, entity, label, description, score, birthYear };
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+
+  return ranked[0] || null;
+}
+
+function selectTmdbPerson(results = [], query = '', identityContext = {}) {
+  const queryKey = normalizeIdentityText(query);
+  const positiveKeywords = (identityContext.positiveKeywords || []).map(normalizeIdentityText).filter(Boolean);
+  const excludeKeywords = (identityContext.excludeKeywords || []).map(normalizeIdentityText).filter(Boolean);
+  return results.map((person, index) => {
+    const nameKey = normalizeIdentityText(person.name);
+    const contextText = normalizeIdentityText(`${person.name || ''} ${(person.known_for || []).map(row => `${row.title || row.name || ''} ${row.overview || ''}`).join(' ')}`);
+    let score = Math.max(0, 25 - (index * 2));
+    if (nameKey === queryKey) score += 110;
+    else if (nameKey.includes(queryKey) || queryKey.includes(nameKey)) score += 40;
+    score += Math.min(70, Number(person.popularity || 0));
+    if (person.profile_path) score += 8;
+    positiveKeywords.forEach(keyword => { if (contextText.includes(keyword)) score += 25; });
+    excludeKeywords.forEach(keyword => { if (contextText.includes(keyword)) score -= 75; });
+    return { person, score };
+  }).sort((a, b) => b.score - a.score)[0] || null;
+}
+
 function parseBlueskyResults(payload = {}) {
   const media = [];
   const aliases = [];
@@ -154,13 +249,14 @@ function normalizeRaw(raw, query, sourceId, deps) {
 
 async function runWikidata(query, deps) {
   const search = await deps.fetchText(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=fr&uselang=fr&type=item&limit=8&format=json&origin=*`);
-  const ids = (search.search || []).map(row => row.id).filter(Boolean);
+  const searchRows = search.search || [];
+  const ids = searchRows.map(row => row.id).filter(Boolean);
   if (!ids.length) return { images: [], videos: [], status: statusFor('wikidata', 'wikidata-api', [], [], { note: 'Aucune entite Wikidata' }) };
-  const entityPayload = await deps.fetchText(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(ids.join('|'))}&props=labels|aliases|descriptions|claims&languages=fr|en&format=json&origin=*`);
+  const entityPayload = await deps.fetchText(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(ids.join('|'))}&props=labels|aliases|descriptions|claims|sitelinks&languages=fr|en&format=json&origin=*`);
   const raw = { media: [] };
   const identityAliases = [];
   const accounts = [];
-  const pageSamples = [];
+  const pageSamples = searchRows.map(row => ({ url: `https://www.wikidata.org/wiki/${row.id}`, title: row.label || row.id, description: row.description || '' }));
   const socialClaims = {
     P2002: value => ({ value: `@${value}`, kind: 'username', account: `https://x.com/${value}` }),
     P2003: value => ({ value: `@${value}`, kind: 'username', account: `https://www.instagram.com/${value}/` }),
@@ -168,45 +264,75 @@ async function runWikidata(query, deps) {
     P5797: value => ({ value: `@${value}`, kind: 'username', account: `https://www.twitch.tv/${value}` }),
     P8604: value => ({ value: `@${value}`, kind: 'username', account: `https://onlyfans.com/${value}` })
   };
-  for (const [id, entity] of Object.entries(entityPayload.entities || {})) {
-    const label = entity.labels?.fr?.value || entity.labels?.en?.value || id;
-    const entityUrl = `https://www.wikidata.org/wiki/${id}`;
-    pageSamples.push({ url: entityUrl, title: label });
-    identityAliases.push({ value: label, kind: 'display_name', confidence: 94, evidence: [entityUrl] });
-    for (const alias of [...(entity.aliases?.fr || []), ...(entity.aliases?.en || [])]) {
-      identityAliases.push({ value: alias.value, kind: 'display_name', confidence: 86, evidence: [entityUrl] });
+  const selected = selectWikidataEntity(searchRows, entityPayload.entities || {}, query, deps.identityContext || {});
+  if (!selected) return { images: [], videos: [], status: statusFor('wikidata', 'wikidata-api', [], [], { note: 'Aucune entite Wikidata exploitable', pageSamples }) };
+
+  const { row, entity, label, description } = selected;
+  const entityUrl = `https://www.wikidata.org/wiki/${row.id}`;
+  if (label && !/^Q\d+$/i.test(label)) identityAliases.push({ value: label, kind: 'display_name', confidence: 96, evidence: [entityUrl] });
+  for (const alias of [...(entity.aliases?.fr || []), ...(entity.aliases?.en || [])]) {
+    if (alias.value && !/^Q\d+$/i.test(alias.value)) identityAliases.push({ value: alias.value, kind: 'display_name', confidence: 90, evidence: [entityUrl] });
+  }
+  const identityNameClaims = {
+    P1477: 94,
+    P742: 94,
+    P1448: 90,
+    P1449: 84,
+    P1559: 84,
+    P2561: 88
+  };
+  for (const [property, confidence] of Object.entries(identityNameClaims)) {
+    for (const value of claimTextValues(entity, property)) {
+      if (value && !/^Q\d+$/i.test(value)) identityAliases.push({ value, kind: 'display_name', confidence, evidence: [entityUrl] });
     }
-    const imageName = entity.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-    if (imageName) raw.media.push({ type: 'image', url: `https://commons.wikimedia.org/wiki/Special:Redirect/file/${encodeURIComponent(imageName)}`, link: entityUrl, title: label, description: entity.descriptions?.fr?.value || entity.descriptions?.en?.value || '', trustedContext: true });
-    for (const [property, mapper] of Object.entries(socialClaims)) {
-      for (const claim of entity.claims?.[property] || []) {
-        const value = claim?.mainsnak?.datavalue?.value;
-        if (!value) continue;
-        const mapped = mapper(String(value));
-        identityAliases.push({ value: mapped.value, kind: mapped.kind, confidence: 94, evidence: [entityUrl, mapped.account] });
-        accounts.push(mapped.account);
-      }
+  }
+  const imageName = entity.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+  if (imageName) raw.media.push({ type: 'image', url: `https://commons.wikimedia.org/wiki/Special:Redirect/file/${encodeURIComponent(imageName)}`, link: entityUrl, title: label, description, trustedContext: true });
+  for (const [property, mapper] of Object.entries(socialClaims)) {
+    for (const claim of entity.claims?.[property] || []) {
+      const value = claim?.mainsnak?.datavalue?.value;
+      if (!value) continue;
+      const mapped = mapper(String(value));
+      identityAliases.push({ value: mapped.value, kind: mapped.kind, confidence: 96, evidence: [entityUrl, mapped.account] });
+      accounts.push(mapped.account);
     }
   }
   const normalized = normalizeRaw(raw, query, 'wikidata', deps);
-  return { ...normalized, status: statusFor('wikidata', 'wikidata-api', normalized.images, normalized.videos, { note: `${ids.length} entites Wikidata analysees`, identityAliases, accounts: unique(accounts), pageSamples }) };
+  return { ...normalized, status: statusFor('wikidata', 'wikidata-api', normalized.images, normalized.videos, { note: `Entite retenue: ${label} (${row.id}), ${ids.length} candidates analyses`, identityAliases: uniqueAliasCandidates(identityAliases), accounts: unique(accounts), pageSamples }) };
 }
 
 async function runTmdb(query, deps) {
   const apiKey = deps.connectionValue('tmdb', 'apiKey', 'TMDB_API_KEY');
   if (!apiKey) return { images: [], videos: [], status: statusFor('tmdb', 'tmdb-api', [], [], { success: false, available: false, zeroReason: 'missing_credentials', note: 'Cle TMDB requise dans Connexions API' }) };
   const payload = await deps.fetchText(`https://api.themoviedb.org/3/search/person?api_key=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(query)}&include_adult=${deps.adultConfirmed === true}&language=fr-FR&page=1`);
+  const selected = selectTmdbPerson((payload.results || []).slice(0, 20), query, deps.identityContext || {});
+  if (!selected) return { images: [], videos: [], status: statusFor('tmdb', 'tmdb-api', [], [], { note: 'Aucune personne TMDB correspondante' }) };
+  let details = selected.person;
+  try {
+    details = await deps.fetchText(`https://api.themoviedb.org/3/person/${encodeURIComponent(selected.person.id)}?api_key=${encodeURIComponent(apiKey)}&append_to_response=images%2Cexternal_ids&language=fr-FR`);
+  } catch {
+    details = selected.person;
+  }
   const raw = { media: [] };
   const identityAliases = [];
   const pageSamples = [];
-  for (const person of (payload.results || []).slice(0, 12)) {
-    const link = `https://www.themoviedb.org/person/${person.id}`;
-    pageSamples.push({ url: link, title: person.name });
-    identityAliases.push({ value: person.name, kind: 'display_name', confidence: 88, evidence: [link] });
-    if (person.profile_path) raw.media.push({ type: 'image', url: `https://image.tmdb.org/t/p/original${person.profile_path}`, thumbnail: `https://image.tmdb.org/t/p/w500${person.profile_path}`, link, title: person.name, description: (person.known_for || []).map(row => row.title || row.name).filter(Boolean).join(', '), trustedContext: true });
+  const accounts = [];
+  const link = `https://www.themoviedb.org/person/${selected.person.id}`;
+  pageSamples.push({ url: link, title: details.name || selected.person.name });
+  identityAliases.push({ value: details.name || selected.person.name, kind: 'display_name', confidence: 96, evidence: [link] });
+  for (const alias of details.also_known_as || []) identityAliases.push({ value: alias, kind: 'display_name', confidence: 90, evidence: [link] });
+  const externalIds = details.external_ids || {};
+  if (externalIds.instagram_id) accounts.push(`https://www.instagram.com/${externalIds.instagram_id}/`);
+  if (externalIds.twitter_id) accounts.push(`https://x.com/${externalIds.twitter_id}`);
+  if (externalIds.tiktok_id) accounts.push(`https://www.tiktok.com/@${externalIds.tiktok_id}`);
+  const profiles = details.images?.profiles || [];
+  const profileRows = profiles.length ? profiles : [{ file_path: details.profile_path || selected.person.profile_path }];
+  for (const profile of profileRows.slice(0, deps.imageLimit)) {
+    if (!profile.file_path) continue;
+    raw.media.push({ type: 'image', url: `https://image.tmdb.org/t/p/original${profile.file_path}`, thumbnail: `https://image.tmdb.org/t/p/w500${profile.file_path}`, width: profile.width, height: profile.height, link, title: details.name || selected.person.name, description: details.biography || (selected.person.known_for || []).map(row => row.title || row.name).filter(Boolean).join(', '), trustedContext: true });
   }
   const normalized = normalizeRaw(raw, query, 'tmdb', deps);
-  return { ...normalized, status: statusFor('tmdb', 'tmdb-api', normalized.images, normalized.videos, { note: `${pageSamples.length} personnes TMDB`, identityAliases, pageSamples }) };
+  return { ...normalized, status: statusFor('tmdb', 'tmdb-api', normalized.images, normalized.videos, { note: `Personne TMDB retenue: ${details.name || selected.person.name}`, identityAliases: uniqueAliasCandidates(identityAliases), accounts: unique(accounts), pageSamples }) };
 }
 
 async function runInternetArchive(query, deps) {
@@ -235,7 +361,7 @@ async function runInternetArchive(query, deps) {
 }
 
 async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
-  const scoped = { ...deps, imageLimit: options.imageLimit || 35, videoLimit: options.videoLimit || 20, adultConfirmed: options.adultConfirmed === true };
+  const scoped = { ...deps, imageLimit: options.imageLimit || 35, videoLimit: options.videoLimit || 20, adultConfirmed: options.adultConfirmed === true, identityContext: options.identityContext || {} };
   if (sourceId === 'wikidata') return runWikidata(query, scoped);
   if (sourceId === 'tmdb') return runTmdb(query, scoped);
   if (sourceId === 'internetarchive') return runInternetArchive(query, scoped);
@@ -352,6 +478,8 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
 
 module.exports = {
   runExtendedApiSource,
+  selectWikidataEntity,
+  selectTmdbPerson,
   parseBlueskyResults,
   parseTumblrResults,
   parseImgurResults,
