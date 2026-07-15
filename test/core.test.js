@@ -37,6 +37,7 @@ const {
   discoverAliases,
   inferProfileIdentityAliases,
   mergeIdentityEvidence,
+  applyIdentityEvidenceToPerson,
   searchModeThreshold,
   filterBySearchMode,
   collectSourceStatusUrls,
@@ -504,6 +505,24 @@ test('fusionne les preuves identite et applique le garde-fou adulte', () => {
   assert.equal(adultSearchGuard({ safe: true, selectedSources: ['wikidata'], nsfwSources, adultConfirmed: false }).allowed, true);
 });
 
+test('ne reintroduit pas un alias rejete lors d une nouvelle resolution identite', () => {
+  const rejected = {
+    displayName: 'Taylor Swift',
+    aliases: ['Nils Sjoberg'],
+    usernames: [],
+    accounts: [],
+    aliasEvidence: [{ value: 'Nils Sjoberg', kind: 'display_name', status: 'rejected' }]
+  };
+  const updated = applyIdentityEvidenceToPerson(rejected, [{
+    value: 'Nils Sjoberg',
+    kind: 'display_name',
+    confidence: 99,
+    sources: ['wikidata']
+  }], []);
+  assert.ok(!updated.aliases.includes('Nils Sjoberg'));
+  assert.equal(updated.aliasEvidence.find(row => row.value === 'Nils Sjoberg').status, 'rejected');
+});
+
 test('calcule la distance de Hamming des empreintes perceptuelles', () => {
   assert.equal(hammingDistance('0000000000000000', '0000000000000000'), 0);
   assert.equal(hammingDistance('0000000000000000', 'ffffffffffffffff'), 64);
@@ -631,6 +650,71 @@ test('expose des contrats API coherents', async () => {
   assert.equal(googleClear.status, 200);
 });
 
+test('conserve les preuves et le statut des alias entre Media Finder et Person Finder', async () => {
+  const personResponse = await fetch(`${baseUrl}/api/persons`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Alias Workflow Test', publicOnly: true, safeMode: true })
+  });
+  assert.equal(personResponse.status, 200);
+  const person = await personResponse.json();
+
+  const bulkResponse = await fetch(`${baseUrl}/api/aliases/candidates/bulk`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      personId: person.id,
+      query: 'Alias Workflow Test',
+      candidates: [{
+        value: 'Nils Sjoberg',
+        kind: 'display_name',
+        status: 'to_review',
+        confidence: 93,
+        sources: ['wikidata'],
+        evidence: ['https://www.wikidata.org/wiki/Q26876']
+      }]
+    })
+  });
+  assert.equal(bulkResponse.status, 200);
+  const candidate = (await bulkResponse.json()).candidates[0];
+  assert.equal(candidate.status, 'to_review');
+  assert.equal(candidate.personId, person.id);
+  assert.deepEqual(candidate.sources, ['wikidata']);
+
+  const personCandidates = await fetch(`${baseUrl}/api/aliases/candidates?personId=${encodeURIComponent(person.id)}`).then(response => response.json());
+  assert.equal(personCandidates.candidates.length, 1);
+  assert.equal(personCandidates.candidates[0].confidence, 93);
+  assert.deepEqual(personCandidates.candidates[0].evidence, ['https://www.wikidata.org/wiki/Q26876']);
+
+  const confirmedResponse = await fetch(`${baseUrl}/api/aliases/candidates/${encodeURIComponent(candidate.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'confirmed' })
+  });
+  assert.equal(confirmedResponse.status, 200);
+  let updatedPerson = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`).then(response => response.json());
+  assert.ok(updatedPerson.aliases.includes('Nils Sjoberg'));
+  assert.equal(updatedPerson.aliasEvidence.find(row => row.id === candidate.id)?.status, 'confirmed');
+
+  const rejectedResponse = await fetch(`${baseUrl}/api/aliases/candidates/${encodeURIComponent(candidate.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'rejected' })
+  });
+  assert.equal(rejectedResponse.status, 200);
+  updatedPerson = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`).then(response => response.json());
+  assert.ok(!updatedPerson.aliases.includes('Nils Sjoberg'));
+  assert.equal(updatedPerson.aliasEvidence.find(row => row.id === candidate.id)?.status, 'rejected');
+
+  const deleteCandidate = await fetch(`${baseUrl}/api/aliases/candidates/${encodeURIComponent(candidate.id)}`, { method: 'DELETE' });
+  assert.equal(deleteCandidate.status, 200);
+  updatedPerson = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`).then(response => response.json());
+  assert.ok(!updatedPerson.aliasEvidence.some(row => row.id === candidate.id));
+
+  const deletePerson = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`, { method: 'DELETE' });
+  assert.equal(deletePerson.status, 200);
+});
+
 test('garde les contrats DOM et le registre de sources synchronises', async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
@@ -656,8 +740,14 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(client, /restoreSearchSnapshot\(lastSearchConfig\)/);
   assert.match(html, /id="images-results-scroll" class="zone-content-scroll" role="region" aria-labelledby="images-zone-title" tabindex="0"/);
   assert.match(html, /id="videos-results-scroll" class="zone-content-scroll" role="region" aria-labelledby="videos-zone-title" tabindex="0"/);
+  assert.match(html, /id="alias-action-panel"/);
+  assert.match(html, /id="person-alias-candidates"/);
   assert.match(styles, /--media-results-height:\s*clamp\(/);
   assert.match(styles, /\.zone-content-scroll\s*\{[^}]*overflow-y:\s*auto;/s);
+  assert.match(styles, /\.alias-action-panel\s*\{/);
+  assert.match(client, /\/api\/aliases\/candidates\/bulk/);
+  assert.match(client, /runSearchWithCurrentControls\(\{ append: true, aliasOf: parentQuery \}\)/);
+  assert.match(client, /searchForm\.requestSubmit\(\)/);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
   assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 51);
   assert.equal(new Set(sourceIds).size, sourceIds.length);

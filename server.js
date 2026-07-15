@@ -44,7 +44,7 @@ const {
   parseDanbooruPosts,
   decodeWarcHtml
 } = require('./src/sources/discoveryAdapters');
-const { mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
+const { normalizeIdentityValue, mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
 const { createRemoteStore } = require('./src/storage/remoteStore');
 
@@ -193,6 +193,8 @@ const configuredOrigins = String(process.env.CORS_ORIGINS || '')
 const allowedOrigins = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:3000',
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
   'https://media-gatherer.vercel.app',
   ...configuredOrigins
 ]);
@@ -268,6 +270,7 @@ function defaultStore() {
     persons: [],
     personMediaLinks: [],
     personValidationRules: [],
+    aliasCandidates: [],
     sourceDiagnostics: {},
     resultSnapshots: [],
     monitors: [],
@@ -2556,6 +2559,131 @@ function sendExport(res, name, rows, format = 'json') {
   res.send(serializeRows(rows, format));
 }
 
+const ALIAS_CANDIDATE_STATUSES = new Set(['to_review', 'probable', 'confirmed', 'rejected', 'merged']);
+
+function normalizeAliasCandidate(raw = {}, context = {}) {
+  const kind = raw.kind === 'username' ? 'username' : 'display_name';
+  const cleanValue = kind === 'username'
+    ? `@${String(raw.value || raw.alias || '').replace(/^@+/, '').trim()}`
+    : String(raw.value || raw.alias || '').trim();
+  const normalizedValue = normalizeIdentityValue(cleanValue.replace(/^@/, ''));
+  if (!normalizedValue || normalizedValue.length < 2) return null;
+  const fallbackStatus = ALIAS_CANDIDATE_STATUSES.has(context.status) ? context.status : 'to_review';
+  const status = ALIAS_CANDIDATE_STATUSES.has(raw.status) ? raw.status : fallbackStatus;
+  const numericConfidence = Number(raw.confidence || 0);
+  const confidence = Number.isFinite(numericConfidence) ? Math.max(0, Math.min(100, numericConfidence)) : 0;
+  const sources = Array.isArray(raw.sources) ? raw.sources : [];
+  const evidence = Array.isArray(raw.evidence) ? raw.evidence : [];
+  return {
+    value: cleanValue,
+    normalizedValue,
+    kind,
+    status,
+    confidence,
+    query: String(raw.query || context.query || '').trim(),
+    personId: String(raw.personId || context.personId || '').trim() || null,
+    sources: uniq([...sources, raw.sourceId].filter(Boolean).map(String)).slice(0, 12),
+    evidence: uniq([...evidence, raw.url].filter(Boolean).map(String)).slice(0, 12)
+  };
+}
+
+function aliasCandidateKey(candidate = {}) {
+  const scope = candidate.personId
+    ? `person:${candidate.personId}`
+    : `query:${normalizeIdentityValue(candidate.query)}`;
+  return `${scope}:${candidate.kind || 'display_name'}:${candidate.normalizedValue || normalizeIdentityValue(candidate.value)}`;
+}
+
+function upsertAliasCandidates(store, rows = [], context = {}) {
+  const existingMap = new Map((store.aliasCandidates || []).map(candidate => [aliasCandidateKey(candidate), candidate]));
+  const touched = [];
+  rows.forEach(raw => {
+    const incoming = normalizeAliasCandidate(raw, context);
+    if (!incoming) return;
+    const key = aliasCandidateKey(incoming);
+    const existing = existingMap.get(key);
+    const now = new Date().toISOString();
+    const candidate = {
+      ...(existing || {}),
+      ...incoming,
+      id: existing?.id || makeId('alias'),
+      status: raw.status && ALIAS_CANDIDATE_STATUSES.has(raw.status)
+        ? raw.status
+        : (existing?.status || incoming.status),
+      confidence: Math.max(Number(existing?.confidence || 0), incoming.confidence),
+      sources: uniq([...(existing?.sources || []), ...incoming.sources]).slice(0, 12),
+      evidence: uniq([...(existing?.evidence || []), ...incoming.evidence]).slice(0, 12),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    };
+    existingMap.set(key, candidate);
+    touched.push(candidate);
+  });
+  store.aliasCandidates = [...existingMap.values()]
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .slice(0, 2000);
+  return touched;
+}
+
+function syncAliasCandidateToPerson(store, candidate) {
+  if (!candidate?.personId) return null;
+  let updatedPerson = null;
+  store.persons = (store.persons || []).map(person => {
+    if (person.id !== candidate.personId) return person;
+    const normalized = candidate.normalizedValue || normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''));
+    let aliases = [...(person.aliases || [])];
+    let usernames = [...(person.usernames || [])];
+    const shouldAttach = ['confirmed', 'merged'].includes(candidate.status);
+    if (candidate.kind === 'username') {
+      usernames = usernames.filter(value => normalizeIdentityValue(String(value).replace(/^@/, '')) !== normalized);
+      if (shouldAttach) usernames.push(String(candidate.value).replace(/^@/, ''));
+    } else {
+      aliases = aliases.filter(value => normalizeIdentityValue(value) !== normalized);
+      if (shouldAttach) aliases.push(candidate.value);
+    }
+    const evidenceMap = new Map((person.aliasEvidence || []).map(row => [
+      `${row.kind || 'display_name'}:${row.normalizedValue || normalizeIdentityValue(String(row.value || '').replace(/^@/, ''))}`,
+      row
+    ]));
+    evidenceMap.set(`${candidate.kind}:${normalized}`, { ...candidate });
+    updatedPerson = {
+      ...person,
+      aliases: uniq(aliases),
+      usernames: uniq(usernames),
+      aliasEvidence: [...evidenceMap.values()],
+      updatedAt: new Date().toISOString()
+    };
+    return updatedPerson;
+  });
+  return updatedPerson;
+}
+
+function removeAliasCandidateFromPerson(store, candidate) {
+  if (!candidate?.personId) return null;
+  const normalized = candidate.normalizedValue || normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''));
+  let updatedPerson = null;
+  store.persons = (store.persons || []).map(person => {
+    if (person.id !== candidate.personId) return person;
+    updatedPerson = {
+      ...person,
+      aliases: candidate.kind === 'username'
+        ? [...(person.aliases || [])]
+        : (person.aliases || []).filter(value => normalizeIdentityValue(value) !== normalized),
+      usernames: candidate.kind === 'username'
+        ? (person.usernames || []).filter(value => normalizeIdentityValue(String(value).replace(/^@/, '')) !== normalized)
+        : [...(person.usernames || [])],
+      aliasEvidence: (person.aliasEvidence || []).filter(row => {
+        const rowKind = row.kind === 'username' ? 'username' : 'display_name';
+        const rowValue = row.normalizedValue || normalizeIdentityValue(String(row.value || '').replace(/^@/, ''));
+        return rowKind !== candidate.kind || rowValue !== normalized;
+      }),
+      updatedAt: new Date().toISOString()
+    };
+    return updatedPerson;
+  });
+  return updatedPerson;
+}
+
 function buildPersonQueries(person, depth = 'normal') {
   const base = uniq([person.displayName, person.name, ...(person.aliases || []), ...(person.usernames || [])]);
   const positives = uniq(person.positiveKeywords || []);
@@ -2660,10 +2788,16 @@ async function resolveIdentityProfile(person, options = {}) {
   });
   const accounts = uniq(Object.values(payload.status || {}).flatMap(status => status.accounts || []));
   const updated = applyIdentityEvidenceToPerson(person, payload.aliases || [], accounts);
+  let candidates = [];
   mutateStore(store => {
     store.persons = store.persons.map(row => row.id === person.id ? updated : row);
+    candidates = upsertAliasCandidates(store, payload.aliases || [], {
+      personId: person.id,
+      query: person.displayName || person.name,
+      status: 'probable'
+    });
   });
-  return { person: updated, aliases: payload.aliases || [], accounts, status: payload.status, media: { images: payload.images, videos: payload.videos } };
+  return { person: updated, aliases: payload.aliases || [], candidates, accounts, status: payload.status, media: { images: payload.images, videos: payload.videos } };
 }
 
 app.get('/api/health', (req, res) => {
@@ -2681,11 +2815,13 @@ app.get('/api/health', (req, res) => {
       collectionCount: store.collection.length,
       personCount: store.persons.length,
       personMediaCount: store.personMediaLinks.length,
+      aliasCandidateCount: store.aliasCandidates.length,
       cacheEntries: Object.keys(store.cache || {}).length
     },
     modules: {
       mediaFinder: true,
       personFinder: true,
+      aliasWorkflow: true,
       collection: true,
       exports: true,
       cache: true,
@@ -2702,7 +2838,8 @@ app.get('/api/storage/status', (req, res) => {
     history: store.history.length,
     collection: store.collection.length,
     persons: store.persons.length,
-    personMediaLinks: store.personMediaLinks.length
+    personMediaLinks: store.personMediaLinks.length,
+    aliasCandidates: store.aliasCandidates.length
   } });
 });
 
@@ -3710,7 +3847,8 @@ app.get('/api/dashboard/overview', (req, res) => {
     cache: Object.keys(store.cache || {}).length,
     queue: store.queue.length,
     persons: store.persons.length,
-    personMedia: store.personMediaLinks.length
+    personMedia: store.personMediaLinks.length,
+    aliasCandidates: store.aliasCandidates.length
   });
 });
 app.get('/api/dashboard', (req, res) => res.redirect('/api/dashboard/overview'));
@@ -3735,10 +3873,88 @@ app.get('/api/franchises', (req, res) => {
 });
 app.get('/api/franchises/:slug/timeline', (req, res) => res.json({ slug: req.params.slug, events: readStore().collection.map(item => ({ id: item.id, title: item.title, date: item.createdAt, type: inferMediaType(item) })) }));
 
+app.get('/api/aliases/options', (req, res) => res.json({
+  statuses: [...ALIAS_CANDIDATE_STATUSES],
+  kinds: ['display_name', 'username']
+}));
+app.get('/api/aliases/candidates', (req, res) => {
+  const query = normalizeIdentityValue(req.query.query || '');
+  const personId = String(req.query.personId || '').trim();
+  const status = String(req.query.status || '').trim();
+  const candidates = (readStore().aliasCandidates || [])
+    .filter(candidate => !query || normalizeIdentityValue(candidate.query) === query)
+    .filter(candidate => !personId || candidate.personId === personId)
+    .filter(candidate => !status || candidate.status === status)
+    .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  res.json({ candidates });
+});
+app.post('/api/aliases/candidates/bulk', (req, res) => {
+  const rows = Array.isArray(req.body?.candidates) ? req.body.candidates.slice(0, 100) : [];
+  if (!rows.length) return res.status(400).json({ error: 'Candidats alias requis' });
+  const personId = String(req.body.personId || '').trim();
+  const store = readStore();
+  if (personId && !store.persons.some(person => person.id === personId)) return res.status(404).json({ error: 'Profil introuvable' });
+  const candidates = upsertAliasCandidates(store, rows, {
+    query: req.body.query,
+    personId,
+    status: req.body.status || 'to_review'
+  });
+  candidates.forEach(candidate => {
+    if (['confirmed', 'merged', 'rejected'].includes(candidate.status)) syncAliasCandidateToPerson(store, candidate);
+  });
+  writeStore(store);
+  res.json({ candidates });
+});
+app.post('/api/aliases/candidates', (req, res) => {
+  const store = readStore();
+  const personId = String(req.body.personId || '').trim();
+  if (personId && !store.persons.some(person => person.id === personId)) return res.status(404).json({ error: 'Profil introuvable' });
+  const [candidate] = upsertAliasCandidates(store, [req.body], {
+    query: req.body.query,
+    personId,
+    status: req.body.status || 'to_review'
+  });
+  if (!candidate) return res.status(400).json({ error: 'Alias invalide' });
+  if (['confirmed', 'merged', 'rejected'].includes(candidate.status)) syncAliasCandidateToPerson(store, candidate);
+  writeStore(store);
+  res.json(candidate);
+});
+app.patch('/api/aliases/candidates/:id', (req, res) => {
+  const store = readStore();
+  const index = (store.aliasCandidates || []).findIndex(candidate => candidate.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: 'Candidat alias introuvable' });
+  const current = store.aliasCandidates[index];
+  const status = req.body.status == null ? current.status : String(req.body.status);
+  if (!ALIAS_CANDIDATE_STATUSES.has(status)) return res.status(400).json({ error: 'Statut alias invalide' });
+  const personId = req.body.personId == null ? current.personId : String(req.body.personId || '').trim() || null;
+  if (personId && !store.persons.some(person => person.id === personId)) return res.status(404).json({ error: 'Profil introuvable' });
+  const updated = {
+    ...current,
+    status,
+    personId,
+    note: req.body.note == null ? current.note : String(req.body.note || ''),
+    updatedAt: new Date().toISOString()
+  };
+  if (current.personId && current.personId !== updated.personId) removeAliasCandidateFromPerson(store, current);
+  store.aliasCandidates[index] = updated;
+  syncAliasCandidateToPerson(store, updated);
+  writeStore(store);
+  res.json(updated);
+});
+app.delete('/api/aliases/candidates/:id', (req, res) => {
+  const store = readStore();
+  const candidate = (store.aliasCandidates || []).find(row => row.id === req.params.id);
+  if (!candidate) return res.status(404).json({ error: 'Candidat alias introuvable' });
+  store.aliasCandidates = store.aliasCandidates.filter(row => row.id !== req.params.id);
+  removeAliasCandidateFromPerson(store, candidate);
+  writeStore(store);
+  res.json({ ok: true });
+});
+
 app.get('/api/persons/options', (req, res) => res.json({ types: ['public_figure', 'creator', 'artist', 'journalist', 'athlete', 'consented_person', 'unknown_public'], statuses: ['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved'], depths: ['quick', 'normal', 'deep', 'archive'] }));
 app.get('/api/persons/stats', (req, res) => {
   const store = readStore();
-  res.json({ persons: store.persons.length, mediaLinks: store.personMediaLinks.length, rules: store.personValidationRules.length });
+  res.json({ persons: store.persons.length, mediaLinks: store.personMediaLinks.length, rules: store.personValidationRules.length, aliasCandidates: store.aliasCandidates.length });
 });
 app.get('/api/persons/search/depths', (req, res) => res.json({ depths: ['quick', 'normal', 'deep', 'archive'] }));
 app.get('/api/persons', (req, res) => res.json({ persons: readStore().persons }));
@@ -3751,6 +3967,7 @@ app.post('/api/persons', (req, res) => {
     type: req.body.type || 'unknown_public',
     aliases: uniq(req.body.aliases || []),
     usernames: uniq(req.body.usernames || []),
+    aliasEvidence: Array.isArray(req.body.aliasEvidence) ? req.body.aliasEvidence.slice(0, 100) : [],
     accounts: Array.isArray(req.body.accounts) ? req.body.accounts : [],
     positiveKeywords: uniq(req.body.positiveKeywords || []),
     excludeKeywords: uniq(req.body.excludeKeywords || []),
@@ -3789,16 +4006,25 @@ app.delete('/api/persons/:id', (req, res) => {
   store.persons = store.persons.filter(person => person.id !== req.params.id);
   store.personMediaLinks = store.personMediaLinks.filter(link => link.personId !== req.params.id);
   store.personValidationRules = store.personValidationRules.filter(rule => rule.personId !== req.params.id);
+  store.aliasCandidates = store.aliasCandidates.filter(candidate => candidate.personId !== req.params.id);
   writeStore(store);
   res.json({ ok: true });
 });
 app.post('/api/persons/:id/aliases', (req, res) => {
-  if (!readStore().persons.some(person => person.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
-  if (!String(req.body.alias || '').trim()) return res.status(400).json({ error: 'Alias requis' });
   const store = readStore();
-  store.persons = store.persons.map(person => person.id === req.params.id ? { ...person, aliases: uniq([...(person.aliases || []), req.body.alias]) } : person);
+  const person = store.persons.find(row => row.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  if (!String(req.body.alias || '').trim()) return res.status(400).json({ error: 'Alias requis' });
+  const structured = req.body.kind || req.body.status || req.body.confidence || req.body.sources || req.body.evidence;
+  const [candidate] = upsertAliasCandidates(store, [{ ...req.body, value: req.body.alias, personId: req.params.id }], {
+    personId: req.params.id,
+    query: req.body.query || person.displayName || person.name,
+    status: structured ? (req.body.status || 'to_review') : 'confirmed'
+  });
+  if (!candidate) return res.status(400).json({ error: 'Alias invalide' });
+  syncAliasCandidateToPerson(store, candidate);
   writeStore(store);
-  res.json({ ok: true });
+  res.json({ ok: true, candidate, person: store.persons.find(row => row.id === req.params.id) });
 });
 app.post('/api/persons/:id/accounts', (req, res) => {
   if (!readStore().persons.some(person => person.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
@@ -3991,6 +4217,7 @@ app.post('/api/exports/results', (req, res) => sendExport(res, 'results', [...(r
 app.get('/api/exports/collection', (req, res) => sendExport(res, 'collection', readStore().collection, req.query.format || 'json'));
 app.get('/api/exports/history', (req, res) => sendExport(res, 'history', readStore().history, req.query.format || 'json'));
 app.get('/api/exports/persons', (req, res) => sendExport(res, 'persons', readStore().persons, req.query.format || 'json'));
+app.get('/api/exports/aliases', (req, res) => sendExport(res, 'aliases', readStore().aliasCandidates, req.query.format || 'json'));
 app.get('/api/exports/person-gallery', (req, res) => sendExport(res, 'person-gallery', readStore().personMediaLinks.filter(link => !req.query.personId || link.personId === req.query.personId), req.query.format || 'json'));
 app.get('/api/exports/person-timeline', (req, res) => sendExport(res, 'person-timeline', readStore().personMediaLinks.filter(link => !req.query.personId || link.personId === req.query.personId), req.query.format || 'json'));
 app.get('/api/exports/franchises', (req, res) => sendExport(res, 'franchises', readStore().collection, req.query.format || 'json'));
@@ -4078,6 +4305,7 @@ app.locals.testables = {
   discoverAliases,
   inferProfileIdentityAliases,
   mergeIdentityEvidence,
+  applyIdentityEvidenceToPerson,
   searchModeThreshold,
   filterBySearchMode,
   collectSourceStatusUrls,

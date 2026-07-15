@@ -1813,7 +1813,7 @@ body {
 
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: minmax(220px, 0.55fr) minmax(420px, 1.45fr);
   gap: 1rem;
 }
 
@@ -2027,6 +2027,91 @@ body {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 0.72rem;
+}
+
+.alias-chip.active {
+  border-color: rgba(56, 189, 248, 0.8);
+  background: rgba(14, 116, 144, 0.24);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+}
+
+.alias-chip.alias-rejected {
+  opacity: 0.58;
+  text-decoration: line-through;
+}
+
+.alias-action-panel {
+  margin: 0 0.9rem 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.alias-action-head,
+.alias-action-buttons,
+.alias-person-action,
+.alias-evidence summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.alias-action-head {
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.alias-action-head strong {
+  overflow-wrap: anywhere;
+}
+
+.alias-action-meta,
+.alias-action-status,
+.alias-evidence-list {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.alias-action-status:not(:empty) {
+  margin-top: 0.65rem;
+}
+
+.alias-action-status.success { color: #86efac; }
+.alias-action-status.error { color: #fda4af; }
+
+.alias-action-buttons,
+.alias-person-action {
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+}
+
+.alias-person-action select {
+  min-width: min(100%, 180px);
+  flex: 1 1 150px;
+  padding: 0.48rem 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.75);
+  color: var(--text-main);
+}
+
+.alias-evidence {
+  margin-top: 0.65rem;
+}
+
+.alias-evidence summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.alias-evidence-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.alias-evidence-list a,
+.alias-evidence-list span {
+  overflow-wrap: anywhere;
 }
 
 .diagnostic-row.ok { border-left: 2px solid rgba(34, 197, 94, 0.55); padding-left: 0.55rem; }
@@ -2525,7 +2610,7 @@ body {
 }
 
 .person-safe-badge,
-.person-chip-row span,
+.person-alias-chip,
 .person-query-chip {
   display: inline-flex;
   padding: 0.25rem 0.45rem;
@@ -2534,6 +2619,17 @@ body {
   background: rgba(8, 47, 73, 0.3);
   color: var(--text-main);
   font-size: 0.76rem;
+}
+
+.person-alias-chip {
+  cursor: pointer;
+  font: inherit;
+}
+
+.person-alias-chip:hover,
+.person-alias-chip:focus-visible {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(14, 116, 144, 0.25);
 }
 
 .person-adult-badge {
@@ -2546,6 +2642,76 @@ body {
   flex-wrap: wrap;
   margin: 1rem 0;
 }
+
+.person-alias-drawer {
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.person-alias-drawer summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.7rem 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.person-alias-drawer summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.person-alias-drawer summary i {
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent-blue);
+}
+
+.person-alias-candidates {
+  display: grid;
+  gap: 0.45rem;
+  padding-bottom: 0.75rem;
+}
+
+.person-alias-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.person-alias-main {
+  min-width: 0;
+}
+
+.person-alias-main strong,
+.person-alias-main small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.person-alias-main small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.person-alias-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.alias-status-confirmed { color: #86efac; }
+.alias-status-probable { color: #fde68a; }
+.alias-status-rejected { color: #fda4af; }
+.alias-status-to_review { color: #bae6fd; }
 
 .person-search-controls input {
   max-width: 6rem;
@@ -2679,6 +2845,12 @@ body {
   }
 }
 
+@media (max-width: 900px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .app-container {
     padding: 1rem;
@@ -2698,6 +2870,20 @@ body {
   .person-rule-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .person-alias-row {
+    grid-template-columns: 1fr;
+  }
+
+  .person-alias-actions {
+    justify-content: flex-start;
+  }
+
+  .alias-action-buttons .btn,
+  .alias-person-action .btn,
+  .alias-person-action select {
+    width: 100%;
   }
 
   .diagnostic-drawer > .insight-panel-header,

@@ -35,6 +35,11 @@ let searchHistory = readLocalArray(['mediagatherer_history', 'aerogatherer_histo
 let savedMonitors = readLocalArray(['mediagatherer_monitors', 'aerogatherer_monitors']);
 let batchQueue = [];
 let currentAliases = [];
+let selectedAliasCandidate = null;
+let aliasActionFeedback = null;
+let aliasCandidatePersistTimer = null;
+const pendingAliasCandidates = new Map();
+const rejectedAliasKeys = new Set(readLocalArray(['mediagatherer_alias_rejections']));
 let sourceDiagnostics = {};
 let runtimePersistentStorage = true;
 const perceptualHashCache = new Map();
@@ -216,6 +221,7 @@ const accountsList = document.getElementById('accounts-list');
 const insightsDashboard = document.getElementById('insights-dashboard');
 const confidenceSummary = document.getElementById('confidence-summary');
 const aliasList = document.getElementById('alias-list');
+const aliasActionPanel = document.getElementById('alias-action-panel');
 const sourceDiagnosticList = document.getElementById('source-diagnostic-list');
 const sourceDiagnosticFilter = document.getElementById('source-diagnostic-filter');
 const sourceDiagnosticSummary = document.getElementById('source-diagnostic-summary');
@@ -259,6 +265,9 @@ const personSafeMode = document.getElementById('person-safe-mode');
 const personAdultConfirmed = document.getElementById('person-adult-confirmed');
 const personList = document.getElementById('person-list');
 const personDetail = document.getElementById('person-detail');
+const personAliasDrawer = document.getElementById('person-alias-drawer');
+const personAliasSummary = document.getElementById('person-alias-summary');
+const personAliasCandidates = document.getElementById('person-alias-candidates');
 const personDepth = document.getElementById('person-depth');
 const personMaxQueries = document.getElementById('person-max-queries');
 const personMinScore = document.getElementById('person-min-score');
@@ -277,6 +286,7 @@ const personRuleList = document.getElementById('person-rule-list');
 
 let personProfiles = readLocalArray(['mediagatherer_persons']);
 let selectedPersonId = null;
+let activePersonAliasCandidates = [];
 
 function updatePersonActions() {
   const disabled = !selectedPersonId;
@@ -622,6 +632,10 @@ async function loadPersons() {
 
 function renderPersonDetail(person) {
   if (!personDetail) return;
+  const searchableAliases = [
+    ...(person.aliases || []).map(value => ({ value, kind: 'display_name' })),
+    ...(person.usernames || []).map(value => ({ value: `@${String(value).replace(/^@/, '')}`, kind: 'username' }))
+  ];
   personDetail.classList.remove('empty');
   personDetail.innerHTML = `
     <div class="person-detail-head">
@@ -636,13 +650,99 @@ function renderPersonDetail(person) {
       </div>
     </div>
     <div class="person-chip-row">
-      ${(person.aliases || []).map(alias => `<span>${escapeHtml(alias)}</span>`).join('')}
-      ${(person.usernames || []).map(alias => `<span>${escapeHtml(alias)}</span>`).join('')}
+      ${searchableAliases.map((alias, index) => `<button type="button" class="person-alias-chip" data-person-detail-alias="${index}" title="Rechercher cet alias dans Media Finder">${escapeHtml(alias.value)}</button>`).join('')}
     </div>
     <p class="person-note">${escapeHtml(person.notes || 'Pas de note.')}</p>
   `;
   personDetail.querySelector('[data-person-delete]')?.addEventListener('click', () => deletePersonProfile(person.id));
+  personDetail.querySelectorAll('[data-person-detail-alias]').forEach(button => {
+    button.addEventListener('click', () => searchPersonAliasCandidate(searchableAliases[Number(button.dataset.personDetailAlias)]));
+  });
   lucide.createIcons();
+}
+
+function renderPersonAliasCandidates(candidates = []) {
+  if (!personAliasDrawer || !personAliasCandidates || !personAliasSummary) return;
+  activePersonAliasCandidates = [...candidates].sort((a, b) => {
+    const statusOrder = { to_review: 0, probable: 1, confirmed: 2, merged: 3, rejected: 4 };
+    return (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5) || Number(b.confidence || 0) - Number(a.confidence || 0);
+  });
+  if (!selectedPersonId) {
+    personAliasDrawer.classList.add('hidden');
+    personAliasCandidates.innerHTML = '';
+    personAliasSummary.textContent = '0 candidat';
+    return;
+  }
+  personAliasDrawer.classList.remove('hidden');
+  const pendingCount = activePersonAliasCandidates.filter(candidate => ['to_review', 'probable'].includes(candidate.status)).length;
+  personAliasSummary.textContent = `${pendingCount} a valider · ${activePersonAliasCandidates.length} total`;
+  personAliasCandidates.innerHTML = activePersonAliasCandidates.length
+    ? activePersonAliasCandidates.map(candidate => `
+      <div class="person-alias-row" data-person-alias-id="${escapeHtml(candidate.id)}">
+        <div class="person-alias-main">
+          <strong>${escapeHtml(candidate.value)}</strong>
+          <small><span class="alias-status-${escapeHtml(candidate.status || 'to_review')}">${escapeHtml(aliasStatusLabel(candidate.status))}</span> · confiance ${Number(candidate.confidence || 0)}% · ${(candidate.sources || []).length} source(s)</small>
+          ${(candidate.evidence || []).length ? `<details class="alias-evidence"><summary>Voir les preuves</summary><div class="alias-evidence-list">${aliasEvidenceHtml(candidate)}</div></details>` : ''}
+        </div>
+        <div class="person-alias-actions">
+          <button type="button" class="btn btn-secondary btn-small" data-person-alias-search title="Rechercher cet alias"><i data-lucide="search"></i><span>Rechercher</span></button>
+          ${candidate.status !== 'confirmed' ? '<button type="button" class="btn btn-secondary btn-small" data-person-alias-status="confirmed"><i data-lucide="check"></i><span>Confirmer</span></button>' : ''}
+          ${candidate.status !== 'rejected' ? '<button type="button" class="btn btn-secondary btn-small" data-person-alias-status="rejected"><i data-lucide="ban"></i><span>Rejeter</span></button>' : ''}
+          <button type="button" class="icon-btn" data-person-alias-delete title="Supprimer ce candidat" aria-label="Supprimer ${escapeHtml(candidate.value)}"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+    `).join('')
+    : '<div class="person-empty">Aucun alias candidat pour cette fiche.</div>';
+  personAliasCandidates.querySelectorAll('[data-person-alias-id]').forEach(row => {
+    const candidate = activePersonAliasCandidates.find(item => item.id === row.dataset.personAliasId);
+    row.querySelector('[data-person-alias-search]')?.addEventListener('click', () => searchPersonAliasCandidate(candidate));
+    row.querySelectorAll('[data-person-alias-status]').forEach(button => {
+      button.addEventListener('click', () => updatePersonAliasCandidate(candidate.id, button.dataset.personAliasStatus));
+    });
+    row.querySelector('[data-person-alias-delete]')?.addEventListener('click', () => deletePersonAliasCandidate(candidate.id));
+  });
+  lucide.createIcons();
+}
+
+async function updatePersonAliasCandidate(candidateId, status) {
+  if (!candidateId || !selectedPersonId) return;
+  const row = personAliasCandidates?.querySelector(`[data-person-alias-id="${CSS.escape(candidateId)}"]`);
+  row?.querySelectorAll('button').forEach(button => { button.disabled = true; });
+  try {
+    const response = await fetch(`${API_BASE}/api/aliases/candidates/${encodeURIComponent(candidateId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, personId: selectedPersonId })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    addConsoleLog(`[ALIAS] ${data.value} : ${aliasStatusLabel(data.status)}.`, 'success');
+    await selectPerson(selectedPersonId, false);
+  } catch (error) {
+    addConsoleLog(`[ALIAS] Validation impossible : ${error.message}`, 'error');
+    row?.querySelectorAll('button').forEach(button => { button.disabled = false; });
+  }
+}
+
+async function deletePersonAliasCandidate(candidateId) {
+  if (!candidateId || !selectedPersonId) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/aliases/candidates/${encodeURIComponent(candidateId)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    addConsoleLog('[ALIAS] Candidat supprime de la fiche personne.', 'success');
+    await selectPerson(selectedPersonId, false);
+  } catch (error) {
+    addConsoleLog(`[ALIAS] Suppression impossible : ${error.message}`, 'error');
+  }
+}
+
+function searchPersonAliasCandidate(candidate) {
+  if (!candidate?.value) return;
+  setActiveTab('search');
+  searchInput.value = candidate.value;
+  searchForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  addConsoleLog(`[ALIAS] Recherche lancee depuis Person Finder : ${candidate.value}`, 'info');
+  searchForm.requestSubmit();
 }
 
 function renderPersonPlan(queries) {
@@ -711,17 +811,19 @@ async function selectPerson(id, rerenderList = true) {
   if (rerenderList) renderPersonList();
   const localPerson = personProfiles.find(person => person.id === id);
   if (localPerson) renderPersonDetail(localPerson);
-  const [personRes, planRes, galleryRes, timelineRes, rulesRes] = await Promise.all([
+  const [personRes, planRes, galleryRes, timelineRes, rulesRes, aliasesRes] = await Promise.all([
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`),
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/queries?depth=${encodeURIComponent(personDepth?.value || 'normal')}`),
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/gallery`),
     fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/timeline`),
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`)
+    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`),
+    fetch(`${API_BASE}/api/aliases/candidates?personId=${encodeURIComponent(id)}`)
   ]);
   if (personRes.ok) {
     const latestPerson = await personRes.json();
     personProfiles = personProfiles.map(person => person.id === latestPerson.id ? latestPerson : person);
     localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    renderPersonList();
     renderPersonDetail(latestPerson);
     updatePersonActions();
   }
@@ -729,6 +831,7 @@ async function selectPerson(id, rerenderList = true) {
   if (galleryRes.ok) renderPersonMedia((await galleryRes.json()).links || []);
   if (timelineRes.ok) renderPersonTimeline((await timelineRes.json()).events || []);
   if (rulesRes.ok) renderPersonRules((await rulesRes.json()).rules || []);
+  if (aliasesRes.ok) renderPersonAliasCandidates((await aliasesRes.json()).candidates || []);
 }
 
 async function savePersonProfile(event) {
@@ -774,6 +877,7 @@ async function deletePersonProfile(id) {
     personDetail.className = 'person-detail empty';
     personDetail.textContent = 'Selectionne ou cree une fiche personne.';
     renderPersonMedia([]);
+    renderPersonAliasCandidates([]);
     renderPersonTimeline([]);
     renderPersonRules([]);
   }
@@ -1179,19 +1283,277 @@ function updateSourceDiagnostics(data) {
   });
 }
 
-function updateAliases(data) {
-  const map = new Map(currentAliases.map(alias => [normalizeForScore(alias.value), alias]));
+function normalizeAliasKey(value) {
+  return normalizeSearchTerm(String(value || '').replace(/^@/, '')).replace(/[^a-z0-9]+/g, '');
+}
+
+function aliasCandidateLocalKey(candidate = {}, query = '') {
+  candidate = candidate || {};
+  const scope = normalizeAliasKey(candidate.query || query || currentSearchQuery || searchInput?.value || 'global');
+  const kind = candidate.kind === 'username' ? 'username' : 'display_name';
+  return `${scope}:${kind}:${normalizeAliasKey(candidate.value)}`;
+}
+
+function aliasStatusLabel(status) {
+  return {
+    to_review: 'A verifier',
+    probable: 'Probable',
+    confirmed: 'Confirme',
+    rejected: 'Rejete',
+    merged: 'Fusionne'
+  }[status] || 'A verifier';
+}
+
+function aliasEvidenceHtml(candidate) {
+  const evidence = [...new Set(candidate?.evidence || [])].slice(0, 8);
+  if (!evidence.length) return '<span>Aucune preuve detaillee disponible.</span>';
+  return evidence.map(item => {
+    const url = safeHttpUrl(item);
+    return url
+      ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`
+      : `<span>${escapeHtml(item)}</span>`;
+  }).join('');
+}
+
+function mergePersistedAliasCandidates(candidates = []) {
+  const persisted = new Map(candidates.map(candidate => [aliasCandidateLocalKey(candidate, candidate.query), candidate]));
+  candidates.filter(candidate => candidate.status === 'rejected').forEach(candidate => {
+    rejectedAliasKeys.add(aliasCandidateLocalKey(candidate, candidate.query));
+  });
+  localStorage.setItem('mediagatherer_alias_rejections', JSON.stringify([...rejectedAliasKeys]));
+  currentAliases = currentAliases.map(alias => {
+    const candidate = persisted.get(aliasCandidateLocalKey(alias, alias.query));
+    return candidate ? { ...alias, ...candidate } : alias;
+  }).filter(alias => alias.status !== 'rejected' && !rejectedAliasKeys.has(aliasCandidateLocalKey(alias, alias.query)));
+  if (selectedAliasCandidate) {
+    selectedAliasCandidate = currentAliases.find(alias => aliasCandidateLocalKey(alias, alias.query) === aliasCandidateLocalKey(selectedAliasCandidate, selectedAliasCandidate.query)) || null;
+  }
+}
+
+function scheduleAliasCandidatePersistence(candidates = [], query = '') {
+  candidates.forEach(candidate => {
+    const row = { ...candidate, query: candidate.query || query || currentSearchQuery };
+    if (!row.value || row.status === 'rejected') return;
+    pendingAliasCandidates.set(aliasCandidateLocalKey(row, row.query), row);
+  });
+  clearTimeout(aliasCandidatePersistTimer);
+  aliasCandidatePersistTimer = setTimeout(async () => {
+    const rows = [...pendingAliasCandidates.values()];
+    pendingAliasCandidates.clear();
+    aliasCandidatePersistTimer = null;
+    if (!rows.length) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/aliases/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query || currentSearchQuery, candidates: rows })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      mergePersistedAliasCandidates(data.candidates || []);
+      renderInsights();
+    } catch (error) {
+      addConsoleLog(`[ALIAS] Sauvegarde differee impossible : ${error.message}`, 'warning');
+    }
+  }, 450);
+}
+
+function setAliasActionStatus(message, type = 'info') {
+  aliasActionFeedback = message ? { message, type } : null;
+  const status = aliasActionPanel?.querySelector('[data-alias-action-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `alias-action-status ${type}`;
+}
+
+function selectAliasCandidate(candidate) {
+  const changed = aliasCandidateLocalKey(candidate, candidate?.query) !== aliasCandidateLocalKey(selectedAliasCandidate, selectedAliasCandidate?.query);
+  if (changed) aliasActionFeedback = null;
+  selectedAliasCandidate = candidate || null;
+  renderInsights();
+  if (selectedAliasCandidate) {
+    aliasActionPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    addConsoleLog(`[ALIAS] ${selectedAliasCandidate.value} selectionne.`, 'info');
+  }
+}
+
+async function persistAliasCandidateStatus(candidate, status, extra = {}) {
+  const request = candidate.id
+    ? fetch(`${API_BASE}/api/aliases/candidates/${encodeURIComponent(candidate.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, ...extra })
+      })
+    : fetch(`${API_BASE}/api/aliases/candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...candidate, query: candidate.query || currentSearchQuery, status, ...extra })
+      });
+  const response = await request;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  mergePersistedAliasCandidates([data]);
+  return data;
+}
+
+async function launchAliasSearch(candidate, append = false) {
+  if (!candidate?.value) return;
+  const parentQuery = currentSearchQuery || searchInput.value.trim();
+  setActiveTab('search');
+  searchInput.value = candidate.value;
+  if (!append) {
+    addConsoleLog(`[ALIAS] Nouvelle recherche : ${candidate.value}`, 'info');
+    searchForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    searchForm.requestSubmit();
+    return;
+  }
+  setAliasActionStatus(`Recherche de ${candidate.value} en cours...`);
+  aliasActionPanel?.querySelectorAll('button, select').forEach(control => { control.disabled = true; });
+  try {
+    await runSearchWithCurrentControls({ append: true, aliasOf: parentQuery });
+    try {
+      const persisted = await persistAliasCandidateStatus(candidate, 'merged');
+      selectedAliasCandidate = persisted;
+      renderInsights();
+    } catch (error) {
+      addConsoleLog(`[ALIAS] Fusion effectuee, statut non sauvegarde : ${error.message}`, 'warning');
+    }
+    setAliasActionStatus(`Resultats de ${candidate.value} ajoutes a ${parentQuery}.`, 'success');
+    addConsoleLog(`[ALIAS] Resultats de ${candidate.value} fusionnes.`, 'success');
+  } finally {
+    aliasActionPanel?.querySelectorAll('button, select').forEach(control => { control.disabled = false; });
+  }
+}
+
+function prefillPersonFromAlias(candidate) {
+  setActiveTab('persons');
+  if (personName && !personName.value) personName.value = currentSearchQuery || candidate.value;
+  const target = candidate.kind === 'username' ? personUsernames : personAliases;
+  if (target) {
+    const values = splitPersonLines(target.value);
+    const cleanValue = candidate.kind === 'username' ? candidate.value.replace(/^@/, '') : candidate.value;
+    target.value = [...new Set([...values, cleanValue])].join('\n');
+  }
+  personForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target?.focus();
+  addConsoleLog(`[ALIAS] ${candidate.value} prepare dans une nouvelle fiche Person Finder.`, 'success');
+}
+
+async function addAliasCandidateToPerson(candidate) {
+  if (!candidate?.value) return;
+  const select = aliasActionPanel?.querySelector('[data-alias-person-select]');
+  const personId = select?.value || selectedPersonId || '';
+  if (!personId) {
+    prefillPersonFromAlias(candidate);
+    return;
+  }
+  setAliasActionStatus('Ajout a Person Finder...');
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(personId)}/aliases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alias: candidate.value,
+        kind: candidate.kind,
+        status: 'to_review',
+        confidence: candidate.confidence,
+        sources: candidate.sources,
+        evidence: candidate.evidence,
+        query: candidate.query || currentSearchQuery
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (data.person) {
+      personProfiles = personProfiles.map(person => person.id === data.person.id ? data.person : person);
+      localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    }
+    setAliasActionStatus(`${candidate.value} ajoute comme candidat a verifier.`, 'success');
+    addConsoleLog(`[ALIAS] ${candidate.value} envoye vers Person Finder.`, 'success');
+  } catch (error) {
+    setAliasActionStatus(`Ajout impossible : ${error.message}`, 'error');
+  }
+}
+
+async function rejectAliasCandidate(candidate) {
+  if (!candidate?.value) return;
+  try {
+    await persistAliasCandidateStatus(candidate, 'rejected');
+  } catch (error) {
+    addConsoleLog(`[ALIAS] Rejet conserve localement : ${error.message}`, 'warning');
+  }
+  const key = aliasCandidateLocalKey(candidate, candidate.query);
+  rejectedAliasKeys.add(key);
+  localStorage.setItem('mediagatherer_alias_rejections', JSON.stringify([...rejectedAliasKeys]));
+  currentAliases = currentAliases.filter(alias => aliasCandidateLocalKey(alias, alias.query) !== key);
+  selectedAliasCandidate = null;
+  renderInsights();
+  addConsoleLog(`[ALIAS] ${candidate.value} rejete pour cette recherche.`, 'success');
+}
+
+function renderAliasActionPanel() {
+  if (!aliasActionPanel) return;
+  const candidate = selectedAliasCandidate;
+  if (!candidate) {
+    aliasActionPanel.classList.add('hidden');
+    aliasActionPanel.innerHTML = '';
+    return;
+  }
+  const personOptions = personProfiles.map(person => `<option value="${escapeHtml(person.id)}" ${person.id === selectedPersonId ? 'selected' : ''}>${escapeHtml(person.displayName || person.name)}</option>`).join('');
+  aliasActionPanel.innerHTML = `
+    <div class="alias-action-head">
+      <div>
+        <strong>${escapeHtml(candidate.value)}</strong>
+        <div class="alias-action-meta">${escapeHtml(candidate.kind === 'username' ? 'Username public' : 'Nom public')} · confiance ${Number(candidate.confidence || 0)}% · ${escapeHtml(aliasStatusLabel(candidate.status))}</div>
+      </div>
+      <button type="button" class="icon-btn" data-alias-close aria-label="Fermer les actions alias" title="Fermer"><i data-lucide="x"></i></button>
+    </div>
+    <div class="alias-action-buttons">
+      <button type="button" class="btn btn-primary btn-small" data-alias-search><i data-lucide="search"></i><span>Rechercher</span></button>
+      <button type="button" class="btn btn-secondary btn-small" data-alias-append><i data-lucide="list-plus"></i><span>Ajouter aux resultats</span></button>
+      <button type="button" class="btn btn-secondary btn-small" data-alias-reject><i data-lucide="ban"></i><span>Rejeter</span></button>
+    </div>
+    <div class="alias-person-action">
+      ${personOptions ? `<select data-alias-person-select aria-label="Fiche Person Finder cible">${personOptions}</select>` : '<span class="alias-action-meta">Aucune fiche Person Finder.</span>'}
+      <button type="button" class="btn btn-secondary btn-small" data-alias-person><i data-lucide="user-plus"></i><span>${personOptions ? 'Ajouter a Person Finder' : 'Preparer une fiche'}</span></button>
+    </div>
+    <details class="alias-evidence">
+      <summary><i data-lucide="file-search"></i><span>Preuves et sources (${(candidate.evidence || []).length})</span></summary>
+      <div class="alias-evidence-list">${aliasEvidenceHtml(candidate)}</div>
+    </details>
+    <div class="alias-action-status ${escapeHtml(aliasActionFeedback?.type || 'info')}" data-alias-action-status>${escapeHtml(aliasActionFeedback?.message || '')}</div>
+  `;
+  aliasActionPanel.classList.remove('hidden');
+  aliasActionPanel.querySelector('[data-alias-close]')?.addEventListener('click', () => selectAliasCandidate(null));
+  aliasActionPanel.querySelector('[data-alias-search]')?.addEventListener('click', () => launchAliasSearch(candidate, false));
+  aliasActionPanel.querySelector('[data-alias-append]')?.addEventListener('click', () => launchAliasSearch(candidate, true));
+  aliasActionPanel.querySelector('[data-alias-person]')?.addEventListener('click', () => addAliasCandidateToPerson(candidate));
+  aliasActionPanel.querySelector('[data-alias-reject]')?.addEventListener('click', () => rejectAliasCandidate(candidate));
+  lucide.createIcons();
+}
+
+function updateAliases(data, options = {}) {
+  const map = new Map(currentAliases.map(alias => [`${alias.kind === 'username' ? 'username' : 'display_name'}:${normalizeAliasKey(alias.value)}`, alias]));
   (data.aliases || []).forEach(alias => {
-    const key = normalizeForScore(alias.value);
-    if (!key) return;
-    const existing = map.get(key) || { value: alias.value, kind: alias.kind || 'alias', count: 0, sources: [], evidence: [], confidence: 0 };
+    const normalizedValue = normalizeAliasKey(alias.value);
+    if (!normalizedValue) return;
+    const key = `${alias.kind === 'username' ? 'username' : 'display_name'}:${normalizedValue}`;
+    const query = alias.query || data.query || currentSearchQuery || searchInput?.value || '';
+    if (rejectedAliasKeys.has(aliasCandidateLocalKey(alias, query))) return;
+    const existing = map.get(key) || { value: alias.value, kind: alias.kind || 'display_name', count: 0, sources: [], evidence: [], confidence: 0, query };
     existing.sources = [...new Set([...(existing.sources || []), ...(alias.sources || [])])].slice(0, 6);
     existing.evidence = [...new Set([...(existing.evidence || []), ...(alias.evidence || [])])].slice(0, 4);
     existing.confidence = Math.max(existing.confidence || 0, alias.confidence || 0);
     existing.count = Math.max(existing.count || 0, alias.count || 1, existing.sources.length, existing.evidence.length);
+    existing.id = alias.id || existing.id;
+    existing.status = alias.status || existing.status || 'to_review';
+    existing.personId = alias.personId || existing.personId || null;
+    existing.query = query;
+    existing.kind = alias.kind === 'username' ? 'username' : 'display_name';
     map.set(key, existing);
   });
   currentAliases = [...map.values()].sort((a, b) => (b.confidence || 0) - (a.confidence || 0) || b.count - a.count).slice(0, 24);
+  if (!options.skipPersist && data.aliases?.length) scheduleAliasCandidatePersistence(data.aliases, data.query || currentSearchQuery);
 }
 
 function diagnosticState(item) {
@@ -1265,20 +1627,19 @@ function renderInsights() {
 
   if (aliasList) {
     aliasList.innerHTML = currentAliases.length
-      ? currentAliases.map(alias => `
-        <button type="button" class="alias-chip" data-alias="${escapeHtml(alias.value)}" title="${escapeHtml([alias.kind === 'display_name' ? 'Nom public' : 'Username', ...(alias.evidence || []), ...(alias.sources || [])].join(' · '))}">
+      ? currentAliases.map((alias, index) => `
+        <button type="button" class="alias-chip ${alias === selectedAliasCandidate || aliasCandidateLocalKey(alias, alias.query) === aliasCandidateLocalKey(selectedAliasCandidate, selectedAliasCandidate?.query) ? 'active' : ''}" data-alias-index="${index}" aria-pressed="${alias === selectedAliasCandidate ? 'true' : 'false'}">
           ${escapeHtml(alias.value)}
-          <span>${(alias.sources || []).length || alias.count} src</span>
+          <span>${Number(alias.confidence || 0)}% · ${(alias.sources || []).length || alias.count} src</span>
         </button>
       `).join('')
       : '<div class="muted-line">Aucun alias inféré pour le moment.</div>';
-    aliasList.querySelectorAll('[data-alias]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        searchInput.value = btn.dataset.alias;
-        addConsoleLog(`[ALIAS] Terme chargé : ${btn.dataset.alias}`, 'info');
-      });
+    aliasList.querySelectorAll('[data-alias-index]').forEach(btn => {
+      btn.addEventListener('click', () => selectAliasCandidate(currentAliases[Number(btn.dataset.aliasIndex)]));
     });
   }
+
+  renderAliasActionPanel();
 
   renderSourceDiagnostics();
 
@@ -1990,6 +2351,11 @@ async function fetchWaybackArchiveSearch(query) {
 async function runSearchWithCurrentControls(options = {}) {
   const query = searchInput.value.trim();
   if (!query) return;
+  const appendResults = options.append === true;
+  const parentQuery = String(options.aliasOf || currentSearchQuery || query).trim();
+  const parentSearchConfig = appendResults && lastSearchConfig
+    ? { ...lastSearchConfig, query: parentQuery }
+    : null;
   currentSearchQuery = query;
   
   // Read checked sources
@@ -2041,6 +2407,10 @@ async function runSearchWithCurrentControls(options = {}) {
     typeVal,
     colorVal
   };
+  if (appendResults) {
+    lastSearchConfig.append = true;
+    lastSearchConfig.parentQuery = parentQuery;
+  }
   
   statusConsoleWrapper.classList.remove('hidden');
   addConsoleLog(`Initialisation de la recherche pour : "${query}"`, 'info');
@@ -2053,7 +2423,8 @@ async function runSearchWithCurrentControls(options = {}) {
   if (sizeVal || typeVal) {
     addConsoleLog(`Filtres média actifs : taille="${sizeVal || 'toutes'}", type="${typeVal || 'tous'}"`, 'info');
   }
-  renderLoading();
+  if (appendResults) addConsoleLog(`[ALIAS] Fusion des resultats de "${query}" avec "${parentQuery}".`, 'info');
+  else renderLoading();
   
   // Reset and set status dots to loading
   resetAllStatusDots();
@@ -2061,22 +2432,26 @@ async function runSearchWithCurrentControls(options = {}) {
     updateSourceStatusDot(src, 'loading');
   });
   
-  // Reset counts
-  allImages = [];
-  allVideos = [];
-  filteredImages = [];
-  filteredVideos = [];
-  detectedAccounts = [];
-  currentAliases = [];
-  sourceDiagnostics = {};
-  if (accountsDashboard) accountsDashboard.classList.add('hidden');
-  if (insightsDashboard) insightsDashboard.classList.add('hidden');
-  if (accountsList) accountsList.innerHTML = '';
-  badgeImagesCount.textContent = '0';
-  badgeVideosCount.textContent = '0';
-  statsBar.classList.add('hidden');
-  filterInput.value = '';
-  document.getElementById('source-filter').value = 'all';
+  // Reset counts only for a replacement search. Alias merge keeps the current workspace.
+  if (!appendResults) {
+    allImages = [];
+    allVideos = [];
+    filteredImages = [];
+    filteredVideos = [];
+    detectedAccounts = [];
+    currentAliases = [];
+    selectedAliasCandidate = null;
+    sourceDiagnostics = {};
+    if (accountsDashboard) accountsDashboard.classList.add('hidden');
+    if (insightsDashboard) insightsDashboard.classList.add('hidden');
+    if (aliasActionPanel) aliasActionPanel.classList.add('hidden');
+    if (accountsList) accountsList.innerHTML = '';
+    badgeImagesCount.textContent = '0';
+    badgeVideosCount.textContent = '0';
+    statsBar.classList.add('hidden');
+    filterInput.value = '';
+    document.getElementById('source-filter').value = 'all';
+  }
 
   const restoredSnapshot = await restoreSearchSnapshot(lastSearchConfig);
   if (restoredSnapshot.images || restoredSnapshot.videos) {
@@ -2205,10 +2580,20 @@ async function runSearchWithCurrentControls(options = {}) {
     checkedSources.forEach(src => {
       updateSourceStatusDot(src, 'error');
     });
-    imagesGrid.innerHTML = '';
-    videosGrid.innerHTML = '';
-    renderEmptyState(imagesGrid, 'image');
-    renderEmptyState(videosGrid, 'video');
+    if (!appendResults) {
+      imagesGrid.innerHTML = '';
+      videosGrid.innerHTML = '';
+      renderEmptyState(imagesGrid, 'image');
+      renderEmptyState(videosGrid, 'video');
+    }
+  } finally {
+    if (appendResults) {
+      currentSearchQuery = parentQuery;
+      searchInput.value = parentQuery;
+      if (parentSearchConfig) lastSearchConfig = parentSearchConfig;
+      scheduleSearchSnapshotSave(0);
+      renderInsights();
+    }
   }
 }
 
@@ -2969,6 +3354,7 @@ refreshSearchHistory();
 loadMonitors();
 loadCollection();
 updatePersonActions();
+loadPersons();
 lucide.createIcons();
 
 // ----------------------------------------------------

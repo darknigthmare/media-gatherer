@@ -135,6 +135,13 @@
 
         <div class="person-panel person-main">
           <div id="person-detail" class="person-detail empty">Selectionne ou cree une fiche personne.</div>
+          <details class="person-alias-drawer hidden" id="person-alias-drawer" open>
+            <summary>
+              <span><i data-lucide="tags"></i> Alias a valider</span>
+              <span id="person-alias-summary">0 candidat</span>
+            </summary>
+            <div id="person-alias-candidates" class="person-alias-candidates"></div>
+          </details>
           <div class="person-search-controls">
             <label>Profondeur<select id="person-depth">
               <option value="quick">Rapide</option>
@@ -893,6 +900,7 @@
             <span>Alias trouvés</span>
           </div>
           <div class="alias-list" id="alias-list"></div>
+          <div class="alias-action-panel hidden" id="alias-action-panel" aria-live="polite"></div>
         </div>
         <details class="insight-panel diagnostic-drawer" id="source-diagnostic-drawer">
           <summary class="insight-panel-header">

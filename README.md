@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 96 sources : 22 normales, 15 sociales, 8 d'identite et 51 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.6.0 ajoute Common Crawl, SearXNG, Lemmy, GitHub, Odysee, MusicBrainz, GDELT, Podcast Index, Pixelfed, Pexels, GIPHY, Fanvue, cinq plateformes de profils webcam publics, Indexxx, Boobpedia, Gelbooru et Danbooru. Les API et instances configurables ont un adaptateur dedie; les profils NSFW publics conservent le crawl borne et les fallbacks de decouverte existants. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
+La version 1.6.1 rend les alias actionnables de bout en bout : nouvelle recherche, ajout aux resultats courants, transfert structure vers Person Finder, validation, rejet durable et preuves accessibles. La version 1.6.0 avait ajoute Common Crawl, SearXNG, Lemmy, GitHub, Odysee, MusicBrainz, GDELT, Podcast Index, Pixelfed, Pexels, GIPHY, Fanvue, cinq plateformes de profils webcam publics, Indexxx, Boobpedia, Gelbooru et Danbooru. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -84,6 +84,8 @@ Les identifiants saisis dans l'onglet Connexions restent en memoire de session s
 - Eporner utilise son API publique en priorite, puis repasse sur la recherche HTML et les moteurs publics si elle ne repond pas.
 - La meilleure URL connue est conservee lors du dedoublonnage ; une miniature ne remplace pas un original.
 - Les alias ne sont proposes qu'avec une preuve de profil ou de nom public ; les liens sortants des hubs publics restent des candidats a verifier et les chemins techniques de forum sont exclus.
+- Un alias trouve ouvre un panneau d'actions : rechercher, fusionner ses medias avec les resultats visibles, l'envoyer vers une fiche Person Finder ou le rejeter. La confiance, les sources et les preuves restent attachees au candidat.
+- Person Finder separe les alias a verifier, confirmes et rejetes. Un alias confirme devient un terme de recherche direct; un rejet n'est pas reintroduit silencieusement par la resolution d'identite suivante.
 - La resolution d'identite croise Wikidata, les reseaux publics et les hubs de liens avant la recherche Person Finder.
 - Les empreintes dHash sont calculees apres affichage via le proxy local, sans retarder l'arrivee progressive des resultats.
 

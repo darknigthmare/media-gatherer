@@ -37,21 +37,51 @@ function mergeIdentityEvidence(query, discoveredAliases = [], sourceStatus = {})
 
 function applyIdentityEvidenceToPerson(person, aliases = [], accounts = []) {
   const primary = normalizeIdentityValue(person.displayName || person.name);
+  const rejectedAliases = new Set((person.aliasEvidence || [])
+    .filter(candidate => candidate.status === 'rejected')
+    .map(candidate => `${candidate.kind === 'username' ? 'username' : 'display_name'}:${normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''))}`));
   const displayAliases = aliases
     .filter(alias => alias.kind !== 'username' && Number(alias.confidence || 0) >= 75)
     .map(alias => alias.value)
-    .filter(value => normalizeIdentityValue(value) !== primary);
+    .filter(value => normalizeIdentityValue(value) !== primary)
+    .filter(value => !rejectedAliases.has(`display_name:${normalizeIdentityValue(value)}`));
   const usernames = aliases
     .filter(alias => alias.kind === 'username' && Number(alias.confidence || 0) >= 80)
     .map(alias => alias.value.replace(/^@/, ''))
-    .filter(value => normalizeIdentityValue(value) !== primary);
+    .filter(value => normalizeIdentityValue(value) !== primary)
+    .filter(value => !rejectedAliases.has(`username:${normalizeIdentityValue(value)}`));
   const existingAccounts = Array.isArray(person.accounts) ? person.accounts : [];
   const accountRows = (accounts || []).filter(Boolean).map(url => typeof url === 'string' ? { url } : url);
   const accountMap = new Map([...existingAccounts, ...accountRows].map(account => [String(account.url || `${account.platform || ''}:${account.username || ''}`).toLowerCase(), account]));
+  const evidenceMap = new Map((person.aliasEvidence || []).map(candidate => [
+    `${candidate.kind || 'display_name'}:${normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''))}`,
+    candidate
+  ]));
+  aliases.forEach(alias => {
+    if (!alias?.value) return;
+    const kind = alias.kind === 'username' ? 'username' : 'display_name';
+    const normalizedValue = normalizeIdentityValue(String(alias.value).replace(/^@/, ''));
+    if (!normalizedValue) return;
+    const key = `${kind}:${normalizedValue}`;
+    const existing = evidenceMap.get(key) || {};
+    evidenceMap.set(key, {
+      ...existing,
+      value: kind === 'username' ? `@${String(alias.value).replace(/^@+/, '')}` : String(alias.value).trim(),
+      normalizedValue,
+      kind,
+      status: existing.status === 'rejected' ? 'rejected' : (alias.status || existing.status || 'probable'),
+      confidence: Math.max(Number(existing.confidence || 0), Number(alias.confidence || 0)),
+      sources: [...new Set([...(existing.sources || []), ...(alias.sources || []), alias.sourceId].filter(Boolean))].slice(0, 10),
+      evidence: [...new Set([...(existing.evidence || []), ...(alias.evidence || []), alias.url].filter(Boolean))].slice(0, 10),
+      discoveredAt: existing.discoveredAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  });
   return {
     ...person,
-    aliases: [...new Set([...(person.aliases || []), ...displayAliases])],
-    usernames: [...new Set([...(person.usernames || []), ...usernames])],
+    aliases: [...new Set([...(person.aliases || []).filter(value => !rejectedAliases.has(`display_name:${normalizeIdentityValue(value)}`)), ...displayAliases])],
+    usernames: [...new Set([...(person.usernames || []).filter(value => !rejectedAliases.has(`username:${normalizeIdentityValue(String(value).replace(/^@/, ''))}`)), ...usernames])],
+    aliasEvidence: [...evidenceMap.values()],
     accounts: [...accountMap.values()],
     identityResolvedAt: new Date().toISOString()
   };

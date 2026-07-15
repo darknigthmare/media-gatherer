@@ -1,6 +1,6 @@
 # Etat et suite
 
-## Integre dans la version 1.5.6
+## Integre jusqu'a la version 1.6.1
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
@@ -27,6 +27,8 @@
 - Dedoublonnage perceptuel optionnel des images en plus des URL et signatures visuelles.
 - Tiroirs defilables pour la liste NSFW, la repartition des sources et les diagnostics.
 - Alias deduits uniquement depuis une preuve de profil ou de nom public; chemins de forum exclus.
+- Workflow d'alias complet : candidats structures, provenance, recherche de remplacement, fusion aux resultats, pont Media Finder vers Person Finder, confirmation, rejet et suppression.
+- Tiroir de validation des alias par fiche personne et relance directe de Media Finder depuis chaque alias confirme ou candidat.
 - Etats distincts pour acces direct, fallback actif, blocage, limitation et source indisponible.
 - Profils Person Finder, alias detectes ou saisis, comptes publics, score, galerie, timeline, validation et exclusions.
 - Securite HTTP, SSRF, CORS, CSP, rate limits, limites de taille et token d'ecriture facultatif.
