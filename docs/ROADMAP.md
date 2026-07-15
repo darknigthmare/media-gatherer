@@ -11,10 +11,10 @@
 - Recherche Wayback par terme, domaines officiels ou personnels probables et extraction CDX rapide par domaine sans filtre de nom apres validation du site.
 - Cache navigateur IndexedDB separe par requete, sources et niveau adulte, restaure pendant les recherches et complete par le refresh.
 - Diagnostics bruts/retenus/rejetes pour expliquer precisement les baisses de volume.
-- 42 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
+- 51 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
 - Eporner API v2 prioritaire, plus XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz en HTML public.
 - Recherches publiques Phun Forum, PlanetSuzy et Bellazon, avec crawl borne des sujets correspondants.
-- 76 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
+- 96 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
 - Openverse via API publique, plus Snapchat et Threads en profils publics.
 - Audit live reproductible de toutes les sources, avec etats operationnel, degrade, vide, configuration, blocage, limitation, faux positif et erreur.
 - Second transport Bing Images asynchrone et fallback indexe limite au domaine pour les sites rendus en JavaScript.

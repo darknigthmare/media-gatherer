@@ -1,0 +1,1326 @@
+{
+  "generatedAt": "2026-07-15T06:26:33.419Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:3016",
+  "queryMode": "category-smoke-queries; safe=per-source",
+  "catalog": {
+    "sources": 96,
+    "selectedSources": 11,
+    "adapters": 96,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 11,
+    "operational": 3,
+    "degraded": 1,
+    "false_positive": 0,
+    "empty": 2,
+    "configuration_required": 4,
+    "access_blocked": 0,
+    "rate_limited": 1,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "commoncrawl",
+      "label": "Common Crawl",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "commoncrawl-warc",
+      "implementation": "dedicated-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "commoncrawl.org"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 13454,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "commoncrawl-warc",
+        "imagesCount": 5,
+        "videosCount": 5,
+        "zeroReason": "",
+        "note": "2 captures trouvees, 2 WARC ouvertes dans CC-MAIN-2026-25; 1 essais ignores",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [
+          {
+            "url": "https://www.nasa.gov/",
+            "title": "NASAhttps://www.nasa.gov",
+            "archivedAt": "20260606074822",
+            "collection": "CC-MAIN-2026-25"
+          },
+          {
+            "url": "https://en.wikipedia.org/wiki/NASA",
+            "title": "Wikipediahttps://en.wikipedia.org › wiki › NASA",
+            "archivedAt": "20260609145118",
+            "collection": "CC-MAIN-2026-25"
+          }
+        ],
+        "pagesDiscovered": 4,
+        "pagesCrawled": 2,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "NASA’s Juno Reveals New Insights into Cosmic Ray Origins",
+          "description": "",
+          "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/hpd/foreshock-bowshock.jpg?w=1024",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/hpd/foreshock-bowshock.jpg?w=1024",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Hello, World! NASA Shares New Home for Roman Space Telescope Updates",
+          "description": "",
+          "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/missions/rst/cleanroom-photos/6.3%2060%20min%20bts.jpg?w=1024",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/missions/rst/cleanroom-photos/6.3%2060%20min%20bts.jpg?w=1024",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "What’s Up: June 2026 Skywatching Tips from NASA",
+          "description": "",
+          "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/solar-system/skywatching/2026/june/55129740863_8d1388b2d2_o.jpg?w=1024",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/solar-system/skywatching/2026/june/55129740863_8d1388b2d2_o.jpg?w=1024",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Gravity Waves From Super Typhoon Sinlaku",
+          "description": "",
+          "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/iotd/2026/gravity-waves-from-super-typhoon-sinlaku/sinlaku_gravitywaves_airs_20260413_th.jpg?w=1024",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/esd/eo/images/iotd/2026/gravity-waves-from-super-typhoon-sinlaku/sinlaku_gravitywaves_airs_20260413_th.jpg?w=1024",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "image",
+          "title": "NASA Wideband Demo Completes Primary Mission, Extends Operations  ",
+          "description": "",
+          "url": "https://www.nasa.gov/wp-content/uploads/2026/01/pext-terminal-signal-2.jpg",
+          "thumbnail": "https://www.nasa.gov/wp-content/uploads/2026/01/pext-terminal-signal-2.jpg",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "4 min readWhat’s Up: June 2026 Skywatching Tips from NASAarticle5 days ago",
+          "description": "",
+          "url": "https://science.nasa.gov/solar-system/whats-up-june-2026-skywatching-tips-from-nasa/",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/solar-system/skywatching/2026/june/55129740863_8d1388b2d2_o.jpg?w=1024",
+          "link": "https://science.nasa.gov/solar-system/whats-up-june-2026-skywatching-tips-from-nasa/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Skywatching",
+          "description": "",
+          "url": "https://science.nasa.gov/skywatching/",
+          "thumbnail": "",
+          "link": "https://science.nasa.gov/skywatching/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "6 min read\n\n\t\t\n\t\t\tTotal Solar Eclipse on August 12, 2026\n\t\t\n\n\t\t\n\n\t\t\t\n\t\t\t\t\n\t\t\t\tarticle\n\t\t\t\n\n\t\t\t7 hours ago",
+          "description": "",
+          "url": "https://science.nasa.gov/eclipses/future-eclipses/total-solar-eclipse-on-august-12-2026/",
+          "thumbnail": "https://assets.science.nasa.gov/dynamicimage/assets/science/hpd/eclipse/eclipse_map_20260812.jpg?w=1024",
+          "link": "https://science.nasa.gov/eclipses/future-eclipses/total-solar-eclipse-on-august-12-2026/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "Common Crawl video",
+          "description": "",
+          "url": "https://www.nasa.gov/wp-content/plugins/nasa-hds-core-setup/assets/favicons/site.webm",
+          "thumbnail": "",
+          "link": "https://www.nasa.gov/",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "Europa Clipper",
+          "description": "",
+          "url": "https://en.wikipedia.org/wiki/Europa_Clipper",
+          "thumbnail": "https://en.wikipedia.org/static/images/icons/enwiki-25.svg",
+          "link": "https://en.wikipedia.org/wiki/Europa_Clipper",
+          "sourceId": "commoncrawl",
+          "matchReasons": [
+            "aucune preuve textuelle suffisante"
+          ],
+          "confidenceScore": 20
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 10,
+        "queryRelevantSamples": 9,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 2,
+        "missingUrls": 0
+      },
+      "state": "degraded"
+    },
+    {
+      "id": "searxng",
+      "label": "SearXNG",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "endpoint",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "searxng-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "docs.searxng.org"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 15,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "searxng-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_configuration",
+        "note": "Renseignez une instance SearXNG avec sortie JSON dans Connexions API",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "odysee",
+      "label": "Odysee / LBRY",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "video",
+        "page"
+      ],
+      "adapterMode": "odysee-claims-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "odysee.com"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 1383,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "odysee-claims-api",
+        "imagesCount": 0,
+        "videosCount": 5,
+        "zeroReason": "",
+        "note": "Index public de claims Odysee/LBRY",
+        "accounts": [
+          "https://odysee.com/@RandomFandubsSS:d",
+          "https://odysee.com/@Goherence:0",
+          "https://odysee.com/@AugenAufMedienAnalyse:6",
+          "https://odysee.com/@etresouverain:c",
+          "https://odysee.com/@Autresvidéos:e"
+        ],
+        "identityAliases": [
+          {
+            "value": "@RandomFandubsSS",
+            "kind": "username",
+            "confidence": 88,
+            "evidence": [
+              "https://odysee.com/@RandomFandubsSS:d"
+            ]
+          },
+          {
+            "value": "@Goherence",
+            "kind": "username",
+            "confidence": 88,
+            "evidence": [
+              "https://odysee.com/@Goherence:0"
+            ]
+          },
+          {
+            "value": "@AugenAufMedienAnalyse",
+            "kind": "username",
+            "confidence": 88,
+            "evidence": [
+              "https://odysee.com/@AugenAufMedienAnalyse:6"
+            ]
+          },
+          {
+            "value": "@etresouverain",
+            "kind": "username",
+            "confidence": 88,
+            "evidence": [
+              "https://odysee.com/@etresouverain:c"
+            ]
+          },
+          {
+            "value": "@Autresvidéos",
+            "kind": "username",
+            "confidence": 88,
+            "evidence": [
+              "https://odysee.com/@Autresvidéos:e"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://odysee.com/@RandomFandubsSS:d/Misunderstanding-done:3",
+            "title": "TONIKAWA: Over The Moon For You Clip | Misunderstanding | Fandub"
+          },
+          {
+            "url": "https://odysee.com/@Goherence:0/180---Current-Availability-button:2",
+            "title": "180 - Current Availability Button"
+          },
+          {
+            "url": "https://odysee.com/@AugenAufMedienAnalyse:6/Redacted-News_20260422_2:f",
+            "title": "Impfstoffe aus dem Weltraum – Das ist weitaus gefährlicher als die Covid-Impfung (Redacted News)"
+          },
+          {
+            "url": "https://odysee.com/@etresouverain:c/xZaGG0uo36bCRQ-U:8",
+            "title": "Un astronaute de la NASA partage une vidéo non montée de la Lune, filmée avec son iPhone pendant la mission Artemis II."
+          },
+          {
+            "url": "https://odysee.com/@Autresvidéos:e/Vidéo-divulguée-par-la-NASA-du-satellite-Black-Knight:2",
+            "title": "Vidéo divulguée par la NASA du satellite Black Knight"
+          }
+        ],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [
+        {
+          "type": "video",
+          "title": "TONIKAWA: Over The Moon For You Clip | Misunderstanding | Fandub",
+          "description": "CAST\n\nNasa Yuzaki - BeablyBoy\nTsukasa Yuzaki - SabiVA\nKaname Arisugawa - Apocalamb\nAya Arisugawa - SoftBunny\nChitose Kaginoji - OhGeezus\nWomen - Rin, SoftBunny, SabiVA",
+          "url": "https://odysee.com/@RandomFandubsSS:d/Misunderstanding-done:3",
+          "thumbnail": "https://thumbs.odycdn.com/b49969f429322f4cc2cec8b345049f8d.webp",
+          "link": "https://odysee.com/@RandomFandubsSS:d/Misunderstanding-done:3",
+          "sourceId": "odysee",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "video",
+          "title": "180 - Current Availability Button",
+          "description": "Gusto mo ba malaman ang balanse ng intyon imbentaryo kahit nasa kalagitnaan ng transaction? Pwede po, tara ating tingnan",
+          "url": "https://odysee.com/@Goherence:0/180---Current-Availability-button:2",
+          "thumbnail": "https://thumbs.odycdn.com/1f57411cb51e47026a8b99f33ab02ed7.webp",
+          "link": "https://odysee.com/@Goherence:0/180---Current-Availability-button:2",
+          "sourceId": "odysee",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "video",
+          "title": "Impfstoffe aus dem Weltraum – Das ist weitaus gefährlicher als die Covid-Impfung (Redacted News)",
+          "description": "[Morgen, Freitag, für alle 😊] (Redacted News - Deutsch) Die NASA finanziert das Weltraum-Pharma-Projekt „SpaceMD“ von Red Wire, bei dem mithilfe einer Technologie namens „Pillbox“ unter Mikrogravitation auf der Internationalen Raumstation Arzneimittelkristalle gezüchtet werden – Kristalle, die bereits mit der Entwicklung von Insulin und mRNA-Impfstoffen der nächsten Generation in Verbindung stehen. Kritiker warnen, dass sich die Arzneimittelentwicklung dadurch der öffentlichen Kontrolle, der rechtlichen Zuständigkeit und der Rechenschaftspflicht entzieht. Angesichts der Tatsache, dass GLP-1-Medikamente wie Ozempic mit Organversagen und einer zunehmenden Zahl von Klagen in Verbindung gebracht werden und die MAHA-Reformen stillschweigend zu Fall gebracht werden, stellt sich die Frage: Flüchtet die Pharmaindustrie in den Weltraum?\n\nFür Dich mit KI-Unterstützung auf Deutsch übersetzt und vertont, der Redacted News Beitrag vom 22. April 2026\n\n▬▬▬▬ Quellen ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n @RedactedNews  \nhttps://www.youtube.com/watch?v=DT_Nb1HCsHQ\n\n▬▬▬▬ Unterstützen? ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\nDanke. Besuche den Augen Auf SHOP! Vielleicht ist was für Dich dabei.\nhttps://shop.augenaufmedien.de\n\nOder Du bist offen für einen Energieausleich\nBitte als \"Schenkung ohne Gegenleistung und ohne Zweckbindung\" kennzeichnen.\n\nPaypal: https://paypal.me/augenaufmedien\nbzw. an paypal@augenaufmedienanalyse.de\n\nAls Überweisung oder Dauerauftrag:\nKontoinhaber: Augen Auf Medien UG\nIBAN: DE37 2135 2240 0186 5535 74\n\n▬▬▬▬ Telegram ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\nKanal \"Augen Auf Medien Analyse\", unzensiert\nhttps://t.me/AugenAufMA\n\nKanal \"Video Translate Projects\":\nhttps://t.me/VideoTranslateProjects\n\n▬▬▬▬ Odysee / LBRY▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\nhttps://odysee.com/@AugenAufMedienAnalyse\nHier findest Du alle Videos, auch die hier zensierten.\n\n▬▬▬▬ Website ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\nhttps://augenaufmedienanalyse.de\nhttps://shop.augenaufmedien.de\n\n▬▬▬  Augen Auf Medien Analyse ▬▬▬▬▬▬▬▬▬▬▬▬\n▬▬▬   & Video Translate Projects ▬▬▬▬▬▬▬▬▬▬▬▬\n\nSind nebenberufliches Engagement, mit Beteiligung von Menschen, die sich für die Freiheit und die Demokratie Erhaltung einsetzen, in ihrer Freizeit.\n\nAlle Initiativen & Projekte: \nhttps://augenaufmedienanalyse.de/2022/02/18/projekte/\n\n▬▬▬▬ Musik ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\nFinal Game von Frametraxx \nhttps://www.frametraxx.de/info/gemafreie-filmmusik.html\nMit Gemafreier Filmmusik\n\n---\nhttps://youtu.be/GKWxl8MkV7s",
+          "url": "https://odysee.com/@AugenAufMedienAnalyse:6/Redacted-News_20260422_2:f",
+          "thumbnail": "https://thumbs.odycdn.com/b4ab8b6958f1fc3752ac241e8f15ee0b.webp",
+          "link": "https://odysee.com/@AugenAufMedienAnalyse:6/Redacted-News_20260422_2:f",
+          "sourceId": "odysee",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "video",
+          "title": "Un astronaute de la NASA partage une vidéo non montée de la Lune, filmée avec son iPhone pendant la mission Artemis II.",
+          "description": "",
+          "url": "https://odysee.com/@etresouverain:c/xZaGG0uo36bCRQ-U:8",
+          "thumbnail": "https://thumbs.odycdn.com/5ca4cceaa27ac39e2151d06383af2520.webp",
+          "link": "https://odysee.com/@etresouverain:c/xZaGG0uo36bCRQ-U:8",
+          "sourceId": "odysee",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Vidéo divulguée par la NASA du satellite Black Knight",
+          "description": "",
+          "url": "https://odysee.com/@Autresvidéos:e/Vidéo-divulguée-par-la-NASA-du-satellite-Black-Knight:2",
+          "thumbnail": "https://thumbs.odycdn.com/91cefd4c27b2472e69f6518b60502843.webp",
+          "link": "https://odysee.com/@Autresvidéos:e/Vidéo-divulguée-par-la-NASA-du-satellite-Black-Knight:2",
+          "sourceId": "odysee",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 5,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "gdelt",
+      "label": "GDELT Actualites",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "gdelt-doc-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "gdeltproject.org"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 11011,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": false,
+        "adapter": "gdelt-doc-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "rate_limited",
+        "note": "GDELT indisponible: HTTP 429",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": false
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "rate_limited"
+    },
+    {
+      "id": "podcastindex",
+      "label": "Podcast Index",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "podcast-index-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "podcastindex.org"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 7,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "podcast-index-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle et secret Podcast Index requis dans Connexions API",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "pexels",
+      "label": "Pexels",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "pexels-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "pexels.com"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 6,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "pexels-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle Pexels requise dans Connexions API",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "giphy",
+      "label": "GIPHY",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image"
+      ],
+      "adapterMode": "giphy-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "giphy.com"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 7,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "giphy-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle GIPHY requise dans Connexions API",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "lemmy",
+      "label": "Lemmy",
+      "category": "social",
+      "nsfw": false,
+      "auth": "instance-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "lemmy-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "lemmy.world"
+      ],
+      "query": "Douglas Adams",
+      "httpStatus": 200,
+      "durationMs": 1825,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "lemmy-api",
+        "imagesCount": 3,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "API publique lemmy.world",
+        "accounts": [
+          "https://slrpnk.net/u/sodalite",
+          "https://lemmy.world/u/sodalite",
+          "https://hackertalks.com/u/jet",
+          "https://mastodon.uno/users/tizianocaviglia",
+          "https://mastodon.uno/users/dret",
+          "https://poliversity.it/users/trapiantodipelo",
+          "https://feddit.org/u/marv99",
+          "https://lemmy.durstig.online/u/eifachposte",
+          "https://feddit.online/u/tuckerm",
+          "https://lemmy.world/u/Innerworld",
+          "https://lemmy.world/u/DouglasAdamsApple",
+          "https://lemmy.blahaj.zone/u/DouglasAdams_42",
+          "https://lemmings.world/u/DouglasAdams_42"
+        ],
+        "identityAliases": [
+          {
+            "value": "@sodalite",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://slrpnk.net/u/sodalite",
+              "https://slrpnk.net/post/40208087"
+            ]
+          },
+          {
+            "value": "@sodalite",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://lemmy.world/u/sodalite",
+              "https://lemmy.world/post/49369691"
+            ]
+          },
+          {
+            "value": "@jet",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://hackertalks.com/u/jet",
+              "https://hackertalks.com/post/27665378"
+            ]
+          },
+          {
+            "value": "@tizianocaviglia",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://mastodon.uno/users/tizianocaviglia",
+              "https://mastodon.uno/users/tizianocaviglia/statuses/116637445635863313"
+            ]
+          },
+          {
+            "value": "Tiziano Caviglia",
+            "kind": "display_name",
+            "confidence": 78,
+            "evidence": [
+              "https://mastodon.uno/users/tizianocaviglia"
+            ]
+          },
+          {
+            "value": "@dret",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://mastodon.uno/users/dret",
+              "https://mastodon.uno/users/dret/statuses/116635949888084109"
+            ]
+          },
+          {
+            "value": "Dret :mastodon:",
+            "kind": "display_name",
+            "confidence": 78,
+            "evidence": [
+              "https://mastodon.uno/users/dret"
+            ]
+          },
+          {
+            "value": "@trapiantodipelo",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://poliversity.it/users/trapiantodipelo",
+              "https://poliversity.it/users/trapiantodipelo/statuses/116635408667299878"
+            ]
+          },
+          {
+            "value": "Pelosetto",
+            "kind": "display_name",
+            "confidence": 78,
+            "evidence": [
+              "https://poliversity.it/users/trapiantodipelo"
+            ]
+          },
+          {
+            "value": "@marv99",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://feddit.org/u/marv99",
+              "https://feddit.org/post/30279002"
+            ]
+          },
+          {
+            "value": "@eifachposte",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://lemmy.durstig.online/u/eifachposte",
+              "https://lemmy.durstig.online/post/30086"
+            ]
+          },
+          {
+            "value": "@tuckerm",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://feddit.online/u/tuckerm",
+              "https://feddit.online/c/atheism/p/1671057/douglas-adams-march-11-1952-may-11-2001-the-puddle-analogy"
+            ]
+          },
+          {
+            "value": "tuckerm",
+            "kind": "display_name",
+            "confidence": 78,
+            "evidence": [
+              "https://feddit.online/u/tuckerm"
+            ]
+          },
+          {
+            "value": "@Innerworld",
+            "kind": "username",
+            "confidence": 84,
+            "evidence": [
+              "https://lemmy.world/u/Innerworld",
+              "https://lemmy.world/post/46730337"
+            ]
+          },
+          {
+            "value": "@DouglasAdamsApple",
+            "kind": "username",
+            "confidence": 92,
+            "evidence": [
+              "https://lemmy.world/u/DouglasAdamsApple"
+            ]
+          },
+          {
+            "value": "@DouglasAdams_42",
+            "kind": "username",
+            "confidence": 92,
+            "evidence": [
+              "https://lemmy.blahaj.zone/u/DouglasAdams_42"
+            ]
+          },
+          {
+            "value": "@DouglasAdams_42",
+            "kind": "username",
+            "confidence": 92,
+            "evidence": [
+              "https://lemmings.world/u/DouglasAdams_42"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://slrpnk.net/post/40208087",
+            "title": "Kakos Industries – Do Evil Better"
+          },
+          {
+            "url": "https://lemmy.world/post/49369691",
+            "title": "Kakos Industries – Do Evil Better"
+          },
+          {
+            "url": "https://hackertalks.com/post/27665378",
+            "title": "The Tragedy of the Empathetic Carnivore - Nick Mailer [Lecture]"
+          },
+          {
+            "url": "https://mastodon.uno/users/tizianocaviglia/statuses/116637445635863313",
+            "title": "L'improbabile origine della Guida galattica per gli autostoppisti di Douglas Adams"
+          },
+          {
+            "url": "https://mastodon.uno/users/dret/statuses/116635949888084109",
+            "title": "𝗢𝗚𝗚𝗜 𝗘' 𝗜𝗟 \"𝗧𝗢𝗪𝗘𝗟 𝗗𝗔𝗬\" !!!"
+          },
+          {
+            "url": "https://poliversity.it/users/trapiantodipelo/statuses/116635408667299878",
+            "title": "È il Towel Day, dedicato a Douglas Adams e alla sua 'Guida galattica per autostoppisti'"
+          },
+          {
+            "url": "https://feddit.org/post/30279002",
+            "title": "Stardust Hotel - Staffel 1 der Serie | ARD"
+          },
+          {
+            "url": "https://lemmy.durstig.online/post/30086",
+            "title": "The Conscious Bridge"
+          },
+          {
+            "url": "https://feddit.online/c/atheism/p/1671057/douglas-adams-march-11-1952-may-11-2001-the-puddle-analogy",
+            "title": "Douglas Adams (March 11, 1952 - May 11, 2001) - The Puddle Analogy"
+          },
+          {
+            "url": "https://lemmy.world/post/46730337",
+            "title": "I may not have gone where I intended to go, but I think I have ended up where I needed to be. —Douglas Adams"
+          }
+        ],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "L'improbabile origine della Guida galattica per gli autostoppisti di Douglas Adams",
+          "description": "L'improbabile origine della Guida galattica per gli autostoppisti di Douglas Adams  \n[\\#DouglasAdams](https://mastodon.uno/tags/DouglasAdams) [#TowelDay](https://mastodon.uno/tags/TowelDay) [@cultura](https://diggita.com/c/cultura)  \nPoche opere della letteratura contemporanea sono riuscite a fondere fantascienza, comicità assurda e riflessione filosofica quanto la Guida...  \n[https://www.tizianocaviglia.name/2026/05/25/l-improbabile-origine-della-guida-galattica-per-gli-autostoppisti-di-douglas-adams/13428/](https://www.tizianocaviglia.name/2026/05/25/l-improbabile-origine-della-guida-galattica-per-gli-autostoppisti-di-douglas-adams/13428/)",
+          "url": "https://cdn.masto.host/mastodonuno/media_attachments/files/116/637/426/986/581/282/original/0ee72e64676db7d8.jpg",
+          "thumbnail": "https://lemmy.world/pictrs/image/4fbc0afb-377c-4352-ad4c-81cde8377635.jpeg",
+          "link": "https://mastodon.uno/users/tizianocaviglia/statuses/116637445635863313",
+          "sourceId": "lemmy",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "𝗢𝗚𝗚𝗜 𝗘' 𝗜𝗟 \"𝗧𝗢𝗪𝗘𝗟 𝗗𝗔𝗬\" !!!",
+          "description": "𝗢𝗚𝗚𝗜 𝗘' 𝗜𝗟 \"𝗧𝗢𝗪𝗘𝗟 𝗗𝗔𝗬\" !!!\n\n25 Maggio 2026\n\n...\"L’asciugamano è forse l’oggetto più utile che l’autostoppista galattico  \npossa avere...\"\n\n\"... tra altre cose, potete usarlo per evitare lo sguardo della Vorace Bestia Bugblatta di Traal (un animale abominevolmente stupido, che pensa che se voi non lo vedete, nemmeno lui possa vedere voi: è matto da legare, ma molto, molto vorace)\"\n\n(cit. La Guida Galattica per Autostoppisti - Douglas Adams)\n\n[@cultura](https://diggita.com/c/cultura)\n\n[\\#towelday](https://mastodon.uno/tags/towelday) [#douglasadams](https://mastodon.uno/tags/douglasadams) [#guidagalattica](https://mastodon.uno/tags/guidagalattica) [#scifi](https://mastodon.uno/tags/scifi)",
+          "url": "https://cdn.masto.host/mastodonuno/media_attachments/files/116/635/920/011/238/175/original/11a976197563c530.png",
+          "thumbnail": "https://lemmy.world/pictrs/image/9c98ebce-185a-4ede-b493-5fd4e2e5dc4c.png",
+          "link": "https://mastodon.uno/users/dret/statuses/116635949888084109",
+          "sourceId": "lemmy",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "image",
+          "title": "Stardust Hotel - Staffel 1 der Serie | ARD",
+          "description": "Wir freuen uns tierisch über diese deutsche(!) SciFi-(Komödien)-Serie. Es gibt Roboter und nicht-funktioniale Technik, wie bei Douglas Adams, trashige Umgebung, wie bei Ijon Tichy und nette Anspielungen auf klassiche SciFi.\n\n::: spoiler Achtung Spoiler bzgl. der Thematiken\nDie Geschichten behandeln in leicht und lockerer Weise SciFi Themen, wie eine Gesellschaft in der Post-Apokalypse, Konflikte in den Gesetzen der Robotik, Seelentransfer in eine Maschine, Update der Persönlichkeit, ...\n:::\n\nUnd die Schauspieler finden wir auch sympathisch :)",
+          "url": "https://www.ardmediathek.de/img?imwidth=1280&url=https%3A%2F%2Fapi.ardmediathek.de%2Fimage-service%2Fimages%2Furn%3Aard%3Aimage%3A99a8a058472455ac%3Fw%3D%7Bwidth%7D%26ch%3Ddadd0cfd291b1d28",
+          "thumbnail": "https://www.ardmediathek.de/img?imwidth=1280&url=https%3A%2F%2Fapi.ardmediathek.de%2Fimage-service%2Fimages%2Furn%3Aard%3Aimage%3A99a8a058472455ac%3Fw%3D%7Bwidth%7D%26ch%3Ddadd0cfd291b1d28",
+          "link": "https://feddit.org/post/30279002",
+          "sourceId": "lemmy",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 3,
+        "queryRelevantSamples": 3,
+        "sourceDomainSamples": 2,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "pixelfed",
+      "label": "Pixelfed",
+      "category": "social",
+      "nsfw": false,
+      "auth": "instance-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "pixelfed-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "pixelfed.social"
+      ],
+      "query": "Douglas Adams",
+      "httpStatus": 200,
+      "durationMs": 3826,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "pixelfed-api",
+        "note": "0 media public extractible; pixelfed.social: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "github",
+      "label": "GitHub Public",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "token-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "github-users-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "github.com"
+      ],
+      "query": "Douglas Adams",
+      "httpStatus": 200,
+      "durationMs": 1674,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "github-users-api",
+        "imagesCount": 4,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "API GitHub publique non authentifiee",
+        "accounts": [
+          "https://github.com/rikyoz",
+          "https://github.com/marcusramberg",
+          "https://github.com/tomconte",
+          "https://github.com/hajschroeder"
+        ],
+        "identityAliases": [
+          {
+            "value": "@rikyoz",
+            "kind": "username",
+            "confidence": 94,
+            "evidence": [
+              "https://github.com/rikyoz"
+            ]
+          },
+          {
+            "value": "Riccardo",
+            "kind": "display_name",
+            "confidence": 90,
+            "evidence": [
+              "https://github.com/rikyoz"
+            ]
+          },
+          {
+            "value": "@marcusramberg",
+            "kind": "username",
+            "confidence": 94,
+            "evidence": [
+              "https://github.com/marcusramberg"
+            ]
+          },
+          {
+            "value": "Marcus Ramberg",
+            "kind": "display_name",
+            "confidence": 90,
+            "evidence": [
+              "https://github.com/marcusramberg"
+            ]
+          },
+          {
+            "value": "@tomconte",
+            "kind": "username",
+            "confidence": 94,
+            "evidence": [
+              "https://github.com/tomconte"
+            ]
+          },
+          {
+            "value": "Thomas Conté",
+            "kind": "display_name",
+            "confidence": 90,
+            "evidence": [
+              "https://github.com/tomconte"
+            ]
+          },
+          {
+            "value": "@tomconte",
+            "kind": "username",
+            "confidence": 82,
+            "evidence": [
+              "https://github.com/tomconte",
+              "https://x.com/tomconte"
+            ]
+          },
+          {
+            "value": "@hajschroeder",
+            "kind": "username",
+            "confidence": 94,
+            "evidence": [
+              "https://github.com/hajschroeder"
+            ]
+          },
+          {
+            "value": "Hans J.",
+            "kind": "display_name",
+            "confidence": 90,
+            "evidence": [
+              "https://github.com/hajschroeder"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://github.com/rikyoz",
+            "title": "Riccardo",
+            "description": "Software Developer 💻 ~                               \r\n«Time is an illusion. Lunchtime doubly so.» \r\n ― Douglas Adams"
+          },
+          {
+            "url": "https://github.com/marcusramberg",
+            "title": "Marcus Ramberg",
+            "description": "A common mistake that people make when trying to design something completely foolproof is to underestimate the ingenuity of complete fools.\r\n\r\n- Douglas Adams"
+          },
+          {
+            "url": "https://github.com/tomconte",
+            "title": "Thomas Conté",
+            "description": "“I love deadlines. I love the whooshing noise they make as they go by.” \r\n― Douglas Adams"
+          },
+          {
+            "url": "https://github.com/hajschroeder",
+            "title": "Hans J.",
+            "description": "Junior Full Stack Web and Software Dev \r\n\"Obligatory Douglas Adams Quote\" "
+          }
+        ],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Riccardo",
+          "description": "Software Developer 💻 ~                               \r\n«Time is an illusion. Lunchtime doubly so.» \r\n ― Douglas Adams",
+          "url": "https://avatars.githubusercontent.com/u/1334291?v=4",
+          "thumbnail": "https://avatars.githubusercontent.com/u/1334291?v=4",
+          "link": "https://github.com/rikyoz",
+          "sourceId": "github",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "image",
+          "title": "Marcus Ramberg",
+          "description": "A common mistake that people make when trying to design something completely foolproof is to underestimate the ingenuity of complete fools.\r\n\r\n- Douglas Adams",
+          "url": "https://avatars.githubusercontent.com/u/5526?v=4",
+          "thumbnail": "https://avatars.githubusercontent.com/u/5526?v=4",
+          "link": "https://github.com/marcusramberg",
+          "sourceId": "github",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "image",
+          "title": "Thomas Conté",
+          "description": "“I love deadlines. I love the whooshing noise they make as they go by.” \r\n― Douglas Adams",
+          "url": "https://avatars.githubusercontent.com/u/199027?v=4",
+          "thumbnail": "https://avatars.githubusercontent.com/u/199027?v=4",
+          "link": "https://github.com/tomconte",
+          "sourceId": "github",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "image",
+          "title": "Hans J.",
+          "description": "Junior Full Stack Web and Software Dev \r\n\"Obligatory Douglas Adams Quote\" ",
+          "url": "https://avatars.githubusercontent.com/u/92347861?v=4",
+          "thumbnail": "https://avatars.githubusercontent.com/u/92347861?v=4",
+          "link": "https://github.com/hajschroeder",
+          "sourceId": "github",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 4,
+        "queryRelevantSamples": 4,
+        "sourceDomainSamples": 4,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "musicbrainz",
+      "label": "MusicBrainz",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "page"
+      ],
+      "adapterMode": "musicbrainz-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "musicbrainz.org"
+      ],
+      "query": "Douglas Adams",
+      "httpStatus": 200,
+      "durationMs": 1252,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "musicbrainz-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "identity_metadata_only",
+        "note": "Artiste MusicBrainz: Douglas Adams",
+        "accounts": [
+          "https://www.allmusic.com/artist/mn0000803382",
+          "https://www.bandsintown.com/a/201077",
+          "https://bookbrainz.org/creator/307812da-da11-4ee5-a906-31e5ce9694bb",
+          "https://www.discogs.com/artist/134923",
+          "https://www.deezer.com/artist/4468812",
+          "https://commons.wikimedia.org/wiki/File:Douglas_adams_portrait_cropped.jpg",
+          "https://www.imdb.com/name/nm0010930/",
+          "https://www.last.fm/music/Douglas+Adams",
+          "https://genius.com/artists/Douglas-adams",
+          "https://www.musixmatch.com/artist/Douglas-Adams",
+          "http://www.douglasadams.com/",
+          "http://id.loc.gov/authorities/names/n80076765",
+          "https://catalogue.bnf.fr/ark:/12148/cb11888092r",
+          "https://ci.nii.ac.jp/author/DA07517784",
+          "https://d-nb.info/gnd/119033364",
+          "https://id.ndl.go.jp/auth/ndlna/00430962",
+          "http://snaccooperative.org/ark:/99166/w65h7md1",
+          "https://nla.gov.au/anbd.aut-an35163268",
+          "https://nla.gov.au/nla.party-847711",
+          "https://openlibrary.org/authors/OL272947A/",
+          "https://rateyourmusic.com/artist/douglas_adams",
+          "https://theatricalia.com/person/238p/douglas-adams",
+          "https://www.muziekweb.nl/Link/M00000364497/",
+          "https://www.whosampled.com/Douglas-Adams/",
+          "https://www.worldcat.org/identities/lccn-n80-076765/",
+          "https://itunes.apple.com/us/artist/id2080713",
+          "http://viaf.org/viaf/113230702",
+          "https://www.wikidata.org/wiki/Q42"
+        ],
+        "identityAliases": [
+          {
+            "value": "Douglas Adams",
+            "kind": "display_name",
+            "confidence": 96,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          },
+          {
+            "value": "Doughlas Adams",
+            "kind": "display_name",
+            "confidence": 86,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          },
+          {
+            "value": "Douglous Adams",
+            "kind": "display_name",
+            "confidence": 86,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          },
+          {
+            "value": "Dougls Adams",
+            "kind": "display_name",
+            "confidence": 86,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          },
+          {
+            "value": "Duglas Adams",
+            "kind": "display_name",
+            "confidence": 86,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          },
+          {
+            "value": "The Hitch-Hiker's Guide To The Galaxy .",
+            "kind": "display_name",
+            "confidence": 86,
+            "evidence": [
+              "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://musicbrainz.org/artist/e9ed318d-8cc5-4cf8-ab77-505e39ab6ea4",
+            "title": "Douglas Adams",
+            "description": "English author"
+          }
+        ],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    }
+  ]
+}

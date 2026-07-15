@@ -8,9 +8,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const dotenv = require('dotenv');
 const dnsModule = require('dns');
 const dns = dnsModule.promises;
 const net = require('net');
+const ENV_PATH = process.pkg ? path.join(path.dirname(process.execPath), '.env') : path.join(__dirname, '.env');
+dotenv.config({ path: ENV_PATH });
 const { version: APP_VERSION } = require('./package.json');
 const DEFAULT_GOOGLE_CX = '155c4d451e53743c2';
 const { CORE_SOURCE_DEFINITIONS } = require('./src/sources/coreSources');
@@ -27,6 +30,20 @@ const {
   selectWikidataEntity,
   selectTmdbPerson
 } = require('./src/sources/publicApiAdapters');
+const {
+  runDiscoverySource,
+  parseSearxngResults,
+  parseLemmyResults,
+  parseGithubUsers,
+  parseOdyseeClaims,
+  parseGdeltArticles,
+  parsePodcastFeeds,
+  parsePexelsResults,
+  parseGiphyResults,
+  parseGelbooruPosts,
+  parseDanbooruPosts,
+  decodeWarcHtml
+} = require('./src/sources/discoveryAdapters');
 const { mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
 const { createRemoteStore } = require('./src/storage/remoteStore');
@@ -432,10 +449,21 @@ function sourceDomain(sourceId) {
     arquivo: 'arquivo.pt',
     imgur: 'imgur.com',
     peertube: 'peertube.tv',
+    commoncrawl: 'commoncrawl.org',
+    searxng: 'docs.searxng.org',
+    odysee: 'odysee.com',
+    gdelt: 'gdeltproject.org',
+    podcastindex: 'podcastindex.org',
+    pexels: 'pexels.com',
+    giphy: 'giphy.com',
     bluesky: 'bsky.app',
     mastodon: 'mastodon.social',
+    lemmy: 'lemmy.world',
+    pixelfed: 'pixelfed.social',
     tumblr: 'tumblr.com',
     twitch: 'twitch.tv',
+    github: 'github.com',
+    musicbrainz: 'musicbrainz.org',
     linktree: 'linktr.ee',
     beacons: 'beacons.ai',
     allmylinks: 'allmylinks.com',
@@ -481,7 +509,16 @@ function sourceDomain(sourceId) {
     manyvids: 'manyvids.com',
     clips4sale: 'clips4sale.com',
     lpsg: 'lpsg.com',
-    adultdvdtalk: 'adultdvdtalk.com'
+    adultdvdtalk: 'adultdvdtalk.com',
+    fanvue: 'fanvue.com',
+    chaturbate: 'chaturbate.com',
+    stripchat: 'stripchat.com',
+    camsoda: 'camsoda.com',
+    livejasmin: 'livejasmin.com',
+    indexxx: 'indexxx.com',
+    boobpedia: 'boobpedia.com',
+    gelbooru: 'gelbooru.com',
+    danbooru: 'danbooru.donmai.us'
   };
   return domains[sourceId] || `${sourceId}.com`;
 }
@@ -666,6 +703,52 @@ async function fetchText(url, options = {}) {
     try { return JSON.parse(response.data); } catch { return response.data; }
   }
   return response.data;
+}
+
+async function postJson(rawUrl, payload, options = {}) {
+  const url = await validatePublicMediaUrl(rawUrl);
+  const response = await axios.post(url, payload, {
+    timeout: options.timeout || 14000,
+    responseType: 'json',
+    maxRedirects: 0,
+    maxContentLength: options.maxContentLength || MAX_HTML_BYTES,
+    maxBodyLength: options.maxBodyLength || MAX_HTML_BYTES,
+    headers: {
+      ...PUBLIC_REQUEST_HEADERS,
+      accept: 'application/json',
+      'content-type': 'application/json',
+      origin: new URL(url).origin,
+      referer: new URL(url).origin,
+      ...(options.headers || {})
+    },
+    lookup: safeDnsLookup,
+    validateStatus: status => status >= 200 && status < 500
+  });
+  if (response.status >= 400) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.data;
+}
+
+async function fetchBinaryRange(rawUrl, offset, length, options = {}) {
+  const start = Math.max(0, Number(offset) || 0);
+  const requestedSize = Number(length);
+  if (!Number.isFinite(requestedSize) || requestedSize <= 0) throw new Error('Plage binaire invalide');
+  const size = Math.min(requestedSize, 6 * 1024 * 1024);
+  const response = await requestPublicUrl(rawUrl, {
+    timeout: options.timeout || 14000,
+    responseType: 'arraybuffer',
+    headers: { range: `bytes=${start}-${start + size - 1}`, accept: 'application/octet-stream' },
+    maxContentLength: size + 1024
+  });
+  if (![200, 206].includes(response.status)) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return Buffer.from(response.data);
 }
 
 async function fetchPage(url, options = {}) {
@@ -1202,7 +1285,12 @@ function extractPublicAccountLinks(html, baseUrl, currentSourceId, limit = 20) {
 function sourceSearchUrls(sourceId, query, options = {}) {
   const encoded = encodeURIComponent(query);
   const username = /^@?[a-z0-9._-]+$/i.test(query) ? encodeURIComponent(query.replace(/^@/, '')) : '';
+  const slugWords = String(query || '').trim().split(/\s+/).filter(Boolean);
+  const dashSlug = encodeURIComponent(slugWords.join('-').toLowerCase());
+  const wikiSlug = encodeURIComponent(slugWords.map(word => `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join('_'));
   const safe = options.safe !== false;
+  const searxngValue = String(connectionValue('searxng', 'instance', 'SEARXNG_INSTANCE') || '').replace(/\/+$/, '');
+  const searxngBase = searxngValue ? (/^https?:\/\//i.test(searxngValue) ? searxngValue : `https://${searxngValue}`) : '';
   const direct = {
     duckduckgo: `https://duckduckgo.com/html/?q=${encoded}`,
     bing: `https://www.bing.com/images/search?q=${encoded}&adlt=${safe ? 'strict' : 'off'}`,
@@ -1221,10 +1309,23 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     arquivo: `https://arquivo.pt/imagesearch?q=${encoded}`,
     imgur: `https://imgur.com/search?q=${encoded}`,
     peertube: `https://peertube.tv/search?search=${encoded}`,
+    commoncrawl: 'https://index.commoncrawl.org/',
+    searxng: searxngBase
+      ? `${searxngBase}/search?q=${encoded}`
+      : 'https://docs.searxng.org/dev/search_api.html',
+    odysee: `https://odysee.com/$/search?q=${encoded}`,
+    gdelt: `https://api.gdeltproject.org/api/v2/doc/doc?query=${encoded}&mode=ArtList&format=json`,
+    podcastindex: `https://podcastindex.org/search?q=${encoded}`,
+    pexels: `https://www.pexels.com/search/${encoded}/`,
+    giphy: `https://giphy.com/search/${encoded}`,
     bluesky: `https://bsky.app/search?q=${encoded}`,
     mastodon: `https://mastodon.social/search?q=${encoded}`,
+    lemmy: `https://lemmy.world/search?q=${encoded}`,
+    pixelfed: username ? `https://pixelfed.social/${username}` : `https://pixelfed.social/discover/tags/${encoded}`,
     tumblr: `https://www.tumblr.com/search/${encoded}`,
     twitch: username ? `https://www.twitch.tv/${username}/clips` : `https://www.twitch.tv/search?term=${encoded}`,
+    github: `https://github.com/search?q=${encoded}&type=users`,
+    musicbrainz: `https://musicbrainz.org/search?query=${encoded}&type=artist&method=indexed`,
     linktree: username ? `https://linktr.ee/${username}` : 'https://linktr.ee/',
     beacons: username ? `https://beacons.ai/${username}` : 'https://beacons.ai/',
     allmylinks: username ? `https://allmylinks.com/${username}` : 'https://allmylinks.com/',
@@ -1278,9 +1379,19 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     manyvids: `https://www.manyvids.com/Search/${encoded}/`,
     clips4sale: `https://www.clips4sale.com/clips/search/${encoded}`,
     lpsg: `https://www.lpsg.com/search/?q=${encoded}&t=post`,
-    adultdvdtalk: `https://forum.adultdvdtalk.com/search?q=${encoded}`
+    adultdvdtalk: `https://forum.adultdvdtalk.com/search?q=${encoded}`,
+    fanvue: username ? [`https://www.fanvue.com/${username}`, `https://www.fanvue.com/search?q=${encoded}`] : `https://www.fanvue.com/search?q=${encoded}`,
+    chaturbate: username ? [`https://chaturbate.com/${username}/`, `https://chaturbate.com/tags/${encoded}/`] : `https://chaturbate.com/tags/${encoded}/`,
+    stripchat: username ? [`https://stripchat.com/${username}`, `https://stripchat.com/search?query=${encoded}`] : `https://stripchat.com/search?query=${encoded}`,
+    camsoda: username ? [`https://www.camsoda.com/${username}`, `https://www.camsoda.com/search?query=${encoded}`] : `https://www.camsoda.com/search?query=${encoded}`,
+    livejasmin: username ? [`https://www.livejasmin.com/en/chat/${username}`, `https://www.livejasmin.com/en/search?query=${encoded}`] : `https://www.livejasmin.com/en/search?query=${encoded}`,
+    indexxx: `https://www.indexxx.com/m/${dashSlug}/`,
+    boobpedia: `https://www.boobpedia.com/boobs/${wikiSlug}`,
+    gelbooru: `https://gelbooru.com/index.php?page=post&s=list&tags=${encoded}`,
+    danbooru: `https://danbooru.donmai.us/posts?tags=${encoded}`
   };
-  const urls = [direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`];
+  const configuredDirect = direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`;
+  const urls = Array.isArray(configuredDirect) ? [...configuredDirect] : [configuredDirect];
   if (NSFW_SOURCES.has(sourceId) || ['social', 'identity'].includes(SOURCE_META[sourceId]?.category)) {
     const domain = sourceDomain(sourceId);
     urls.push(`https://duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
@@ -1409,7 +1520,7 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
     }
   }
 
-  for (const [searchIndex, searchUrl] of searchUrls.entries()) {
+  for (const searchUrl of searchUrls) {
     try {
       const page = await fetchPage(searchUrl, { timeout: options.timeout || 14000 });
       const searchHost = new URL(searchUrl).hostname;
@@ -1418,11 +1529,12 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
       if ([401, 403, 451].includes(page.statusCode)) blockedResponses += 1;
       if (page.statusCode >= 400) continue;
       successfulRequests += 1;
-      if (searchIndex === 0) directReachable = true;
+      const directTransport = hostMatchesSource(page.finalUrl, sourceId);
+      if (directTransport) directReachable = true;
       else fallbackReachable = true;
 
       const pageLinks = extractAdapterPageLinks(page.html, page.finalUrl, query, sourceId, 24, {
-        trustedSearchResults: searchIndex === 0 && Boolean(adapter.trustSearchResults)
+        trustedSearchResults: directTransport && Boolean(adapter.trustSearchResults)
       });
       discoveredPages.push(...pageLinks);
 
@@ -1490,9 +1602,11 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
     ? ''
     : (uniquePages.length
         ? 'detail_pages_without_public_media'
-        : (!successfulRequests
-            ? (rateLimitedResponses ? 'rate_limited' : (blockedResponses ? 'access_blocked' : 'source_unreachable'))
-            : 'no_matching_public_pages'));
+        : (rateLimitedResponses
+            ? 'rate_limited'
+            : (blockedResponses && !directReachable
+                ? 'access_blocked'
+                : (!successfulRequests ? 'source_unreachable' : 'no_matching_public_pages'))));
   const profileNote = adapter.publicProfileOnly ? '; profils publics uniquement' : '';
   return {
     images: uniqueImages,
@@ -1798,9 +1912,54 @@ async function scrapeBingHtmlFallback(query, options = {}) {
   return { ...crawled, httpStatus: htmlSearch.statusCode, pageSamples: pages.slice(0, 5).map(page => page.url) };
 }
 
+async function discoverArchivePages(query, limit = 4) {
+  const pages = [];
+  try {
+    const bing = await fetchPage(`https://www.bing.com/search?q=${encodeURIComponent(query)}&adlt=off`, { timeout: 10000 });
+    pages.push(...parseBingWebResults(bing.html, query, limit));
+  } catch {
+    // The DuckDuckGo fallback below can still discover archive candidates.
+  }
+  if (pages.length < limit) {
+    try {
+      const duck = await fetchPage(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { timeout: 10000 });
+      pages.push(...parseDuckDuckGoWebResults(duck.html, query, limit));
+    } catch {
+      // Return the candidates already discovered by Bing.
+    }
+  }
+  return dedupeBy(pages.filter(page => isSafeHttpUrl(page.url) && !isSearchPageUrl(page.url)), page => page.url).slice(0, limit);
+}
+
+function extractArchivedMedia(html, pageUrl, query, sourceId) {
+  const $ = cheerio.load(html || '');
+  const pageTitle = $('meta[property="og:title"]').attr('content') || $('title').text().replace(/\s+/g, ' ').trim();
+  const trustedContext = isTrustedIdentityResultPage(pageUrl, pageTitle, query);
+  return {
+    images: extractImagesFromHtml(html, pageUrl, query, sourceId, 24, { trustedContext, scanEmbeddedUrls: false }),
+    videos: extractLinksAsVideos(html, pageUrl, query, sourceId, 12, { trustedContext })
+  };
+}
+
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
   const imageLimit = options.imageLimit || 35;
   const videoLimit = options.videoLimit || 20;
+  const discovery = await runDiscoverySource(sourceId, query, options, {
+    fetchText,
+    postJson,
+    fetchBinaryRange,
+    discoverArchivePages,
+    extractArchivedMedia,
+    enrichMedia,
+    dedupeBestMedia,
+    connectionValue,
+    formatDuration,
+    sha1: value => crypto.createHash('sha1').update(String(value)).digest('hex'),
+    userAgent: PUBLIC_REQUEST_HEADERS['user-agent'],
+    imageLimit,
+    videoLimit
+  });
+  if (discovery) return discovery;
   const extended = await runExtendedApiSource(sourceId, query, options, {
     fetchText,
     enrichMedia,
@@ -2181,7 +2340,8 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
   const aliases = new Map();
   const directProfileSources = new Set([
     'instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'snapchat', 'threads', 'telegram', 'bluesky', 'mastodon', 'tumblr', 'twitch',
-    'linktree', 'beacons', 'allmylinks', 'carrd', 'onlyfans', 'fansly', 'mym', 'fancentro', 'loyalfans',
+    'lemmy', 'pixelfed', 'github', 'linktree', 'beacons', 'allmylinks', 'carrd', 'onlyfans', 'fansly', 'mym',
+    'fancentro', 'loyalfans', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia',
     'manyvids', 'clips4sale'
   ]);
   const nestedProfilePrefixes = new Set(['user', 'users', 'u', 'profile', 'profiles', 'channel', 'channels', 'c', 's']);
@@ -2478,7 +2638,7 @@ function publicOnlyPersonGuard(person = {}) {
   };
 }
 
-const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
+const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
 
 async function resolveIdentityProfile(person, options = {}) {
   const defaults = options.includeNsfw === true ? [...DEFAULT_IDENTITY_SOURCES, 'stashdb', 'iafd', 'theporndb'] : DEFAULT_IDENTITY_SOURCES;
@@ -3039,6 +3199,15 @@ const CONNECTION_PROVIDERS = {
   twitch: { label: 'Twitch Helix', env: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'], unlocks: 'Comptes et clips publics Twitch via app auth', fields: [{ name: 'clientId', label: 'Client ID', type: 'password', required: true }, { name: 'clientSecret', label: 'Client secret', type: 'password', required: true }] },
   mastodon: { label: 'Mastodon', env: ['MASTODON_ACCESS_TOKEN'], unlocks: 'Recherche de comptes et medias publics selon l instance', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: true }, { name: 'accessToken', label: 'Access token personnel', type: 'password', required: false }] },
   peertube: { label: 'PeerTube', env: ['PEERTUBE_INSTANCE'], unlocks: 'Recherche video sur une instance PeerTube', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: true }] },
+  searxng: { label: 'SearXNG', env: ['SEARXNG_INSTANCE'], unlocks: 'Metarecherche images et videos via votre instance JSON', fields: [{ name: 'instance', label: 'Instance SearXNG', type: 'text', required: true }] },
+  lemmy: { label: 'Lemmy', env: ['LEMMY_INSTANCE'], unlocks: 'Posts, comptes et medias publics federes', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: false, defaultValue: 'https://lemmy.world' }, { name: 'accessToken', label: 'Access token personnel', type: 'password', required: false }] },
+  pixelfed: { label: 'Pixelfed', env: ['PIXELFED_INSTANCE'], unlocks: 'Profils et medias photo publics federes', fields: [{ name: 'instance', label: 'Instance', type: 'text', required: false, defaultValue: 'https://pixelfed.social' }, { name: 'accessToken', label: 'Access token personnel', type: 'password', required: false }] },
+  github: { label: 'GitHub', env: ['GITHUB_TOKEN'], unlocks: 'Profils, avatars et alias publics avec quotas ameliores', fields: [{ name: 'token', label: 'Personal access token', type: 'password', required: false }] },
+  podcastindex: { label: 'Podcast Index', env: ['PODCAST_INDEX_API_KEY', 'PODCAST_INDEX_API_SECRET'], unlocks: 'Recherche de podcasts et illustrations publiques', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }, { name: 'apiSecret', label: 'API secret', type: 'password', required: true }] },
+  pexels: { label: 'Pexels API', env: ['PEXELS_API_KEY'], unlocks: 'Photos et videos Pexels en haute resolution', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
+  giphy: { label: 'GIPHY API', env: ['GIPHY_API_KEY'], unlocks: 'GIF et images animees publiques', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: true }] },
+  gelbooru: { label: 'Gelbooru DAPI', env: ['GELBOORU_API_KEY', 'GELBOORU_USER_ID'], unlocks: 'Quotas DAPI personnels pour les illustrations 18+', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: false }, { name: 'userId', label: 'User ID', type: 'password', required: false }] },
+  danbooru: { label: 'Danbooru API', env: ['DANBOORU_LOGIN', 'DANBOORU_API_KEY'], unlocks: 'Quotas personnels pour les illustrations 18+', fields: [{ name: 'login', label: 'Login', type: 'text', required: false }, { name: 'apiKey', label: 'API key', type: 'password', required: false }] },
   stashdb: { label: 'StashDB GraphQL', env: ['STASHDB_API_KEY'], unlocks: 'Metadonnees et alias avec votre propre cle StashDB', fields: [{ name: 'apiKey', label: 'API key personnelle', type: 'password', required: true }] },
   telegram: { label: 'Telegram', env: [], unlocks: 'Non disponible: OAuth/session MTProto non integre', fields: [], available: false }
 };
@@ -3097,6 +3266,50 @@ app.post('/api/connections/:id/test', async (req, res) => {
       const instanceValue = connectionValue('peertube', 'instance', 'PEERTUBE_INSTANCE') || 'https://peertube.tv';
       const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
       await fetchText(`${instance}/api/v1/config`);
+    }
+    if (id === 'searxng') {
+      const instanceValue = connectionValue('searxng', 'instance', 'SEARXNG_INSTANCE');
+      const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
+      const payload = await fetchText(`${instance}/search?q=test&format=json`, { headers: { accept: 'application/json' } });
+      if (typeof payload === 'string') throw new Error('Sortie JSON SearXNG desactivee');
+    }
+    if (id === 'lemmy') {
+      const value = connectionValue('lemmy', 'instance', 'LEMMY_INSTANCE') || 'https://lemmy.world';
+      const instance = /^https?:\/\//i.test(value) ? value.replace(/\/+$/, '') : `https://${value.replace(/\/+$/, '')}`;
+      await fetchText(`${instance}/api/v3/site`, { headers: connectionValue('lemmy', 'accessToken', 'LEMMY_ACCESS_TOKEN') ? { authorization: `Bearer ${connectionValue('lemmy', 'accessToken', 'LEMMY_ACCESS_TOKEN')}` } : undefined });
+    }
+    if (id === 'pixelfed') {
+      const value = connectionValue('pixelfed', 'instance', 'PIXELFED_INSTANCE') || 'https://pixelfed.social';
+      const instance = /^https?:\/\//i.test(value) ? value.replace(/\/+$/, '') : `https://${value.replace(/\/+$/, '')}`;
+      await fetchText(`${instance}/api/v1/instance`, { headers: connectionValue('pixelfed', 'accessToken', 'PIXELFED_ACCESS_TOKEN') ? { authorization: `Bearer ${connectionValue('pixelfed', 'accessToken', 'PIXELFED_ACCESS_TOKEN')}` } : undefined });
+    }
+    if (id === 'github') {
+      const token = connectionValue('github', 'token', 'GITHUB_TOKEN');
+      await fetchText('https://api.github.com/users/octocat', { headers: { accept: 'application/vnd.github+json', ...(token ? { authorization: `Bearer ${token}` } : {}) } });
+    }
+    if (id === 'podcastindex') {
+      const apiKey = connectionValue('podcastindex', 'apiKey', 'PODCAST_INDEX_API_KEY');
+      const apiSecret = connectionValue('podcastindex', 'apiSecret', 'PODCAST_INDEX_API_SECRET');
+      const authDate = String(Math.floor(Date.now() / 1000));
+      await fetchText('https://api.podcastindex.org/api/1.0/search/byterm?q=test&max=1', { headers: { 'X-Auth-Date': authDate, 'X-Auth-Key': apiKey, Authorization: crypto.createHash('sha1').update(`${apiKey}${apiSecret}${authDate}`).digest('hex'), 'User-Agent': PUBLIC_REQUEST_HEADERS['user-agent'] } });
+    }
+    if (id === 'pexels') await fetchText('https://api.pexels.com/v1/curated?per_page=1', { headers: { authorization: connectionValue('pexels', 'apiKey', 'PEXELS_API_KEY') } });
+    if (id === 'giphy') await fetchText(`https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(connectionValue('giphy', 'apiKey', 'GIPHY_API_KEY'))}&q=test&limit=1`);
+    if (id === 'gelbooru') {
+      const params = new URLSearchParams({ page: 'dapi', s: 'post', q: 'index', json: '1', tags: 'test', limit: '1' });
+      const apiKey = connectionValue('gelbooru', 'apiKey', 'GELBOORU_API_KEY');
+      const userId = connectionValue('gelbooru', 'userId', 'GELBOORU_USER_ID');
+      if (apiKey) params.set('api_key', apiKey);
+      if (userId) params.set('user_id', userId);
+      await fetchText(`https://gelbooru.com/index.php?${params}`);
+    }
+    if (id === 'danbooru') {
+      const params = new URLSearchParams({ tags: 'test', limit: '1' });
+      const login = connectionValue('danbooru', 'login', 'DANBOORU_LOGIN');
+      const apiKey = connectionValue('danbooru', 'apiKey', 'DANBOORU_API_KEY');
+      if (login) params.set('login', login);
+      if (apiKey) params.set('api_key', apiKey);
+      await fetchText(`https://danbooru.donmai.us/posts.json?${params}`);
     }
     if (id === 'twitch') {
       const tokenResponse = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(connectionValue('twitch', 'clientId', 'TWITCH_CLIENT_ID'))}&client_secret=${encodeURIComponent(connectionValue('twitch', 'clientSecret', 'TWITCH_CLIENT_SECRET'))}&grant_type=client_credentials`, { method: 'POST' });
@@ -3260,7 +3473,8 @@ function sourceAdapterContract(source) {
   const dedicatedAdapters = new Set([
     'duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'reddit', 'wayback', 'dailymotion',
     'wikidata', 'tmdb', 'openverse', 'internetarchive', 'arquivo', 'imgur', 'peertube', 'bluesky', 'mastodon',
-    'tumblr', 'twitch', 'stashdb'
+    'tumblr', 'twitch', 'stashdb', 'commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz',
+    'gdelt', 'podcastindex', 'pixelfed', 'pexels', 'giphy', 'gelbooru', 'danbooru'
   ]);
   const provider = CONNECTION_PROVIDERS[source.id];
   const optionalAuth = /optional/i.test(source.auth || '');
@@ -3881,6 +4095,17 @@ app.locals.testables = {
   parsePeerTubeResults,
   parseArquivoResults,
   parseOpenverseResults,
+  parseSearxngResults,
+  parseLemmyResults,
+  parseGithubUsers,
+  parseOdyseeClaims,
+  parseGdeltArticles,
+  parsePodcastFeeds,
+  parsePexelsResults,
+  parseGiphyResults,
+  parseGelbooruPosts,
+  parseDanbooruPosts,
+  decodeWarcHtml,
   selectWikidataEntity,
   selectTmdbPerson,
   buildGoogleCseUrl,

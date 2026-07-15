@@ -1,0 +1,627 @@
+{
+  "generatedAt": "2026-07-15T06:27:17.006Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:3016",
+  "queryMode": "forced:mia khalifa; safe=false",
+  "catalog": {
+    "sources": 96,
+    "selectedSources": 9,
+    "adapters": 96,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 9,
+    "operational": 1,
+    "degraded": 0,
+    "false_positive": 0,
+    "empty": 6,
+    "configuration_required": 1,
+    "access_blocked": 1,
+    "rate_limited": 0,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "fanvue",
+      "label": "Fanvue public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "fanvue.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 4123,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.fanvue.com: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "chaturbate",
+      "label": "Chaturbate public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "chaturbate.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 2355,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; chaturbate.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "stripchat",
+      "label": "Stripchat public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "stripchat.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 3238,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; stripchat.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "camsoda",
+      "label": "CamSoda public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "camsoda.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 1908,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.camsoda.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "livejasmin",
+      "label": "LiveJasmin public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "livejasmin.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 3156,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.livejasmin.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "indexxx",
+      "label": "Indexxx",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-metadata-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "indexxx.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 1940,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.indexxx.com: HTTP 403; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "access_blocked"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "access_blocked"
+    },
+    {
+      "id": "boobpedia",
+      "label": "Boobpedia",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-metadata-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "boobpedia.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 2579,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "4 pages correspondantes; 4 ouvertes; www.boobpedia.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 3,
+        "videosCount": 0,
+        "pagesDiscovered": 4,
+        "pagesCrawled": 4,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#column-one",
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#searchInput",
+          "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#cite_note-1"
+        ],
+        "accounts": [
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#column-one",
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#searchInput",
+          "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "https://www.boobpedia.com/boobs/Mia_Khalifa#cite_note-1",
+          "https://www.boobpedia.com/boobs/Mia_Khalifa",
+          "https://instagram.com/miakhalifa",
+          "https://onlyfans.com/miakhalifa",
+          "https://onlyfans.com/miakfree",
+          "https://www.snapchat.com/add/thedcsportsgirl",
+          "https://www.tiktok.com/@miakhalifa",
+          "https://twitch.tv/miakhalifa",
+          "https://x.com/miakhalifa",
+          "https://www.iafd.com/person.rme/id=90663149-484f-4151-96db-872f370815cb",
+          "https://www.pornhub.com/channels/mia-khalifa",
+          "https://www.pornhub.com/pornstar/mia-khalifa",
+          "https://www.adultdvdtalk.com/pornstar/mia-khalifa",
+          "https://www.babepedia.com/babe/Mia_Khalifa?utm_source=boobpedia&utm_medium=referral",
+          "https://www.indexxx.com/m/mia-khalifa"
+        ],
+        "identityAliases": [
+          {
+            "value": "Mia",
+            "kind": "display_name",
+            "confidence": 84,
+            "evidence": [
+              "https://www.boobpedia.com/boobs/Mia_Khalifa#column-one"
+            ]
+          },
+          {
+            "value": "@boobs",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.boobpedia.com/boobs/Mia_Khalifa#column-one"
+            ]
+          },
+          {
+            "value": "@miakhalifa",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://instagram.com/miakhalifa"
+            ]
+          },
+          {
+            "value": "@miakfree",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://onlyfans.com/miakfree"
+            ]
+          },
+          {
+            "value": "@thedcsportsgirl",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.snapchat.com/add/thedcsportsgirl"
+            ]
+          },
+          {
+            "value": "@person.rme",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.iafd.com/person.rme/id=90663149-484f-4151-96db-872f370815cb"
+            ]
+          },
+          {
+            "value": "@mia-khalifa",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.pornhub.com/channels/mia-khalifa"
+            ]
+          },
+          {
+            "value": "@pornstar",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.pornhub.com/pornstar/mia-khalifa"
+            ]
+          },
+          {
+            "value": "@babe",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.babepedia.com/babe/Mia_Khalifa?utm_source=boobpedia&utm_medium=referral"
+            ]
+          }
+        ],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "thumbnail": "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "link": "https://www.boobpedia.com/boobs/Mia_Khalifa#column-one",
+          "sourceId": "boobpedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "File:Mia Khalifa 06.jpg",
+          "description": "",
+          "url": "https://www.boobpedia.com/wiki/images/1/19/Mia_Khalifa_06.jpg?20260606004550",
+          "thumbnail": "https://www.boobpedia.com/wiki/images/1/19/Mia_Khalifa_06.jpg?20260606004550",
+          "link": "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "sourceId": "boobpedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "File:Mia Khalifa 06.jpg",
+          "description": "",
+          "url": "https://www.boobpedia.com/wiki/index.php?title=File:Mia_Khalifa_06.jpg",
+          "thumbnail": "https://www.boobpedia.com/wiki/index.php?title=File:Mia_Khalifa_06.jpg",
+          "link": "https://www.boobpedia.com/boobs/File:Mia_Khalifa_06.jpg",
+          "sourceId": "boobpedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 3,
+        "queryRelevantSamples": 3,
+        "sourceDomainSamples": 3,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "gelbooru",
+      "label": "Gelbooru",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "api-key-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "gelbooru-dapi",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "gelbooru.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 809,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "gelbooru-dapi",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Gelbooru exige actuellement un API key et un User ID personnels",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "danbooru",
+      "label": "Danbooru",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "api-key-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "danbooru-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "danbooru.donmai.us"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 443,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "danbooru-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "Danbooru API publique",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    }
+  ]
+}

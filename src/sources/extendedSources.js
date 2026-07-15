@@ -6,10 +6,21 @@ const EXTENDED_SOURCE_DEFINITIONS = [
   { id: 'arquivo', label: 'Arquivo.pt Images', category: 'normal', supports: ['image', 'page'], adapter: 'arquivo-api', subtype: 'archive', purpose: 'media' },
   { id: 'imgur', label: 'Imgur', category: 'normal', supports: ['image', 'video'], adapter: 'imgur-api', subtype: 'platform', purpose: 'media', auth: 'client-id' },
   { id: 'peertube', label: 'PeerTube', category: 'normal', supports: ['video'], adapter: 'peertube-api', subtype: 'video', purpose: 'media' },
+  { id: 'commoncrawl', label: 'Common Crawl', category: 'normal', supports: ['image', 'video', 'page'], adapter: 'commoncrawl-warc', subtype: 'archive', purpose: 'media' },
+  { id: 'searxng', label: 'SearXNG', category: 'normal', supports: ['image', 'video', 'page'], adapter: 'searxng-api', subtype: 'search-engine', purpose: 'media', auth: 'endpoint' },
+  { id: 'odysee', label: 'Odysee / LBRY', category: 'normal', supports: ['video', 'page'], adapter: 'odysee-claims-api', subtype: 'video', purpose: 'media' },
+  { id: 'gdelt', label: 'GDELT Actualites', category: 'normal', supports: ['image', 'page'], adapter: 'gdelt-doc-api', subtype: 'news', purpose: 'media' },
+  { id: 'podcastindex', label: 'Podcast Index', category: 'normal', supports: ['image', 'page'], adapter: 'podcast-index-api', subtype: 'podcast', purpose: 'media', auth: 'api-key' },
+  { id: 'pexels', label: 'Pexels', category: 'normal', supports: ['image', 'video'], adapter: 'pexels-api', subtype: 'stock-media', purpose: 'media', auth: 'api-key' },
+  { id: 'giphy', label: 'GIPHY', category: 'normal', supports: ['image'], adapter: 'giphy-api', subtype: 'animated-image', purpose: 'media', auth: 'api-key' },
   { id: 'bluesky', label: 'Bluesky', category: 'social', supports: ['image', 'video', 'page'], adapter: 'bluesky-api', subtype: 'social', purpose: 'identity', defaultSelected: true },
   { id: 'mastodon', label: 'Mastodon', category: 'social', supports: ['image', 'video', 'page'], adapter: 'mastodon-api', subtype: 'social', purpose: 'identity' },
+  { id: 'lemmy', label: 'Lemmy', category: 'social', supports: ['image', 'video', 'page'], adapter: 'lemmy-api', subtype: 'social', purpose: 'identity', auth: 'instance-optional' },
+  { id: 'pixelfed', label: 'Pixelfed', category: 'social', supports: ['image', 'video', 'page'], adapter: 'pixelfed-api', subtype: 'social-image', purpose: 'identity', auth: 'instance-optional' },
   { id: 'tumblr', label: 'Tumblr', category: 'social', supports: ['image', 'video', 'page'], adapter: 'tumblr-api', subtype: 'social', purpose: 'identity', auth: 'api-key' },
   { id: 'twitch', label: 'Twitch Clips', category: 'social', supports: ['image', 'video', 'page'], adapter: 'twitch-api', subtype: 'social', purpose: 'identity', auth: 'client-credentials' },
+  { id: 'github', label: 'GitHub Public', category: 'identity', supports: ['image', 'page'], adapter: 'github-users-api', subtype: 'developer-profile', purpose: 'identity', auth: 'token-optional' },
+  { id: 'musicbrainz', label: 'MusicBrainz', category: 'identity', supports: ['page'], adapter: 'musicbrainz-api', subtype: 'music-metadata', purpose: 'identity' },
   { id: 'linktree', label: 'Linktree', category: 'identity', supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'link-hub', purpose: 'identity' },
   { id: 'beacons', label: 'Beacons', category: 'identity', supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'link-hub', purpose: 'identity' },
   { id: 'allmylinks', label: 'AllMyLinks', category: 'identity', supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'link-hub', purpose: 'identity' },
@@ -23,7 +34,16 @@ const EXTENDED_SOURCE_DEFINITIONS = [
   { id: 'manyvids', label: 'ManyVids public', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-profile-crawl', subtype: 'platform', purpose: 'media' },
   { id: 'clips4sale', label: 'Clips4Sale public', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-profile-crawl', subtype: 'platform', purpose: 'media' },
   { id: 'lpsg', label: 'LPSG Forum', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-forum-crawl', subtype: 'forum', purpose: 'discovery' },
-  { id: 'adultdvdtalk', label: 'Adult DVD Talk Forum', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-forum-crawl', subtype: 'forum', purpose: 'discovery' }
+  { id: 'adultdvdtalk', label: 'Adult DVD Talk Forum', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-forum-crawl', subtype: 'forum', purpose: 'discovery' },
+  { id: 'fanvue', label: 'Fanvue public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'creator-platform', purpose: 'identity' },
+  { id: 'chaturbate', label: 'Chaturbate public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'live-creator', purpose: 'identity' },
+  { id: 'stripchat', label: 'Stripchat public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'live-creator', purpose: 'identity' },
+  { id: 'camsoda', label: 'CamSoda public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'live-creator', purpose: 'identity' },
+  { id: 'livejasmin', label: 'LiveJasmin public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'live-creator', purpose: 'identity' },
+  { id: 'indexxx', label: 'Indexxx', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
+  { id: 'boobpedia', label: 'Boobpedia', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
+  { id: 'gelbooru', label: 'Gelbooru', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'gelbooru-dapi', subtype: 'illustration', purpose: 'media', auth: 'api-key-optional' },
+  { id: 'danbooru', label: 'Danbooru', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'danbooru-api', subtype: 'illustration', purpose: 'media', auth: 'api-key-optional' }
 ];
 
 const EXTENDED_SOURCE_ADAPTERS = {
@@ -47,7 +67,14 @@ const EXTENDED_SOURCE_ADAPTERS = {
   manyvids: { domains: ['manyvids.com'], pagePatterns: [/\/(?:Profile|Video|Store)\//i], media: ['image', 'video', 'page'], crawlLimit: 4, publicProfileOnly: true },
   clips4sale: { domains: ['clips4sale.com'], pagePatterns: [/\/(?:studio|studios|clip)\//i], media: ['image', 'video', 'page'], crawlLimit: 4, publicProfileOnly: true },
   lpsg: { domains: ['lpsg.com'], pagePatterns: [/\/threads\//i, /\/members\//i], media: ['image', 'video', 'page'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
-  adultdvdtalk: { domains: ['adultdvdtalk.com', 'forum.adultdvdtalk.com'], pagePatterns: [/\/(?:forum|threads?|profile|pornstar)\//i, /forum\.asp/i], media: ['image', 'video', 'page'], crawlLimit: 4, forum: true, transport: 'public-forum-get' }
+  adultdvdtalk: { domains: ['adultdvdtalk.com', 'forum.adultdvdtalk.com'], pagePatterns: [/\/(?:forum|threads?|profile|pornstar)\//i, /forum\.asp/i], media: ['image', 'video', 'page'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
+  fanvue: { domains: ['fanvue.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/(?:creator|profile|discover)\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  chaturbate: { domains: ['chaturbate.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  stripchat: { domains: ['stripchat.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/model\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  camsoda: { domains: ['camsoda.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/(?:model|profile)\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  livejasmin: { domains: ['livejasmin.com'], pagePatterns: [/\/(?:en\/)?chat\/[a-z0-9._-]+/i, /\/(?:model|performer)\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  indexxx: { domains: ['indexxx.com'], pagePatterns: [/\/(?:m|model|performer|pornstar)\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
+  boobpedia: { domains: ['boobpedia.com'], pagePatterns: [/\/boobs\/(?:index\.php\?title=)?[^/?#]+/i, /\/index\.php\?title=/i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true }
 };
 
 module.exports = {

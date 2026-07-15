@@ -820,16 +820,24 @@ async function runPersonSearch() {
     return;
   }
   if (personMediaList) personMediaList.innerHTML = '<div class="person-empty">Recherche Person Finder en cours...</div>';
+  const depth = personDepth?.value || 'normal';
   const safeSources = ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'bluesky', 'mastodon', 'reddit'];
+  if (['normal', 'deep', 'archive'].includes(depth)) safeSources.push('gdelt', 'odysee', 'lemmy');
+  if (['deep', 'archive'].includes(depth)) safeSources.push('pixelfed', 'searxng');
+  if (depth === 'archive') safeSources.push('commoncrawl');
   const adultSources = ['stashdb', 'iafd', 'babepedia', 'erome', 'redgifs', 'eporner', 'phunforum', 'planetsuzy', 'bellazon'];
+  if (['deep', 'archive'].includes(depth)) adultSources.push('fanvue', 'indexxx', 'boobpedia', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin');
+  const identitySources = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
+  if (includeNsfw) identitySources.push('stashdb', 'iafd', 'theporndb', 'fanvue', 'indexxx', 'boobpedia');
   const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      depth: personDepth?.value || 'normal',
-      maxQueries: Math.min(Number(personMaxQueries?.value || 10), includeNsfw ? 6 : 10),
+      depth,
+      maxQueries: Math.min(Number(personMaxQueries?.value || 10), includeNsfw ? 5 : (depth === 'archive' ? 6 : 10)),
       minScore: Number(personMinScore?.value || 35),
       sources: [...safeSources, ...(includeNsfw ? adultSources : [])].join(','),
+      identitySources: identitySources.join(','),
       adultConfirmed: includeNsfw && selected?.adultConfirmed === true,
       resolveIdentity: true
     })
@@ -1550,13 +1558,7 @@ function logSourceStatus(source, status) {
     updateSourceStatusDot(source, isZero ? 'warning' : 'success');
     const noteSuffix = status.note ? ` - ${status.note}` : '';
     const logType = isZero ? 'warning' : 'success';
-    if (source === 'reddit' || source === 'erome' || source === 'wayback' || source === 'telegram' || source === 'phunforum' || source === 'planetsuzy' || source === 'bellazon') {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
-    } else if (source === 'youtube' || source === 'dailymotion' || source === 'vimeo' || source === 'redgifs' || source === 'xhamster' || source === 'xvideos' || source === 'spankbang' || source === 'pornhub' || source === 'youporn' || source === 'tube8' || source === 'tnaflix' || source === 'eporner' || source === 'xnxx' || source === 'hqporner' || source === 'nuvid' || source === 'drtuber' || source === 'pornone' || source === 'youjizz') {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
-    } else {
-      addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos trouvées.${accountsSuffix}${noteSuffix}`, logType);
-    }
+    addConsoleLog(`[${sourceName}] ${isZero ? 'Aucun média direct' : 'Succès'} : ${status.imagesCount || 0} photos, ${status.videosCount || 0} vidéos trouvées.${accountsSuffix}${noteSuffix}`, logType);
   } else {
     updateSourceStatusDot(source, 'error');
     addConsoleLog(`[${sourceName}] ${status.skipped ? 'Ignoré' : 'Échec'} : ${status.error || 'source indisponible'}`, status.skipped ? 'warning' : 'error');
@@ -1574,7 +1576,7 @@ function extractMediaAccount(item) {
       const match = parsed.pathname.match(/^\/web\/\d+(?:id_)?\/(https?:\/\/[^/]+)/i);
       return match ? match[1] : '';
     }
-    const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'instagram.com', 'tiktok.com', 'onlyfans.com', 'fansly.com', 'mym.fans'];
+    const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'instagram.com', 'tiktok.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'github.com', 'lemmy.world', 'pixelfed.social', 'odysee.com', 'fanvue.com', 'chaturbate.com', 'stripchat.com', 'camsoda.com', 'livejasmin.com', 'indexxx.com', 'boobpedia.com'];
     const normalizedHost = host.replace(/^www\./, '');
     if (!accountHosts.some(accountHost => normalizedHost === accountHost || normalizedHost.endsWith(`.${accountHost}`))) return '';
     const firstSegment = parsed.pathname.split('/').filter(Boolean)[0];
@@ -1598,7 +1600,7 @@ function classifyDetectedTarget(url) {
     return { type: 'cdn', canScrape: false };
   }
 
-  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'pornhub.com', 'youporn.com', 'tube8.com', 'tnaflix.com', 'motherless.com', 'eporner.com', 'xnxx.com', 'hqporner.com', 'nuvid.com', 'drtuber.com', 'pornone.com', 'youjizz.com'];
+  const accountHosts = ['t.me', 'telegram.me', 'x.com', 'twitter.com', 'tumblr.com', 'erome.com', 'redgifs.com', 'flickr.com', 'reddit.com', 'babepedia.com', 'camwhores.tv', 'pornzog.com', 'onlyfans.com', 'fansly.com', 'mym.fans', 'pornhub.com', 'youporn.com', 'tube8.com', 'tnaflix.com', 'motherless.com', 'eporner.com', 'xnxx.com', 'hqporner.com', 'nuvid.com', 'drtuber.com', 'pornone.com', 'youjizz.com', 'github.com', 'lemmy.world', 'pixelfed.social', 'odysee.com', 'fanvue.com', 'chaturbate.com', 'stripchat.com', 'camsoda.com', 'livejasmin.com', 'indexxx.com', 'boobpedia.com'];
   if (accountHosts.some(accountHost => host === accountHost || host.endsWith(`.${accountHost}`))) {
     return { type: 'account', canScrape: true };
   }
@@ -3164,7 +3166,7 @@ function activateNsfwPreset() {
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
   setNsfwVisibility();
-  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon']);
+  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru']);
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
     if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
   });

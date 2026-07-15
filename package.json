@@ -1,12 +1,12 @@
 {
   "name": "media-gatherer",
-  "version": "1.5.6",
+  "version": "1.6.0",
   "description": "Aspirateur de medias web photos/videos avec Person Finder",
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/js/app.js && node --check scripts/audit-sources.js",
+    "check": "node --check server.js && node --check public/js/app.js && node --check src/sources/discoveryAdapters.js && node --check scripts/audit-sources.js",
     "test": "node --test --test-concurrency=1",
     "qa": "npm run check && npm test",
     "build": "npm run qa",
@@ -41,6 +41,7 @@
     "axios": "^1.7.9",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",
     "file-saver": "^2.0.5",

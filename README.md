@@ -7,9 +7,9 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 - **Recherche inversee** : ouverture des moteurs inverses depuis une image choisie.
 - **Person Finder** : profils publics ou consentis, alias, comptes, galerie, validation, timeline et exclusions.
 
-Le registre contient 76 sources : 15 normales, 13 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
+Le registre contient 96 sources : 22 normales, 15 sociales, 8 d'identite et 51 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.6 ajoute un audit live reproductible de chaque source, des contrats d'adaptateurs exacts, Openverse via son API publique, Snapchat et Threads en profils publics, ainsi qu'un fallback Bing Images limite au domaine pour les sources bloquees ou rendues uniquement en JavaScript. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
+La version 1.6.0 ajoute Common Crawl, SearXNG, Lemmy, GitHub, Odysee, MusicBrainz, GDELT, Podcast Index, Pixelfed, Pexels, GIPHY, Fanvue, cinq plateformes de profils webcam publics, Indexxx, Boobpedia, Gelbooru et Danbooru. Les API et instances configurables ont un adaptateur dedie; les profils NSFW publics conservent le crawl borne et les fallbacks de decouverte existants. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -56,6 +56,13 @@ Copier les valeurs utiles de `.env.example` dans `.env` :
 - `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET` : app auth Twitch Helix pour les clips publics.
 - `MASTODON_INSTANCE` et `MASTODON_ACCESS_TOKEN` : instance et jeton personnel facultatif pour la resolution distante.
 - `PEERTUBE_INSTANCE` : instance PeerTube interrogee.
+- `SEARXNG_INSTANCE` : URL d'une instance personnelle/autorisant la sortie JSON.
+- `LEMMY_INSTANCE` et `LEMMY_ACCESS_TOKEN` : instance Lemmy et jeton personnel facultatif.
+- `PIXELFED_INSTANCE` et `PIXELFED_ACCESS_TOKEN` : instance Pixelfed et jeton personnel facultatif.
+- `GITHUB_TOKEN` : jeton personnel facultatif, utile pour augmenter le quota de recherche d'utilisateurs publics.
+- `PODCAST_INDEX_API_KEY` et `PODCAST_INDEX_API_SECRET` : identifiants officiels Podcast Index.
+- `PEXELS_API_KEY` et `GIPHY_API_KEY` : cles officielles pour leurs recherches photo/video/GIF.
+- `GELBOORU_API_KEY`, `GELBOORU_USER_ID`, `DANBOORU_LOGIN` et `DANBOORU_API_KEY` : identifiants personnels facultatifs pour les quotas des API booru.
 - `STASHDB_API_KEY` : votre cle personnelle StashDB; aucune cle partagee n'est fournie.
 - `KV_REST_API_URL` et `KV_REST_API_TOKEN` : stockage Upstash Redis REST durable sur Vercel.
 
@@ -95,4 +102,4 @@ Sur Vercel, le stockage fichier est temporaire. Si `KV_REST_API_URL` et `KV_REST
 - Les recherches NSFW sont bloquees sans confirmation 18+; une fiche Person Finder doit aussi etre explicitement marquee adulte avant d'interroger ces sources.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_SOURCES_2026-07-15.md](docs/AUDIT_SOURCES_2026-07-15.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_SOURCES_1.6.0_2026-07-15.md](docs/AUDIT_SOURCES_1.6.0_2026-07-15.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).

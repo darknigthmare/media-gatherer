@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const lucide = require('lucide');
 
 const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mediagatherer-test-'));
@@ -52,6 +53,17 @@ const {
   parsePeerTubeResults,
   parseArquivoResults,
   parseOpenverseResults,
+  parseSearxngResults,
+  parseLemmyResults,
+  parseGithubUsers,
+  parseOdyseeClaims,
+  parseGdeltArticles,
+  parsePodcastFeeds,
+  parsePexelsResults,
+  parseGiphyResults,
+  parseGelbooruPosts,
+  parseDanbooruPosts,
+  decodeWarcHtml,
   selectWikidataEntity,
   selectTmdbPerson,
   buildGoogleCseUrl
@@ -385,6 +397,69 @@ test('normalise les nouveaux adaptateurs API avec medias et preuves identite', (
   assert.equal(openverse.media[0].license, 'cc0');
 });
 
+test('normalise les sources de decouverte, identite et archives ajoutees', () => {
+  const searx = parseSearxngResults({ results: [
+    { category: 'images', title: 'Sxysindy portrait', url: 'https://example.com/profile', img_src: 'https://cdn.example/sxysindy.jpg', thumbnail_src: 'https://cdn.example/thumb.jpg' },
+    { category: 'videos', title: 'Sxysindy interview', url: 'https://video.example/watch/sxysindy', thumbnail: 'https://cdn.example/video.jpg' },
+    { category: 'images', title: 'Another person', url: 'https://example.com/other', img_src: 'https://cdn.example/other.jpg' }
+  ] }, 'sxysindy');
+  assert.deepEqual(searx.media.map(item => item.type), ['image', 'video']);
+
+  const lemmy = parseLemmyResults({ posts: [{
+    post: { id: 12, name: 'Sxysindy public post', url: 'https://cdn.example/sxysindy.webp', ap_id: 'https://lemmy.world/post/12' },
+    creator: { name: 'sxysindy_alt', display_name: 'Sxy Sindy', actor_id: 'https://lemmy.world/u/sxysindy_alt' }
+  }] }, 'sxysindy', 'https://lemmy.world');
+  assert.equal(lemmy.media.length, 1);
+  assert.ok(lemmy.aliases.some(alias => alias.value === '@sxysindy_alt'));
+
+  const github = parseGithubUsers([{ login: 'sxysindy', name: 'Sxy Sindy', bio: 'Public creator', avatar_url: 'https://avatars.githubusercontent.com/u/1', html_url: 'https://github.com/sxysindy', twitter_username: 'sindy_alt' }], 'sxysindy');
+  assert.equal(github.media.length, 1);
+  assert.ok(github.aliases.some(alias => alias.value === '@sindy_alt'));
+
+  const odysee = parseOdyseeClaims({ result: { items: [{ canonical_url: 'lbry://@sxysindy#abc/video#def', name: 'video', value: { title: 'Sxysindy interview', thumbnail: { url: 'https://thumbnails.odycdn.com/card.jpg' } }, signing_channel: { name: '@sxysindy', canonical_url: 'lbry://@sxysindy#abc' } }] } }, 'sxysindy');
+  assert.match(odysee.media[0].url, /odysee\.com\/@sxysindy:abc\/video:def/);
+
+  const gdelt = parseGdeltArticles({ articles: [{ title: 'Sxysindy interview', url: 'https://news.example/sxysindy', socialimage: 'https://news.example/image.jpg', domain: 'news.example' }] }, 'sxysindy');
+  assert.equal(gdelt.media[0].type, 'image');
+
+  const podcasts = parsePodcastFeeds({ feeds: [{ title: 'Sxysindy podcast', author: 'Sxy Sindy', artwork: 'https://pod.example/art.jpg', link: 'https://pod.example/' }] }, 'sxysindy');
+  assert.equal(podcasts.media.length, 1);
+  assert.ok(podcasts.aliases.some(alias => alias.value === 'Sxy Sindy'));
+});
+
+test('normalise Pexels, GIPHY et les deux API booru', () => {
+  const pexels = parsePexelsResults({ photos: [{ id: 1, alt: 'Sxysindy portrait', url: 'https://pexels.com/photo/1', width: 2000, height: 3000, src: { original: 'https://images.pexels.com/original.jpg', medium: 'https://images.pexels.com/medium.jpg' } }] }, { videos: [{ id: 2, url: 'https://pexels.com/video/2', image: 'https://images.pexels.com/poster.jpg', duration: 8, video_files: [{ link: 'https://videos.pexels.com/720.mp4', width: 1280, height: 720 }, { link: 'https://videos.pexels.com/1080.mp4', width: 1920, height: 1080 }] }] });
+  assert.deepEqual(pexels.media.map(item => item.type), ['image', 'video']);
+  assert.equal(pexels.media[1].url, 'https://videos.pexels.com/1080.mp4');
+
+  const giphy = parseGiphyResults({ data: [{ title: 'Sxysindy GIF', url: 'https://giphy.com/gifs/1', images: { original: { url: 'https://media.giphy.com/1.gif', width: '800', height: '600' }, fixed_width: { url: 'https://media.giphy.com/1-small.gif' } } }] });
+  assert.equal(giphy.media[0].thumbnail, 'https://media.giphy.com/1-small.gif');
+
+  const gelbooru = parseGelbooruPosts({ post: [{ id: 1, file_url: '//img.gelbooru.com/a.jpg', preview_url: '//img.gelbooru.com/t.jpg', tags: 'sxysindy portrait', width: 1200, height: 1800 }, { id: 3, file_url: '//img.gelbooru.com/a.webm', preview_url: '//img.gelbooru.com/v.jpg', tags: 'sxysindy animation' }] });
+  assert.equal(gelbooru.media[0].url, 'https://img.gelbooru.com/a.jpg');
+  assert.equal(gelbooru.media[1].type, 'video');
+
+  const danbooru = parseDanbooruPosts([{ id: 2, large_file_url: 'https://cdn.donmai.us/a.jpg', preview_file_url: 'https://cdn.donmai.us/t.jpg', tag_string_character: 'sxysindy', image_width: 1600, image_height: 1200 }, { id: 4, file_url: 'https://cdn.donmai.us/a.mp4', preview_file_url: 'https://cdn.donmai.us/v.jpg', file_ext: 'mp4', tag_string_character: 'sxysindy' }]);
+  assert.equal(danbooru.media[0].link, 'https://danbooru.donmai.us/posts/2');
+  assert.equal(danbooru.media[1].type, 'video');
+});
+
+test('decode un WARC sans confondre X-Crawler-Content-Encoding avec le corps HTTP', () => {
+  const html = '<!doctype html><html><body><img src="https://example.com/original.jpg"></body></html>';
+  const record = [
+    'WARC/1.0',
+    'WARC-Type: response',
+    `Content-Length: ${html.length}`,
+    '',
+    'HTTP/1.1 200 OK',
+    'Content-Type: text/html; charset=UTF-8',
+    'X-Crawler-Content-Encoding: br',
+    '',
+    html
+  ].join('\r\n');
+  assert.equal(decodeWarcHtml(zlib.gzipSync(Buffer.from(record))), html);
+});
+
 test('selectionne une seule identite Wikidata et rejette les homonymes', () => {
   const rows = [
     { id: 'QENGINEER', label: 'Douglas Adams', description: 'ingenieur americain', match: { text: 'Douglas Adams' } },
@@ -508,6 +583,9 @@ test('expose des contrats API coherents', async () => {
   const blockedAdultWayback = await fetch(`${baseUrl}/api/wayback/hosts?q=sxysindy&safe=false`);
   assert.equal(blockedAdultWayback.status, 403);
 
+  const blockedAdultSource = await fetch(`${baseUrl}/api/sources/gelbooru/test?q=test&safe=false`);
+  assert.equal(blockedAdultSource.status, 403);
+
   const unknownJob = await fetch(`${baseUrl}/api/queue/jobs/not-found/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(unknownJob.status, 404);
 
@@ -536,11 +614,16 @@ test('expose des contrats API coherents', async () => {
   assert.match(adapters.adapters.find(adapter => adapter.id === 'flickr').availability, /^(?:public-fallback-available|official-api-configured-with-public-fallback)$/);
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'wayback').mode, 'wayback-cdx');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'openverse').implementation, 'dedicated-adapter');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'commoncrawl').mode, 'commoncrawl-warc');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'github').mode, 'github-users-api');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'gelbooru').mode, 'gelbooru-dapi');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'fanvue').implementation, 'source-crawl-adapter');
 
   const providers = await fetch(`${baseUrl}/api/connections/providers`).then(response => response.json());
   const google = providers.providers.find(provider => provider.id === 'google');
   assert.equal(google.fields.find(field => field.name === 'cx').defaultValue, '155c4d451e53743c2');
   assert.deepEqual(google.fields.filter(field => field.required).map(field => field.name), ['apiKey']);
+  assert.ok(['searxng', 'lemmy', 'pixelfed', 'github', 'podcastindex', 'pexels', 'giphy', 'gelbooru', 'danbooru'].every(id => providers.providers.some(provider => provider.id === id)));
 
   const googleSave = await fetch(`${baseUrl}/api/connections/google`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'test-key' }) });
   assert.equal(googleSave.status, 200);
@@ -562,7 +645,9 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
 
   const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
   const sourceIds = sourcePayload.sources.map(source => source.id);
-  assert.ok(['openverse', 'snapchat', 'threads'].every(sourceId => sourceIds.includes(sourceId)));
+  const addedSources = ['commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz', 'gdelt', 'podcastindex', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru', 'pixelfed', 'pexels', 'giphy'];
+  assert.equal(sourceIds.length, 96);
+  assert.ok(['openverse', 'snapchat', 'threads', ...addedSources].every(sourceId => sourceIds.includes(sourceId)));
   assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
   assert.match(client, /createSourceChip\(source\)/);
   assert.match(client, /populateSourceFilter\(\)/);
@@ -574,6 +659,7 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(styles, /--media-results-height:\s*clamp\(/);
   assert.match(styles, /\.zone-content-scroll\s*\{[^}]*overflow-y:\s*auto;/s);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
+  assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 51);
   assert.equal(new Set(sourceIds).size, sourceIds.length);
 });
 

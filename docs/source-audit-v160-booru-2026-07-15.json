@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-07-15T06:24:27.862Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:3016",
+  "queryMode": "forced:hatsune miku; safe=false",
+  "catalog": {
+    "sources": 96,
+    "selectedSources": 2,
+    "adapters": 96,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 2,
+    "operational": 1,
+    "degraded": 0,
+    "false_positive": 0,
+    "empty": 0,
+    "configuration_required": 1,
+    "access_blocked": 0,
+    "rate_limited": 0,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "gelbooru",
+      "label": "Gelbooru",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "api-key-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "gelbooru-dapi",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "gelbooru.com"
+      ],
+      "query": "hatsune miku",
+      "httpStatus": 200,
+      "durationMs": 810,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "gelbooru-dapi",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Gelbooru exige actuellement un API key et un User ID personnels",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "danbooru",
+      "label": "Danbooru",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "api-key-optional",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "danbooru-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-fallback-available",
+      "domains": [
+        "danbooru.donmai.us"
+      ],
+      "query": "hatsune miku",
+      "httpStatus": 200,
+      "durationMs": 574,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "danbooru-api",
+        "imagesCount": 5,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "Danbooru API publique",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "fallbackUsed": false,
+        "directReachable": true
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "hatsune_miku - egokoro_sai",
+          "description": "https://i.pximg.net/img-original/img/2026/07/15/13/56/51/147224408_p0.jpg",
+          "url": "https://cdn.donmai.us/sample/01/c9/sample-01c966c68b51fb5077ccb7c4b6daa78c.jpg",
+          "thumbnail": "https://cdn.donmai.us/180x180/01/c9/01c966c68b51fb5077ccb7c4b6daa78c.jpg",
+          "link": "https://danbooru.donmai.us/posts/11795724",
+          "sourceId": "danbooru",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "hatsune_miku - aoimeow",
+          "description": "https://x.com/1204winter/status/2077221001923006758",
+          "url": "https://cdn.donmai.us/original/f3/99/f3992cac1e3f3d68d1a487c646fabea0.jpg",
+          "thumbnail": "https://cdn.donmai.us/180x180/f3/99/f3992cac1e3f3d68d1a487c646fabea0.jpg",
+          "link": "https://danbooru.donmai.us/posts/11795684",
+          "sourceId": "danbooru",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "hatsune_miku - iwako_(eiken3kyuboy)",
+          "description": "https://x.com/eiken3kyuboy/status/2000543719653822557",
+          "url": "https://cdn.donmai.us/sample/ba/80/sample-ba80c900c621e1fde305b638329ba744.jpg",
+          "thumbnail": "https://cdn.donmai.us/180x180/ba/80/ba80c900c621e1fde305b638329ba744.jpg",
+          "link": "https://danbooru.donmai.us/posts/11795681",
+          "sourceId": "danbooru",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "hatsune_miku - chouti_ttt",
+          "description": "https://x.com/Tiii_hate/status/2077050359554658689",
+          "url": "https://cdn.donmai.us/sample/36/35/sample-36354e38a0acecdb753e49711de0baeb.jpg",
+          "thumbnail": "https://cdn.donmai.us/180x180/36/35/36354e38a0acecdb753e49711de0baeb.jpg",
+          "link": "https://danbooru.donmai.us/posts/11795600",
+          "sourceId": "danbooru",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "hatsune_miku - kumathebear12",
+          "description": "https://x.com/kumathebear12/status/2077196473935229388",
+          "url": "https://cdn.donmai.us/sample/9f/3f/sample-9f3f71c956031f0953c9d3d8cef593b4.jpg",
+          "thumbnail": "https://cdn.donmai.us/180x180/9f/3f/9f3f71c956031f0953c9d3d8cef593b4.jpg",
+          "link": "https://danbooru.donmai.us/posts/11795466",
+          "sourceId": "danbooru",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 5,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    }
+  ]
+}
