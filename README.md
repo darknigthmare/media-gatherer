@@ -7,9 +7,9 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 - **Recherche inversee** : ouverture des moteurs inverses depuis une image choisie.
 - **Person Finder** : profils publics ou consentis, alias, comptes, galerie, validation, timeline et exclusions.
 
-Le registre contient 73 sources : 14 normales, 11 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
+Le registre contient 76 sources : 15 normales, 13 sociales, 6 d'identite et 42 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.5.5 integre le moteur Google Programmable Search `155c4d451e53743c2` comme CX public par defaut. La source Google utilise l'API JSON officielle pour alimenter les cartes Media Finder, applique le niveau SafeSearch ou NSFW actif et laisse le CX modifiable dans Connexions API. Seule une cle `GOOGLE_API_KEY` personnelle reste necessaire.
+La version 1.5.6 ajoute un audit live reproductible de chaque source, des contrats d'adaptateurs exacts, Openverse via son API publique, Snapchat et Threads en profils publics, ainsi qu'un fallback Bing Images limite au domaine pour les sources bloquees ou rendues uniquement en JavaScript. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -27,7 +27,10 @@ Ouvrir ensuite [http://localhost:3000](http://localhost:3000).
 ```powershell
 npm run qa
 npm audit
+npm run audit:sources -- --base http://127.0.0.1:3000
 ```
+
+Pour une requete adulte sur les moteurs generaux, utiliser aussi `--unsafe --query <terme>` afin de reproduire le mode NSFW de l'application.
 
 `npm run qa` verifie la syntaxe du serveur et du frontend, puis execute les tests Node des contrats API/DOM, des icones, de la pertinence, des alias, du dedoublonnage, des exports et de la protection SSRF.
 
@@ -65,13 +68,15 @@ Les identifiants saisis dans l'onglet Connexions restent en memoire de session s
 - Une page de compte publique validee peut etre extraite entierement sans imposer le nom dans chaque media.
 - Wayback decouvre d'abord les domaines via la recherche officielle, complete les usernames avec des domaines personnels probables, puis lit les medias CDX avec `matchType=domain`, sans filtre de nom.
 - Chaque source expose un statut, le nombre brut, le nombre retenu, les pages ouvertes et une raison explicite en cas de zero.
+- `/api/sources/adapters` indique le transport reel, l'authentification, l'etat de configuration, les domaines et les fallbacks de chaque source.
+- L'audit live verifie aussi la pertinence des echantillons, les miniatures manquantes et les faux positifs, au lieu de se limiter au code HTTP.
 - Le navigateur conserve pendant 30 jours les resultats par requete, selection de sources et niveau adulte; une relance ou un refresh les restaure avant d'ajouter les nouveautes.
 - Les diagnostics et la longue liste NSFW sont des tiroirs a hauteur bornee avec defilement interne.
 - Les sources NSFW distinguent acces direct, fallback moteur, blocage, limitation de debit et indisponibilite reseau.
 - Phun Forum, PlanetSuzy et Bellazon utilisent leur recherche publique avant les fallbacks moteurs.
 - Eporner utilise son API publique en priorite, puis repasse sur la recherche HTML et les moteurs publics si elle ne repond pas.
 - La meilleure URL connue est conservee lors du dedoublonnage ; une miniature ne remplace pas un original.
-- Les alias ne sont proposes qu'avec une preuve de profil ou de nom public ; les chemins techniques de forum sont exclus.
+- Les alias ne sont proposes qu'avec une preuve de profil ou de nom public ; les liens sortants des hubs publics restent des candidats a verifier et les chemins techniques de forum sont exclus.
 - La resolution d'identite croise Wikidata, les reseaux publics et les hubs de liens avant la recherche Person Finder.
 - Les empreintes dHash sont calculees apres affichage via le proxy local, sans retarder l'arrivee progressive des resultats.
 
@@ -90,4 +95,4 @@ Sur Vercel, le stockage fichier est temporaire. Si `KV_REST_API_URL` et `KV_REST
 - Les recherches NSFW sont bloquees sans confirmation 18+; une fiche Person Finder doit aussi etre explicitement marquee adulte avant d'interroger ces sources.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md), [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md) et [docs/AUDIT_2026-07-14.md](docs/AUDIT_2026-07-14.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_SOURCES_2026-07-15.md](docs/AUDIT_SOURCES_2026-07-15.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).

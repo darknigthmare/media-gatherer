@@ -17,13 +17,16 @@ const {
   dedupeBestMedia,
   isPrivateIp,
   validatePublicMediaUrl,
+  isLikelyUiAsset,
   extractImagesFromHtml,
   extractLinksAsVideos,
   extractAdapterPageLinks,
   extractSearchResultPages,
+  extractPublicAccountLinks,
   extractMediaFromSourcePage,
   parseDuckDuckGoWebResults,
   parseBingWebResults,
+  bingAsyncImageUrl,
   parseEpornerApiResults,
   sourceSearchUrls,
   pageMatchesAdapter,
@@ -31,6 +34,7 @@ const {
   discoveredVideoPageCandidates,
   isTrustedIdentityResultPage,
   discoverAliases,
+  inferProfileIdentityAliases,
   mergeIdentityEvidence,
   searchModeThreshold,
   filterBySearchMode,
@@ -41,11 +45,13 @@ const {
   buildPersonQueries,
   adultSearchGuard,
   hammingDistance,
+  textMatchesAllQueryTokens,
   parseBlueskyResults,
   parseTumblrResults,
   parseImgurResults,
   parsePeerTubeResults,
   parseArquivoResults,
+  parseOpenverseResults,
   selectWikidataEntity,
   selectTmdbPerson,
   buildGoogleCseUrl
@@ -77,6 +83,14 @@ test('normalise les accents et exige une preuve textuelle', () => {
   assert.equal(evaluateMediaMatch({ title: 'Random filename', trustedContext: true }, 'sxysindy').score, 68);
 });
 
+test('les adaptateurs API et IAFD rejettent les correspondances partielles', () => {
+  assert.equal(textMatchesAllQueryTokens('NASA launch archive', 'NASA'), true);
+  assert.equal(textMatchesAllQueryTokens('Douglas Noel Adams profile', 'Douglas Adams'), true);
+  assert.equal(textMatchesAllQueryTokens('Kay Adams public profile', 'Douglas Adams'), false);
+  assert.equal(pageMatchesAdapter('https://www.iafd.com/person.rme/perfid=miakhalifa', 'iafd'), true);
+  assert.equal(pageMatchesAdapter('https://www.iafd.com/title.rme/id=example', 'iafd'), false);
+});
+
 test('repare les titres UTF-8 interpretes en latin1', () => {
   assert.equal(repairMojibake('Amazing Five â» Mia'), 'Amazing Five ※ Mia');
   assert.equal(repairMojibake('Titre français normal'), 'Titre français normal');
@@ -99,6 +113,24 @@ test('rejette les assets UI et les cartes hors sujet sur une page de recherche',
   assert.ok(images.some(item => /full-sxysindy\.jpg/.test(item.url)));
   assert.equal(videos.length, 1);
   assert.match(videos[0].url, /video\/sxysindy/);
+  assert.equal(isLikelyUiAsset('https://forum.example/styles/default/xenforo/bell.png', 'Search'), true);
+});
+
+test('limite un profil Linktree aux medias du profil et remonte les comptes candidats', () => {
+  const html = `
+    <html><head><title>SxySindy4u OnlyFans Official - Linktree</title><meta property="og:image" content="https://linktr.ee/og/image/sxysindy.jpg"></head><body>
+      <img src="https://ugc.production.linktr.ee/profile_image?io=true&size=avatar-v3_0" alt="SxySindy4u">
+      <img src="https://assets.production.linktr.ee/soco/sponsorship-banners/hulu.webp" alt="Hulu">
+      <a href="https://www.snapchat.com/add/gwenbearxo">Snapchat</a>
+    </body></html>`;
+  const media = extractMediaFromSourcePage(html, 'https://linktr.ee/sxysindy', 'sxysindy', 'linktree', { trustedContext: true });
+  assert.equal(media.images.length, 2);
+  assert.ok(media.images.every(item => !item.url.includes('sponsorship-banners')));
+  const accounts = extractPublicAccountLinks(html, 'https://linktr.ee/sxysindy', 'linktree');
+  assert.deepEqual(accounts, ['https://www.snapchat.com/add/gwenbearxo']);
+  const aliases = inferProfileIdentityAliases('sxysindy', media.images, accounts);
+  assert.ok(aliases.some(alias => alias.value === 'SxySindy4u' && alias.confidence === 84));
+  assert.ok(aliases.some(alias => alias.value === '@gwenbearxo' && alias.confidence === 78));
 });
 
 test('extrait tout le media d une page de compte publique validee', () => {
@@ -160,6 +192,10 @@ test('lit les fallbacks web DuckDuckGo et Bing', () => {
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].playback, 'external');
   assert.equal(candidates[0].thumbnail, '');
+  const asyncUrl = new URL(bingAsyncImageUrl('sxysindy', { safe: false }, 35));
+  assert.equal(asyncUrl.pathname, '/images/async');
+  assert.equal(asyncUrl.searchParams.get('adlt'), 'off');
+  assert.equal(asyncUrl.searchParams.get('count'), '35');
 });
 
 test('normalise l API Eporner et conserve la meilleure miniature', () => {
@@ -320,6 +356,15 @@ test('normalise les nouveaux adaptateurs API avec medias et preuves identite', (
   assert.equal(bluesky.media[0].type, 'image');
   assert.ok(bluesky.aliases.some(alias => alias.value === '@sxysindy.bsky.social'));
 
+  const blueskyNoise = parseBlueskyResults({ posts: [{
+    uri: 'at://did:plc:test/app.bsky.feed.post/noise',
+    author: { handle: 'weather.test', displayName: 'Weather' },
+    record: { text: 'Douglas, Jefferson and Adams counties' },
+    embed: { images: [{ fullsize: 'https://cdn.bsky.app/noise.jpg' }] }
+  }] }, 'Douglas Adams');
+  assert.equal(blueskyNoise.media.length, 0);
+  assert.equal(blueskyNoise.aliases.length, 0);
+
   const tumblr = parseTumblrResults(extendedFixtures.tumblr);
   assert.equal(tumblr.media[0].url, 'https://64.media.tumblr.com/photo.jpg');
   assert.ok(tumblr.aliases.some(alias => alias.value === '@sxysindy'));
@@ -333,6 +378,11 @@ test('normalise les nouveaux adaptateurs API avec medias et preuves identite', (
 
   const arquivo = parseArquivoResults(extendedFixtures.arquivo);
   assert.equal(arquivo.media[0].width, 1280);
+
+  const openverse = parseOpenverseResults({ results: [{ title: 'NASA image', url: 'https://images.example/nasa.jpg', thumbnail: 'https://api.openverse.org/thumb/nasa', foreign_landing_url: 'https://www.flickr.com/photos/nasa/1', width: 1600, height: 900, license: 'cc0' }] });
+  assert.equal(openverse.media[0].url, 'https://images.example/nasa.jpg');
+  assert.equal(openverse.media[0].link, 'https://www.flickr.com/photos/nasa/1');
+  assert.equal(openverse.media[0].license, 'cc0');
 });
 
 test('selectionne une seule identite Wikidata et rejette les homonymes', () => {
@@ -482,6 +532,10 @@ test('expose des contrats API coherents', async () => {
   assert.equal(eporner.mode, 'eporner-api-v2');
   assert.equal(eporner.availability, 'official-public-api-with-html-fallback');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'phunforum').subtype, 'forum');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'google').authRequired, true);
+  assert.match(adapters.adapters.find(adapter => adapter.id === 'flickr').availability, /^(?:public-fallback-available|official-api-configured-with-public-fallback)$/);
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'wayback').mode, 'wayback-cdx');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'openverse').implementation, 'dedicated-adapter');
 
   const providers = await fetch(`${baseUrl}/api/connections/providers`).then(response => response.json());
   const google = providers.providers.find(provider => provider.id === 'google');
@@ -508,6 +562,7 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
 
   const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
   const sourceIds = sourcePayload.sources.map(source => source.id);
+  assert.ok(['openverse', 'snapchat', 'threads'].every(sourceId => sourceIds.includes(sourceId)));
   assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
   assert.match(client, /createSourceChip\(source\)/);
   assert.match(client, /populateSourceFilter\(\)/);

@@ -1,6 +1,7 @@
 const EXTENDED_SOURCE_DEFINITIONS = [
   { id: 'wikidata', label: 'Wikidata identite', category: 'identity', supports: ['image', 'page'], adapter: 'wikidata-api', subtype: 'metadata', purpose: 'identity', defaultSelected: true },
   { id: 'tmdb', label: 'TMDB Person', category: 'identity', supports: ['image', 'page'], adapter: 'tmdb-api', subtype: 'metadata', purpose: 'identity', auth: 'api-key' },
+  { id: 'openverse', label: 'Openverse', category: 'normal', supports: ['image'], adapter: 'openverse-api', subtype: 'image', purpose: 'media' },
   { id: 'internetarchive', label: 'Internet Archive', category: 'normal', supports: ['image', 'video', 'page'], adapter: 'archive-org-api', subtype: 'archive', purpose: 'media', defaultSelected: true },
   { id: 'arquivo', label: 'Arquivo.pt Images', category: 'normal', supports: ['image', 'page'], adapter: 'arquivo-api', subtype: 'archive', purpose: 'media' },
   { id: 'imgur', label: 'Imgur', category: 'normal', supports: ['image', 'video'], adapter: 'imgur-api', subtype: 'platform', purpose: 'media', auth: 'client-id' },
@@ -26,11 +27,19 @@ const EXTENDED_SOURCE_DEFINITIONS = [
 ];
 
 const EXTENDED_SOURCE_ADAPTERS = {
-  linktree: { domains: ['linktr.ee'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
+  linktree: {
+    domains: ['linktr.ee'],
+    pagePatterns: [/^\/[a-z0-9._-]+\/?$/i],
+    media: ['image', 'page'],
+    crawlLimit: 3,
+    publicProfileOnly: true,
+    identityOnly: true,
+    assetPatterns: [/^https:\/\/ugc\.production\.linktr\.ee\//i, /^https:\/\/linktr\.ee\/og\/image\//i]
+  },
   beacons: { domains: ['beacons.ai'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
   allmylinks: { domains: ['allmylinks.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
   carrd: { domains: ['carrd.co'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
-  iafd: { domains: ['iafd.com'], pagePatterns: [/\/person\.rme/i, /\/title\.rme/i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
+  iafd: { domains: ['iafd.com'], pagePatterns: [/\/person\.rme/i], assetPatterns: [/\/graphics\/headshots\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
   adultdatabase: { domains: ['adultdatabase.com'], pagePatterns: [/\/(?:actor|actress|star|performer|model|profile)s?\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
   theporndb: { domains: ['theporndb.net'], pagePatterns: [/\/(?:performers?|people|scenes?)\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
   fancentro: { domains: ['fancentro.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/store\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },

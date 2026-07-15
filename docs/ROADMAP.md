@@ -1,6 +1,6 @@
 # Etat et suite
 
-## Integre dans la version 1.5.5
+## Integre dans la version 1.5.6
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
@@ -14,7 +14,11 @@
 - 42 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
 - Eporner API v2 prioritaire, plus XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz en HTML public.
 - Recherches publiques Phun Forum, PlanetSuzy et Bellazon, avec crawl borne des sujets correspondants.
-- 73 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
+- 76 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
+- Openverse via API publique, plus Snapchat et Threads en profils publics.
+- Audit live reproductible de toutes les sources, avec etats operationnel, degrade, vide, configuration, blocage, limitation, faux positif et erreur.
+- Second transport Bing Images asynchrone et fallback indexe limite au domaine pour les sites rendus en JavaScript.
+- Verification d'identite stricte pour Bluesky, Mastodon, PeerTube et IAFD afin d'eliminer les correspondances partielles.
 - Adaptateurs API publics pour Wikidata, Internet Archive, Arquivo.pt, Bluesky, Mastodon et PeerTube.
 - Adaptateurs optionnels avec identifiants personnels pour TMDB, Imgur, Tumblr, Twitch et StashDB.
 - Resolution d'identite centralisee : alias, comptes publics, preuves et fusion avec Person Finder.
@@ -36,6 +40,7 @@
 - Telegram MTProto n'est pas active : une application Telegram et une session utilisateur autorisee seraient necessaires. Aucun compte prive ne doit etre aspire.
 - Google, Brave, Flickr et YouTube donnent de meilleurs resultats avec leurs identifiants API officiels.
 - Une source peut bloquer les robots, imposer JavaScript, un compte, un paywall ou une restriction regionale. Le diagnostic l'indique sans tenter de contourner la protection.
+- Reddit peut refuser son JSON public selon l'adresse IP; Wayback CDX peut repondre `429`. Ces etats sont exposes separement des vrais zeros.
 
 ## Prochaines evolutions utiles
 

@@ -11,6 +11,29 @@ function normalizeIdentityText(value) {
     .trim();
 }
 
+function textMatchesAllQueryTokens(value, query) {
+  const haystack = normalizeIdentityText(value);
+  const needle = normalizeIdentityText(query);
+  if (!needle) return true;
+  if (haystack.includes(needle)) return true;
+
+  const compactHaystack = haystack.replace(/\s+/g, '');
+  const compactNeedle = needle.replace(/\s+/g, '');
+  if (compactNeedle.length >= 3 && compactHaystack.includes(compactNeedle)) return true;
+
+  const tokens = needle.split(/\s+/).filter(token => token.length >= 2);
+  return tokens.length > 0 && tokens.every(token => haystack.includes(token));
+}
+
+function textContainsQueryPhrase(value, query) {
+  const haystack = normalizeIdentityText(value);
+  const needle = normalizeIdentityText(query);
+  if (!needle) return true;
+  if (haystack.includes(needle)) return true;
+  const compactNeedle = needle.replace(/\s+/g, '');
+  return compactNeedle.length >= 3 && haystack.replace(/\s+/g, '').includes(compactNeedle);
+}
+
 function uniqueAliasCandidates(candidates = []) {
   const map = new Map();
   for (const candidate of candidates) {
@@ -97,7 +120,7 @@ function selectTmdbPerson(results = [], query = '', identityContext = {}) {
   }).sort((a, b) => b.score - a.score)[0] || null;
 }
 
-function parseBlueskyResults(payload = {}) {
+function parseBlueskyResults(payload = {}, query = '') {
   const media = [];
   const aliases = [];
   const accounts = [];
@@ -108,6 +131,7 @@ function parseBlueskyResults(payload = {}) {
     const postId = String(post.uri || '').split('/').pop();
     const link = handle && postId ? `https://bsky.app/profile/${handle}/post/${postId}` : `https://bsky.app/profile/${handle}`;
     const title = [displayName, handle ? `@${handle}` : '', post.record?.text].filter(Boolean).join(' - ');
+    if (query && !textContainsQueryPhrase(`${displayName} ${handle} ${post.record?.text || ''}`, query)) continue;
     if (handle) {
       accounts.push(`https://bsky.app/profile/${handle}`);
       aliases.push({ value: `@${handle}`, kind: 'username', confidence: 96, evidence: [link] });
@@ -211,6 +235,23 @@ function parseArquivoResults(payload = {}) {
       width: row.imgWidth || row.width,
       height: row.imgHeight || row.height,
       archivedAt: row.tstamp || row.timestamp || row.date
+    })).filter(item => item.url)
+  };
+}
+
+function parseOpenverseResults(payload = {}) {
+  return {
+    media: (payload.results || []).map(row => ({
+      type: 'image',
+      url: row.url,
+      thumbnail: row.thumbnail || row.url,
+      link: row.foreign_landing_url || row.detail_url || row.url,
+      title: row.title || row.creator || 'Openverse image',
+      description: [row.creator ? `Creator: ${row.creator}` : '', row.license ? `License: ${row.license}` : ''].filter(Boolean).join(' - '),
+      width: row.width,
+      height: row.height,
+      provider: row.provider || '',
+      license: row.license || ''
     })).filter(item => item.url)
   };
 }
@@ -360,15 +401,35 @@ async function runInternetArchive(query, deps) {
   return { ...normalized, status: statusFor('internetarchive', 'archive-org-api', normalized.images, normalized.videos, { note: `${pageSamples.length} collections publiques analysees`, pageSamples }) };
 }
 
+async function runOpenverse(query, deps) {
+  const params = new URLSearchParams({
+    q: query,
+    page_size: String(Math.min(deps.imageLimit, 20)),
+    mature: deps.adultConfirmed === true ? 'true' : 'false'
+  });
+  const payload = await deps.fetchText(`https://api.openverse.org/v1/images/?${params.toString()}`, {
+    headers: { accept: 'application/json' }
+  });
+  const raw = parseOpenverseResults(payload);
+  const normalized = normalizeRaw(raw, query, 'openverse', deps);
+  return {
+    ...normalized,
+    status: statusFor('openverse', 'openverse-api', normalized.images, normalized.videos, {
+      note: `API publique Openverse; ${Number(payload.result_count || 0)} correspondances annoncees`
+    })
+  };
+}
+
 async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
   const scoped = { ...deps, imageLimit: options.imageLimit || 35, videoLimit: options.videoLimit || 20, adultConfirmed: options.adultConfirmed === true, identityContext: options.identityContext || {} };
   if (sourceId === 'wikidata') return runWikidata(query, scoped);
   if (sourceId === 'tmdb') return runTmdb(query, scoped);
+  if (sourceId === 'openverse') return runOpenverse(query, scoped);
   if (sourceId === 'internetarchive') return runInternetArchive(query, scoped);
 
   if (sourceId === 'bluesky') {
     const payload = await deps.fetchText(`https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(query)}&limit=${Math.min(scoped.imageLimit + scoped.videoLimit, 50)}`);
-    const raw = parseBlueskyResults(payload);
+    const raw = parseBlueskyResults(payload, query);
     const normalized = normalizeRaw(raw, query, sourceId, scoped);
     return { ...normalized, status: statusFor(sourceId, 'bluesky-public-api', normalized.images, normalized.videos, { note: 'API publique Bluesky', identityAliases: raw.aliases, accounts: raw.accounts }) };
   }
@@ -385,6 +446,8 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
     const accounts = [];
     for (const account of search.accounts || []) {
       const accountUrl = account.url || `${instance}/@${account.acct}`;
+      const accountContext = `${account.acct || ''} ${account.display_name || ''}`;
+      if (!textMatchesAllQueryTokens(accountContext, query)) continue;
       accounts.push(accountUrl);
       identityAliases.push({ value: `@${account.acct}`, kind: 'username', confidence: 92, evidence: [accountUrl] });
       if (account.display_name) identityAliases.push({ value: account.display_name, kind: 'display_name', confidence: 84, evidence: [accountUrl] });
@@ -396,7 +459,7 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
       }
     }
     const normalized = normalizeRaw(raw, query, sourceId, scoped);
-    return { ...normalized, status: statusFor(sourceId, 'mastodon-api', normalized.images, normalized.videos, { note: `${accounts.length} comptes publics Mastodon`, identityAliases, accounts: unique(accounts) }) };
+    return { ...normalized, status: statusFor(sourceId, 'mastodon-api', normalized.images, normalized.videos, { note: `${accounts.length} comptes publics Mastodon correspondants`, identityAliases, accounts: unique(accounts) }) };
   }
 
   if (sourceId === 'tumblr') {
@@ -429,6 +492,7 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
     const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
     const payload = await deps.fetchText(`${instance}/api/v1/search/videos?search=${encodeURIComponent(query)}&count=${Math.min(scoped.videoLimit, 25)}&start=0&sort=-match`);
     const raw = parsePeerTubeResults(payload, instance);
+    raw.media = raw.media.filter(item => textMatchesAllQueryTokens(`${item.title || ''} ${item.description || ''} ${item.accountUrl || ''} ${item.link || ''}`, query));
     const normalized = normalizeRaw(raw, query, sourceId, scoped);
     normalized.videos = normalized.videos.map(item => ({ ...item, duration: deps.formatDuration(item.durationSeconds) }));
     return { ...normalized, status: statusFor(sourceId, 'peertube-api', normalized.images, normalized.videos, { note: `API publique ${new URL(instance).hostname}` }) };
@@ -477,6 +541,7 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
 }
 
 module.exports = {
+  textMatchesAllQueryTokens,
   runExtendedApiSource,
   selectWikidataEntity,
   selectTmdbPerson,
@@ -484,5 +549,6 @@ module.exports = {
   parseTumblrResults,
   parseImgurResults,
   parsePeerTubeResults,
-  parseArquivoResults
+  parseArquivoResults,
+  parseOpenverseResults
 };

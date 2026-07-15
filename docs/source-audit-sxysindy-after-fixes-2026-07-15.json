@@ -1,0 +1,2849 @@
+{
+  "generatedAt": "2026-07-15T00:51:56.707Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:3012",
+  "queryMode": "forced:sxysindy; safe=false",
+  "catalog": {
+    "sources": 76,
+    "selectedSources": 46,
+    "adapters": 76,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 46,
+    "operational": 5,
+    "degraded": 2,
+    "false_positive": 0,
+    "empty": 34,
+    "configuration_required": 3,
+    "access_blocked": 1,
+    "rate_limited": 1,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "duckduckgo",
+      "label": "DuckDuckGo",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "duckduckgo-images",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "duckduckgo.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 5982,
+      "status": {
+        "success": true,
+        "adapter": "duckduckgo-images+html-fallback",
+        "imagesCount": 4,
+        "videosCount": 4,
+        "rawCount": 0,
+        "filteredCount": 0,
+        "pagesDiscovered": 3,
+        "pagesCrawled": 1,
+        "discoveredPageSamples": [
+          "https://www.camwhores.tv/tags/sxysindy/",
+          "https://pornzog.com/video/7965268/sxysindy/",
+          "https://www.camwhoreshd.com/tags/sxysindy/"
+        ],
+        "accounts": [
+          "https://www.camwhores.tv/tags/sxysindy/",
+          "https://pornzog.com/video/7965268/sxysindy/",
+          "https://www.camwhoreshd.com/tags/sxysindy/"
+        ],
+        "note": "Endpoint public DuckDuckGo Images; 3 pages web, 1 ouvertes",
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "SxySindy Webcam Striptease",
+          "description": "",
+          "url": "https://tn1.pornzog.com/media/videos/tmb/007/566/387/6.jpg",
+          "thumbnail": "https://tn1.pornzog.com/media/videos/tmb/007/566/387/6.jpg",
+          "link": "https://pornzog.com/video/7965268/sxysindy/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy 5",
+          "description": "",
+          "url": "https://tn1.pornzog.com/media/videos/tmb/008/805/038/12.jpg",
+          "thumbnail": "https://tn1.pornzog.com/media/videos/tmb/008/805/038/12.jpg",
+          "link": "https://pornzog.com/video/7965268/sxysindy/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy 5",
+          "description": "",
+          "url": "https://tn1.pornzog.com/media/videos/tmb/009/220/158/11.jpg",
+          "thumbnail": "https://tn1.pornzog.com/media/videos/tmb/009/220/158/11.jpg",
+          "link": "https://pornzog.com/video/7965268/sxysindy/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Sxysindy - PornZog Free Porn Clips",
+          "description": "",
+          "url": "https://pornzog.com/media/videos/tmb/007/965/268/14.jpg",
+          "thumbnail": "https://pornzog.com/media/videos/tmb/007/965/268/14.jpg",
+          "link": "https://pornzog.com/video/7965268/sxysindy/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "20:44",
+          "description": "",
+          "url": "https://pornzog.com/video/7566387/sxysindy-webcam-striptease/",
+          "thumbnail": "",
+          "link": "https://pornzog.com/video/7566387/sxysindy-webcam-striptease/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "15:01",
+          "description": "",
+          "url": "https://pornzog.com/video/8805038/sxysindy-5/",
+          "thumbnail": "",
+          "link": "https://pornzog.com/video/8805038/sxysindy-5/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "09:32",
+          "description": "",
+          "url": "https://pornzog.com/video/9220158/sxysindy-5/",
+          "thumbnail": "",
+          "link": "https://pornzog.com/video/9220158/sxysindy-5/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans la page source"
+          ],
+          "confidenceScore": 90
+        },
+        {
+          "type": "video",
+          "title": "Sxysindy - PornZog Free Porn Clips",
+          "description": "",
+          "url": "https://pornzog.com/video/7965268/sxysindy/",
+          "thumbnail": "https://pornzog.com/media/videos/tmb/007/965/268/14.jpg",
+          "link": "https://pornzog.com/video/7965268/sxysindy/",
+          "sourceId": "duckduckgo",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 8,
+        "queryRelevantSamples": 8,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 3,
+        "missingUrls": 0
+      },
+      "state": "degraded"
+    },
+    {
+      "id": "bing",
+      "label": "Bing",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "bing-images",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "bing.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 835,
+      "status": {
+        "success": true,
+        "adapter": "bing-images",
+        "imagesCount": 5,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "discoveredPageSamples": [],
+        "accounts": [],
+        "note": "Bing Images HTTP 200",
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Sxysindy + bf #1 [contact for more] - CamWhores",
+          "description": "",
+          "url": "https://cdn.camwhores.tv/contents/videos_screenshots/14026000/14026916/180x135/1.jpg",
+          "thumbnail": "https://ts2.explicit.bing.net/th?id=OIP.__76XgUGRjj_ywgXW103XgAAAA&pid=15.1",
+          "link": "https://www.camwhores.tv/videos/14026916/sxysindy-bf-1-contact-for-more/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy Webcam Striptease - PornZog Free Porn Clips",
+          "description": "",
+          "url": "https://pornzog.com/media/videos/tmb/007/566/387/6.jpg",
+          "thumbnail": "https://ts1.mm.bing.net/th?id=OIP.tFd9x7-ekx_zeeCsQd_UbwAAAA&pid=15.1",
+          "link": "https://pornzog.com/video/7566387/sxysindy-webcam-striptease/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Sxysindy #2 [contact for more]",
+          "description": "",
+          "url": "https://www.camwhoreshd.com/contents/videos_screenshots/1610000/1610470/496x372/3.jpg",
+          "thumbnail": "https://ts4.mm.bing.net/th?id=OIP.d2kOI01cesAkK5tMg1AAuQHaFj&pid=15.1",
+          "link": "https://www.camwhoreshd.com/videos/1610470/sxysindy-2-contact-for-more-1c04c316105fb6a5/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Free sxysindy Porn Videos & Sex Movies - TNAFLIX.COM",
+          "description": "",
+          "url": "https://img.tnaflix.com/a16:8q80w500r/196/10/64/10647883/thumbs/10.jpg",
+          "thumbnail": "https://ts3.mm.bing.net/th?id=OIP.fQYM1C_52W7K7la34V5ntwHaDt&pid=15.1",
+          "link": "https://www.tnaflix.com/search?what=sxysindy",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Sxysindy #2 [contact for more]",
+          "description": "",
+          "url": "https://www.camwhoreshd.com/contents/videos_screenshots/1610000/1610470/496x372/4.jpg",
+          "thumbnail": "https://ts3.mm.bing.net/th?id=OIP.zn6MlV4d1MxBfNdGz_XUcQHaFj&pid=15.1",
+          "link": "https://www.camwhoreshd.com/videos/1610470/sxysindy-2-contact-for-more-1c04c316105fb6a5/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "google",
+      "label": "Google",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image"
+      ],
+      "adapterMode": "google-cse",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "google.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 8,
+      "status": {
+        "success": false,
+        "skipped": true,
+        "adapter": "google-cse",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle Google API requise; moteur CX deja preconfigure dans Connexions API"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "brave",
+      "label": "Brave",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image"
+      ],
+      "adapterMode": "brave-images-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "search.brave.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 8,
+      "status": {
+        "success": false,
+        "skipped": true,
+        "adapter": "brave-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle Brave Search API requise"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "reddit",
+      "label": "Reddit",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "reddit-json",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "reddit.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1301,
+      "status": {
+        "success": false,
+        "available": false,
+        "directReachable": false,
+        "fallbackUsed": false,
+        "adapter": "reddit-json+bing-images-fallback",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "indexedFallbackCount": 0,
+        "note": "Reddit JSON indisponible (HTTP 403); Bing Images HTTP 200",
+        "zeroReason": "access_blocked"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "access_blocked"
+    },
+    {
+      "id": "telegram",
+      "label": "Telegram",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "t.me"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3820,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-profile-crawl",
+        "note": "0 media public extractible; t.me: HTTP 200; duckduckgo.com: HTTP 200; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "instagram",
+      "label": "Instagram",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "instagram.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 14241,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-profile-crawl",
+        "note": "scan public; www.instagram.com: HTTP 200; duckduckgo.com: HTTP 200; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe",
+        "imagesCount": 1,
+        "videosCount": 0,
+        "pagesDiscovered": 6,
+        "pagesCrawled": 6,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [
+          {
+            "url": "https://www.instagram.com/sxysindy/",
+            "title": "SxySindy (@sxysindy) • Instagram photos and videos"
+          },
+          {
+            "url": "https://www.instagram.com/sxysindy/reels/",
+            "title": "SxySindy (@sxysindy) • Instagram photos and videos"
+          },
+          {
+            "url": "https://www.instagram.com/popular/sxysindy/",
+            "title": "Sxysindy - Instagram"
+          },
+          {
+            "url": "https://www.instagram.com/p/Ctn2w8xL_pG/",
+            "title": "SxySindy on Instagram"
+          },
+          {
+            "url": "https://www.instagram.com/sxysindy/reel/B_5dHOvB3eu/",
+            "title": "SxySindy | - Instagram"
+          },
+          {
+            "url": "https://www.instagram.com/p/BUvGUKRFXfi/",
+            "title": "SxySindy | - Instagram"
+          }
+        ],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Sxysindy",
+          "description": "",
+          "url": "https://scontent-mia3-1.cdninstagram.com/v/t51.71878-15/631592458_3489425247898251_7122832152972670957_n.jpg?stp=cmp1_dst-jpg_e35_s640x640_tt6&_nc_cat=111&ccb=7-5&_nc_sid=18de74&efg=eyJlZmdfdGFnIjoiQ0xJUFMuYmVzdF9pbWFnZV91cmxnZW4uQzMifQ%3D%3D&_nc_ohc=Z1vm-WmidtoQ7kNvwFP90IM&_nc_oc=Adp5CsN29hwJBbXyJ4KmEjrzCKmKMVfeOoWLR-8Ra7SQeE9xyHS52BYKYVETSgXt0BU&_nc_zt=23&_nc_ht=scontent-mia3-1.cdninstagram.com&_nc_gid=gx5HKJM0_IlXwjn4CNvk5g&_nc_ss=7360f&oh=00_AQDezAQNV4BLpi4YKBwK52ouYd2hYEu_ccOdi9MfrwQKkQ&oe=6A5CAF70",
+          "thumbnail": "https://scontent-mia3-1.cdninstagram.com/v/t51.71878-15/631592458_3489425247898251_7122832152972670957_n.jpg?stp=cmp1_dst-jpg_e35_s640x640_tt6&_nc_cat=111&ccb=7-5&_nc_sid=18de74&efg=eyJlZmdfdGFnIjoiQ0xJUFMuYmVzdF9pbWFnZV91cmxnZW4uQzMifQ%3D%3D&_nc_ohc=Z1vm-WmidtoQ7kNvwFP90IM&_nc_oc=Adp5CsN29hwJBbXyJ4KmEjrzCKmKMVfeOoWLR-8Ra7SQeE9xyHS52BYKYVETSgXt0BU&_nc_zt=23&_nc_ht=scontent-mia3-1.cdninstagram.com&_nc_gid=gx5HKJM0_IlXwjn4CNvk5g&_nc_ss=7360f&oh=00_AQDezAQNV4BLpi4YKBwK52ouYd2hYEu_ccOdi9MfrwQKkQ&oe=6A5CAF70",
+          "link": "https://www.instagram.com/popular/sxysindy/",
+          "sourceId": "instagram",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 1,
+        "queryRelevantSamples": 1,
+        "sourceDomainSamples": 1,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "facebook",
+      "label": "Facebook",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-search-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "facebook.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3019,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "public-search-crawl",
+        "note": "0 media public extractible; www.facebook.com: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "tiktok",
+      "label": "Tiktok",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-search-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "tiktok.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3533,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-search-crawl",
+        "note": "0 media public extractible; www.tiktok.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "x",
+      "label": "X",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-search-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "x.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2324,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-search-crawl",
+        "note": "0 media public extractible; x.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "pinterest",
+      "label": "Pinterest",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-search-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "pinterest.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2930,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-search-crawl",
+        "note": "0 media public extractible; www.pinterest.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "snapchat",
+      "label": "Snapchat",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "snapchat.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2119,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "public-profile-crawl",
+        "note": "0 media public extractible; www.snapchat.com: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "threads",
+      "label": "Threads",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "threads.net"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3490,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-profile-crawl",
+        "note": "0 media public extractible; www.threads.net: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; site possiblement JS, login ou anti-bot",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": [],
+        "zeroReason": "no_public_media_extracted"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "wayback",
+      "label": "Wayback",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "wayback-cdx",
+      "implementation": "dedicated-adapter",
+      "availability": "frontend-streaming-with-server-cdx",
+      "domains": [
+        "web.archive.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2531,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "wayback-host-search+cdx",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 4,
+        "pagesCrawled": 0,
+        "accounts": [
+          "https://sxysindy.tumblr.com/",
+          "https://sxysindy.com/",
+          "https://thesxysindy.weebly.com/",
+          "https://sxysindy.weebly.com/"
+        ],
+        "pageSamples": [
+          {
+            "url": "https://sxysindy.tumblr.com/",
+            "title": "sxysindy.tumblr.com"
+          },
+          {
+            "url": "https://sxysindy.com/",
+            "title": "sxysindy.com"
+          },
+          {
+            "url": "https://thesxysindy.weebly.com/",
+            "title": "thesxysindy.weebly.com"
+          },
+          {
+            "url": "https://sxysindy.weebly.com/",
+            "title": "sxysindy.weebly.com"
+          }
+        ],
+        "filteredUiAssets": 0,
+        "rateLimitedResponses": 8,
+        "attempts": [
+          {
+            "domain": "sxysindy.tumblr.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "sxysindy.tumblr.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "sxysindy.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "sxysindy.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "thesxysindy.weebly.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "thesxysindy.weebly.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "sxysindy.weebly.com",
+            "success": false,
+            "error": "HTTP 429"
+          },
+          {
+            "domain": "sxysindy.weebly.com",
+            "success": false,
+            "error": "HTTP 429"
+          }
+        ],
+        "note": "4 domaine(s) via la recherche officielle Wayback; 0/4 domaine(s) interroge(s) via CDX",
+        "zeroReason": "rate_limited"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "rate_limited"
+    },
+    {
+      "id": "freeones",
+      "label": "FreeOnes",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "freeones.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 4286,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.freeones.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "freeonesforum",
+      "label": "FreeOnes Forum",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "freeones.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 12010,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.freeones.com: ECONNABORTED; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "erome",
+      "label": "Erome",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "erome.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1853,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; fr.erome.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "redgifs",
+      "label": "RedGIFs",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "video"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "redgifs.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1773,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.redgifs.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "babepedia",
+      "label": "BabePedia",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "babepedia.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1793,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.babepedia.com: HTTP 403; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "camwhores",
+      "label": "CamWhores",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "camwhores.tv",
+        "camwhores.video",
+        "camwhoreshd.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2130,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.camwhores.tv: HTTP 403; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 2 media indexe",
+        "imagesCount": 0,
+        "videosCount": 2,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 2,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "video",
+          "title": "Sxysindy + bf #1 [contact for more] - CamWhores",
+          "description": "",
+          "url": "https://www.camwhores.tv/videos/14026916/sxysindy-bf-1-contact-for-more/",
+          "thumbnail": "https://ts2.explicit.bing.net/th?id=OIP.__76XgUGRjj_ywgXW103XgAAAA&pid=15.1",
+          "link": "https://www.camwhores.tv/videos/14026916/sxysindy-bf-1-contact-for-more/",
+          "sourceId": "camwhores",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Sxysindy #2 [contact for more]",
+          "description": "",
+          "url": "https://www.camwhoreshd.com/videos/1610470/sxysindy-2-contact-for-more-1c04c316105fb6a5/",
+          "thumbnail": "https://ts4.mm.bing.net/th?id=OIP.d2kOI01cesAkK5tMg1AAuQHaFj&pid=15.1",
+          "link": "https://www.camwhoreshd.com/videos/1610470/sxysindy-2-contact-for-more-1c04c316105fb6a5/",
+          "sourceId": "camwhores",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 2,
+        "queryRelevantSamples": 2,
+        "sourceDomainSamples": 2,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "degraded"
+    },
+    {
+      "id": "onlyfans",
+      "label": "OnlyFans public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "onlyfans.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1819,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; onlyfans.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://onlyfans.com/sxysindy"
+        ],
+        "identityAliases": [
+          {
+            "value": "@sxysindy",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://onlyfans.com/sxysindy"
+            ]
+          }
+        ],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "fansly",
+      "label": "Fansly public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "fansly.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1936,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; fansly.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 2,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://fansly.com/sxysindy"
+        ],
+        "identityAliases": [
+          {
+            "value": "@sxysindy",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://fansly.com/sxysindy"
+            ]
+          }
+        ],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Fansly public recherche sxysindy",
+          "description": "",
+          "url": "https://fansly.com/assets/images/fansly_dark_v3.webp",
+          "thumbnail": "https://fansly.com/assets/images/fansly_dark_v3.webp",
+          "link": "https://fansly.com/sxysindy",
+          "sourceId": "fansly",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Fansly public recherche sxysindy",
+          "description": "",
+          "url": "https://fansly.com/assets/images/fansly_light_v3.webp",
+          "thumbnail": "https://fansly.com/assets/images/fansly_light_v3.webp",
+          "link": "https://fansly.com/sxysindy",
+          "sourceId": "fansly",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 2,
+        "queryRelevantSamples": 2,
+        "sourceDomainSamples": 2,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "mym",
+      "label": "MYM public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "mym.fans"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2148,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; mym.fans: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "xvideos",
+      "label": "XVideos",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "video"
+      ],
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "xvideos.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3753,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "1 pages correspondantes; 1 ouvertes; www.xvideos.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 1,
+        "pagesDiscovered": 1,
+        "pagesCrawled": 1,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [
+          "https://fr.xvideos.com/video.bfudf2103/sxysindy_brousse_poilue_sexy_danse"
+        ],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "video",
+          "title": "SxySindy Brousse Poilue Sexy Danse",
+          "description": "",
+          "url": "https://mp4-gcore.xvideos-cdn.com/d45951e3-bb1d-4e73-b621-2c3ef0add263/0/video_360p.mp4?secure=EBlbRWLpPTnKEGyc03xqkQ==,1784087467",
+          "thumbnail": "https://thumbs-gcore.xvideos-cdn.com/d45951e3-bb1d-4e73-b621-2c3ef0add263/0/xv_22_t.jpg",
+          "link": "https://fr.xvideos.com/video.bfudf2103/sxysindy_brousse_poilue_sexy_danse",
+          "sourceId": "xvideos",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 1,
+        "queryRelevantSamples": 1,
+        "sourceDomainSamples": 1,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "eporner",
+      "label": "Eporner",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "video"
+      ],
+      "adapterMode": "eporner-api-v2",
+      "implementation": "source-crawl-adapter",
+      "availability": "official-public-api-with-html-fallback",
+      "domains": [
+        "eporner.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2441,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "eporner-api-v2",
+        "note": "0 pages correspondantes; 0 ouvertes; api.eporner.com: 0 resultat sur 0; www.eporner.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "phunforum",
+      "label": "Phun Forum",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "public-forum-get",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "forum.phun.org",
+        "phun.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1788,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-forum-get",
+        "note": "0 pages correspondantes; 0 ouvertes; forum.phun.org: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "planetsuzy",
+      "label": "PlanetSuzy",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "public-forum-form",
+      "implementation": "source-crawl-adapter",
+      "availability": "public-form-with-search-engine-fallbacks",
+      "domains": [
+        "planetsuzy.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2410,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-forum-form",
+        "note": "0 pages correspondantes; 0 ouvertes; www.planetsuzy.org: formulaire public HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "bellazon",
+      "label": "Bellazon Forum",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "adapterMode": "public-forum-get",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "bellazon.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2550,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-forum-get",
+        "note": "0 pages correspondantes; 0 ouvertes; www.bellazon.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "wikidata",
+      "label": "Wikidata identite",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "wikidata-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "wikidata.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1005,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "wikidata-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "Aucune entite Wikidata",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "openverse",
+      "label": "Openverse",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image"
+      ],
+      "adapterMode": "openverse-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "openverse.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 529,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "openverse-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "API publique Openverse; 0 correspondances annoncees",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "internetarchive",
+      "label": "Internet Archive",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "archive-org-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "archive.org"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 795,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "archive-org-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "0 collections publiques analysees",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "arquivo",
+      "label": "Arquivo.pt Images",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "arquivo-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "arquivo.pt"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1488,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "arquivo-image-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "Recherche images archivees Arquivo.pt",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "bluesky",
+      "label": "Bluesky",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "bluesky-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "bsky.app"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 850,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "bluesky-public-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "API publique Bluesky",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "mastodon",
+      "label": "Mastodon",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "mastodon-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "mastodon.social"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 722,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "mastodon-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "no_matching_public_media",
+        "note": "0 comptes publics Mastodon correspondants",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "tumblr",
+      "label": "Tumblr",
+      "category": "social",
+      "nsfw": false,
+      "auth": "api-key",
+      "authRequired": true,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "tumblr-api",
+      "implementation": "dedicated-adapter",
+      "availability": "official-api-configuration-required",
+      "domains": [
+        "tumblr.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 7,
+      "status": {
+        "success": false,
+        "available": false,
+        "skipped": true,
+        "adapter": "tumblr-api",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "zeroReason": "missing_credentials",
+        "note": "Cle Tumblr requise dans Connexions API",
+        "accounts": [],
+        "identityAliases": [],
+        "pageSamples": []
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "configuration_required"
+    },
+    {
+      "id": "linktree",
+      "label": "Linktree",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "linktr.ee"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3605,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; linktr.ee: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 5,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://linktr.ee/sxysindy",
+          "http://www.instagram.com/sxysindy",
+          "http://www.instagram.com/sweetsavorysensations",
+          "https://www.snapchat.com/add/gwenbearxo?share_id=gG8Dg3sEjqA&locale=en-US",
+          "https://www.snapchat.com/add/sxy_divinity?share_id=WNRh3fMSM-U&locale=en-US"
+        ],
+        "identityAliases": [
+          {
+            "value": "SxySindy4u",
+            "kind": "display_name",
+            "confidence": 84,
+            "evidence": [
+              "https://linktr.ee/sxysindy"
+            ]
+          },
+          {
+            "value": "@sxysindy",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://linktr.ee/sxysindy"
+            ]
+          },
+          {
+            "value": "@sweetsavorysensations",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "http://www.instagram.com/sweetsavorysensations"
+            ]
+          },
+          {
+            "value": "@gwenbearxo",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.snapchat.com/add/gwenbearxo?share_id=gG8Dg3sEjqA&locale=en-US"
+            ]
+          },
+          {
+            "value": "@sxy_divinity",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.snapchat.com/add/sxy_divinity?share_id=WNRh3fMSM-U&locale=en-US"
+            ]
+          }
+        ],
+        "zeroReason": ""
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "SxySindy4u OnlyFans Official - Exclusive Content & Account | Linktree",
+          "description": "",
+          "url": "https://ugc.production.linktr.ee/uxmtD8YYQFqWfll3WP7u_image?io=true&size=avatar-v3_0",
+          "thumbnail": "https://ugc.production.linktr.ee/uxmtD8YYQFqWfll3WP7u_image?io=true&size=avatar-v3_0",
+          "link": "https://linktr.ee/sxysindy",
+          "sourceId": "linktree",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy4u OnlyFans Official - Exclusive Content & Account | Linktree",
+          "description": "",
+          "url": "https://ugc.production.linktr.ee/bXwdQLwPQZWO3tIIv0LN_image?io=true&size=thumbnail-stack_v1_0",
+          "thumbnail": "https://ugc.production.linktr.ee/bXwdQLwPQZWO3tIIv0LN_image?io=true&size=thumbnail-stack_v1_0",
+          "link": "https://linktr.ee/sxysindy",
+          "sourceId": "linktree",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy4u OnlyFans Official - Exclusive Content & Account | Linktree",
+          "description": "",
+          "url": "https://ugc.production.linktr.ee/9QxKA7qVQKG29Dr9PHLG_image?io=true&size=thumbnail-stack_v1_0",
+          "thumbnail": "https://ugc.production.linktr.ee/9QxKA7qVQKG29Dr9PHLG_image?io=true&size=thumbnail-stack_v1_0",
+          "link": "https://linktr.ee/sxysindy",
+          "sourceId": "linktree",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy4u OnlyFans Official - Exclusive Content & Account | Linktree",
+          "description": "",
+          "url": "https://ugc.production.linktr.ee/oLzpvVyTMWXYrq1pHFgu_image?io=true&size=thumbnail-stack_v1_0",
+          "thumbnail": "https://ugc.production.linktr.ee/oLzpvVyTMWXYrq1pHFgu_image?io=true&size=thumbnail-stack_v1_0",
+          "link": "https://linktr.ee/sxysindy",
+          "sourceId": "linktree",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "SxySindy4u OnlyFans Official - Exclusive Content & Account | Linktree",
+          "description": "",
+          "url": "https://linktr.ee/og/image/sxysindy.jpg",
+          "thumbnail": "https://linktr.ee/og/image/sxysindy.jpg",
+          "link": "https://linktr.ee/sxysindy",
+          "sourceId": "linktree",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 5,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "beacons",
+      "label": "Beacons",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "beacons.ai"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1847,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; beacons.ai: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://beacons.ai/sxysindy"
+        ],
+        "identityAliases": [
+          {
+            "value": "@sxysindy",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://beacons.ai/sxysindy"
+            ]
+          }
+        ],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "allmylinks",
+      "label": "AllMyLinks",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "allmylinks.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2073,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; allmylinks.com: HTTP 403; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "carrd",
+      "label": "Carrd",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "carrd.co"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1897,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; sxysindy.carrd.co: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "iafd",
+      "label": "IAFD",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-metadata-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "iafd.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 8296,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.iafd.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "theporndb",
+      "label": "ThePornDB",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "api-key-optional",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-metadata-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "official-api-configured-with-public-fallback",
+      "domains": [
+        "theporndb.net"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2710,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": false,
+        "fallbackUsed": true,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; theporndb.net: HTTP 404; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; bing.com/images: HTTP 200; 0 media indexe; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "fancentro",
+      "label": "FanCentro public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "fancentro.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2230,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; fancentro.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://fancentro.com/age-verification"
+        ],
+        "identityAliases": [
+          {
+            "value": "@age-verification",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://fancentro.com/age-verification"
+            ]
+          }
+        ],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "loyalfans",
+      "label": "LoyalFans public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "loyalfans.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 1894,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.loyalfans.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [
+          "https://www.loyalfans.com/sxysindy"
+        ],
+        "identityAliases": [
+          {
+            "value": "@sxysindy",
+            "kind": "username",
+            "confidence": 78,
+            "evidence": [
+              "https://www.loyalfans.com/sxysindy"
+            ]
+          }
+        ],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "manyvids",
+      "label": "ManyVids public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "manyvids.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2298,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.manyvids.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "clips4sale",
+      "label": "Clips4Sale public",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-profile-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "clips4sale.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 3803,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "0 pages correspondantes; 0 ouvertes; www.clips4sale.com: HTTP 200; duckduckgo.com: HTTP 403; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    },
+    {
+      "id": "lpsg",
+      "label": "LPSG Forum",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "adapterMode": "public-forum-get",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "lpsg.com"
+      ],
+      "query": "sxysindy",
+      "httpStatus": 200,
+      "durationMs": 2218,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "public-forum-get",
+        "note": "0 pages correspondantes; 0 ouvertes; www.lpsg.com: HTTP 200; duckduckgo.com: HTTP 403; www.bing.com: HTTP 200",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "attemptedUrls": 3,
+        "blockedResponses": 1,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [],
+        "accounts": [],
+        "identityAliases": [],
+        "zeroReason": "no_matching_public_pages"
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "empty"
+    }
+  ]
+}
