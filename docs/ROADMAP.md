@@ -1,6 +1,6 @@
 # Etat et suite
 
-## Integre jusqu'a la version 1.7.1
+## Integre jusqu'a la version 1.8.0
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
 - Resultats progressifs par source, recherche batch, queue cooperative par etapes, cache, historique, collection, veilles et exports.
@@ -37,6 +37,12 @@
 - Deverrouillage d'ecriture par cookie `HttpOnly` depuis Connexions lorsque `APP_WRITE_TOKEN` est configure.
 - Historique, collection, profils, queue et veilles Vercel isoles par session navigateur, y compris dans des cles Redis distinctes.
 - Telegram Web public borne par username exact, avec medias, miniatures, compte et URLs de message comme preuves.
+- Plan Person Finder source-aware et equitable entre nom, alias, usernames et comptes; aucun couple non execute n'est masque.
+- Historique de couverture Person Finder par identite/source avec planification, interrogation, skip, erreur et volume de resultats.
+- Canari public adapte a chacun des 97 transports, audit de contrats hors ligne et workflow GitHub hebdomadaire.
+- Classification de qualite `original confirme`, `meilleure version declaree`, `miniature seulement` ou `non verifiee`, completee par la mesure navigateur.
+- Veille locale automatique de 15 minutes a une semaine, sans chevauchement, avec baseline et liste des nouveaux medias.
+- Registre des sources, planificateur/execution Person Finder, qualite media et routeur de veille extraits de `server.js`.
 - Collections du stockage local bornees, proxy media limite a 32 Mo et embeds video restreints aux domaines approuves.
 - Securite HTTP, SSRF, CORS, CSP, rate limits, limites de taille et token d'ecriture facultatif.
 - Executable Windows Node 24 autonome, workflow GitHub Actions Linux/Windows et signature Authenticode optionnelle avant checksum.
@@ -54,7 +60,7 @@
 ## Prochaines evolutions utiles
 
 1. Accepter les conditions Marketplace Upstash sur le compte Vercel, puis relancer le provisioning.
-2. Continuer le decoupage de `server.js` : les adaptateurs Telegram/Coomer, l'identite, le graphe et le stockage sont deja modules.
-3. Etendre les fixtures HTML/API aux sources qui changent souvent et ajouter une surveillance de contrat planifiee.
+2. Continuer le decoupage des routes collection, exports et Person Finder hors de `server.js`.
+3. Enrichir progressivement les fixtures HTML des sources qui changent apres une regression constatee par le workflow planifie.
 4. Fournir un certificat de signature de code dans les secrets GitHub pour activer la signature deja integree.
 5. Valider les adaptateurs avec identifiants sur les comptes API personnels du proprietaire de l'application.

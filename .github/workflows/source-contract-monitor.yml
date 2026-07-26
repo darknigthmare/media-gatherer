@@ -1,0 +1,37 @@
+name: Source contract monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-contract-monitor
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    name: Verify all public source contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit the 97 source contracts and canaries
+        run: npm run audit:source-contracts
+
+      - name: Run deterministic QA
+        run: npm run qa

@@ -908,6 +908,24 @@ test('securise le cycle complet profil comptes validation timeline rapport et gr
   });
   assert.equal(editedAccount.status, 200);
 
+  const searchPlan = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/search-plan?depth=normal&maxQueries=4&sources=duckduckgo,telegram,youtube,wikidata`).then(response => response.json());
+  assert.equal(searchPlan.tasks.length, 4);
+  assert.ok(searchPlan.coverage.some(row => row.identityValue === 'workflow-edited' && row.sourceId === 'youtube' && row.state === 'planned'));
+  assert.ok(searchPlan.coverage.some(row => row.identityValue === 'Person Workflow Test' && row.sourceId === 'telegram' && row.reason === 'telegram_requires_username'));
+  const drySearch = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/search`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      depth: 'normal',
+      maxQueries: 4,
+      sources: 'duckduckgo,telegram,youtube,wikidata',
+      resolveIdentity: false,
+      dryRun: true
+    })
+  });
+  assert.equal(drySearch.status, 200);
+  assert.equal((await drySearch.json()).dryRun, true);
+
   const mediaResponse = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1012,9 +1030,52 @@ test('chaque source expose un contrat de transport public testable', async () =>
     assert.ok(adapter, `adaptateur absent: ${source.id}`);
     assert.ok(Array.isArray(adapter.supports) && adapter.supports.length > 0, `supports absents: ${source.id}`);
     assert.ok(Array.isArray(adapter.domains) && adapter.domains.length > 0, `domaine absent: ${source.id}`);
+    assert.ok(adapter.canary?.query && adapter.canary?.inputType && adapter.canary?.expected, `canari absent: ${source.id}`);
     const urls = sourceSearchUrls(source.id, 'test');
     assert.ok(urls.length > 0 && urls.every(url => /^https:\/\//.test(url)), `transport invalide: ${source.id}`);
   }
+});
+
+test('persiste la frequence et l activation des veilles dans le routeur dedie', async () => {
+  const createdResponse = await fetch(`${baseUrl}/api/monitors`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      query: 'Monitor Workflow Test',
+      enabled: true,
+      intervalMinutes: 1,
+      newOnly: true,
+      config: {
+        query: 'Monitor Workflow Test',
+        checkedSources: ['duckduckgo', 'unknown-source'],
+        safeSearch: true,
+        mediaKind: 'both'
+      },
+      baselineItems: [{ url: 'https://cdn.example.com/baseline.jpg' }]
+    })
+  });
+  assert.equal(createdResponse.status, 200);
+  const monitor = await createdResponse.json();
+  assert.equal(monitor.intervalMinutes, 15);
+  assert.deepEqual(monitor.config.checkedSources, ['duckduckgo']);
+  assert.equal(monitor.lastMediaKeys.length, 1);
+
+  const due = await fetch(`${baseUrl}/api/monitors?due=true`).then(response => response.json());
+  assert.ok(!due.items.some(item => item.id === monitor.id));
+
+  const patchedResponse = await fetch(`${baseUrl}/api/monitors/${encodeURIComponent(monitor.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enabled: false, intervalMinutes: 30 })
+  });
+  assert.equal(patchedResponse.status, 200);
+  const patched = await patchedResponse.json();
+  assert.equal(patched.enabled, false);
+  assert.equal(patched.intervalMinutes, 30);
+  assert.equal(patched.nextRunAt, null);
+
+  const deleted = await fetch(`${baseUrl}/api/monitors/${encodeURIComponent(monitor.id)}`, { method: 'DELETE' });
+  assert.equal(deleted.status, 200);
 });
 
 test('utilise uniquement des icones Lucide disponibles', () => {

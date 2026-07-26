@@ -1,0 +1,1064 @@
+{
+  "generatedAt": "2026-07-26T16:11:08.802Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:3137",
+  "queryMode": "per-source-canaries; safe=per-source",
+  "catalog": {
+    "sources": 97,
+    "selectedSources": 8,
+    "adapters": 97,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 8,
+    "operational": 7,
+    "degraded": 1,
+    "false_positive": 0,
+    "empty": 0,
+    "skipped": 0,
+    "configuration_required": 0,
+    "access_blocked": 0,
+    "rate_limited": 0,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "bing",
+      "label": "Bing",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "purpose": "media",
+      "adapterMode": "bing-images",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "bing.com"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 605,
+      "status": {
+        "success": true,
+        "adapter": "bing-images",
+        "imagesCount": 5,
+        "videosCount": 0,
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "discoveredPageSamples": [],
+        "accounts": [],
+        "note": "Bing Images HTTP 200",
+        "zeroReason": "",
+        "rawImagesCount": 5,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Current Space Act Agreements - NASA",
+          "description": "",
+          "url": "https://images-assets.nasa.gov/image/NHQ202503140021/NHQ202503140021~large.jpg?w=1920&h=1315&fit=clip&crop=faces%2Cfocalpoint",
+          "thumbnail": "https://ts4.mm.bing.net/th?id=OIP.kkAeKwZIPD10c9Po5kGSKgHaFE&pid=15.1",
+          "link": "https://www.nasa.gov/partnerships/current-space-act-agreements/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Space Operations News - NASA",
+          "description": "",
+          "url": "https://images-assets.nasa.gov/image/iss072e518423/iss072e518423~large.jpg?w=1920&h=1280&fit=crop&crop=faces%2Cfocalpoint",
+          "thumbnail": "https://ts4.mm.bing.net/th?id=OIP.wWUtSxfZyOPWiQm8NtlMQQHaE8&pid=15.1",
+          "link": "https://www.nasa.gov/directorates/space-operations/space-operations-news/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Définition | Nasa - National Aeronautics and Space Administration",
+          "description": "",
+          "url": "https://cdn.futura-sciences.com/sources/images/NASA.jpg",
+          "thumbnail": "https://ts1.mm.bing.net/th?id=OIP.YGgIpW4PUzys4iyN2T9CRAHaEo&pid=15.1",
+          "link": "https://www.futura-sciences.com/sciences/definitions/univers-nasa-2468/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Español | NASA+",
+          "description": "",
+          "url": "https://images-assets.nasa.gov/image/jsc2025e036495/jsc2025e036495~large.jpg?w=600&h=400&fit=crop&crop=faces%2Cfocalpoint",
+          "thumbnail": "https://ts1.mm.bing.net/th?id=OIP.T-pNLCR_jgiRPAy1ewAGRAHaE7&pid=15.1",
+          "link": "https://plus.nasa.gov/topics/espanol/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "NextSTEP - NASA",
+          "description": "",
+          "url": "https://images-assets.nasa.gov/image/iss073e0385784/iss073e0385784~large.jpg?w=1920&h=1280&fit=clip&crop=faces%2Cfocalpoint",
+          "thumbnail": "https://ts1.mm.bing.net/th?id=OIP.RfuXqohXUAChW5axb8mDTwHaE8&pid=15.1",
+          "link": "https://www.nasa.gov/humans-in-space/nextstep/",
+          "sourceId": "bing",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "wikimedia",
+      "label": "Wikimedia",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image"
+      ],
+      "purpose": "media",
+      "adapterMode": "wikimedia-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "commons.wikimedia.org"
+      ],
+      "query": "NASA",
+      "httpStatus": 200,
+      "durationMs": 1563,
+      "status": {
+        "success": true,
+        "adapter": "wikimedia-api",
+        "imagesCount": 3,
+        "videosCount": 0,
+        "note": "API Wikimedia Commons",
+        "rawImagesCount": 5,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 2
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Apollo 11 Lunar Lander - 5927 NASA.jpg",
+          "description": "File:Apollo 11 Lunar Lander - 5927 NASA.jpg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Apollo_11_Lunar_Lander_-_5927_NASA.jpg",
+          "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Apollo_11_Lunar_Lander_-_5927_NASA.jpg/1280px-Apollo_11_Lunar_Lander_-_5927_NASA.jpg",
+          "link": "https://commons.wikimedia.org/wiki/File:Apollo_11_Lunar_Lander_-_5927_NASA.jpg",
+          "sourceId": "wikimedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Katherine Johnson at NASA, in 1966.jpg",
+          "description": "File:Katherine Johnson at NASA, in 1966.jpg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/6/62/Katherine_Johnson_at_NASA%2C_in_1966.jpg",
+          "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Katherine_Johnson_at_NASA%2C_in_1966.jpg/1280px-Katherine_Johnson_at_NASA%2C_in_1966.jpg",
+          "link": "https://commons.wikimedia.org/wiki/File:Katherine_Johnson_at_NASA,_in_1966.jpg",
+          "sourceId": "wikimedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "NASA HQ Building.jpg",
+          "description": "File:NASA HQ Building.jpg",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/NASA_HQ_Building.jpg",
+          "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/NASA_HQ_Building.jpg/1280px-NASA_HQ_Building.jpg",
+          "link": "https://commons.wikimedia.org/wiki/File:NASA_HQ_Building.jpg",
+          "sourceId": "wikimedia",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 3,
+        "queryRelevantSamples": 3,
+        "sourceDomainSamples": 3,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "telegram",
+      "label": "Telegram",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "purpose": "identity",
+      "adapterMode": "telegram-web-public-bounded",
+      "implementation": "dedicated-adapter",
+      "availability": "bounded-public-channel-web",
+      "domains": [
+        "t.me"
+      ],
+      "query": "durov",
+      "httpStatus": 200,
+      "durationMs": 307,
+      "status": {
+        "success": true,
+        "available": true,
+        "adapter": "telegram-web-public-bounded",
+        "imagesCount": 1,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "20 bounded public messages parsed",
+        "accounts": [
+          "https://t.me/durov"
+        ],
+        "identityAliases": [
+          {
+            "value": "@durov",
+            "kind": "username",
+            "confidence": 98,
+            "evidence": [
+              "https://t.me/durov",
+              "https://t.me/durov/514",
+              "https://t.me/durov/515",
+              "https://t.me/durov/516",
+              "https://t.me/durov/517",
+              "https://t.me/durov/518",
+              "https://t.me/durov/519",
+              "https://t.me/durov/520",
+              "https://t.me/durov/521",
+              "https://t.me/durov/522",
+              "https://t.me/durov/523",
+              "https://t.me/durov/524",
+              "https://t.me/durov/525",
+              "https://t.me/durov/526",
+              "https://t.me/durov/527",
+              "https://t.me/durov/528",
+              "https://t.me/durov/529",
+              "https://t.me/durov/531",
+              "https://t.me/durov/532",
+              "https://t.me/durov/533",
+              "https://t.me/durov/534"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://t.me/s/durov",
+            "title": "Pavel Durov",
+            "description": "Founder of Telegram."
+          }
+        ],
+        "rawImagesCount": 1,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Pavel Durov - Telegram message 522",
+          "description": "",
+          "url": "https://cdn4.telesco.pe/file/X3S-NWkgt7RPJxt_e96SIPDwwhSzuGlI6t9hvmVO5IBMwsmcplPdSzgn3x9rSWzsXE7kxmupLNuJMOJrZFiQiFKw8iOKuIgFvkFEbRZnS415xSMaewmtXZ1znQH27AE1MuynZsJNMRwo26Xws57iA9zQFqF2EMw8Q-Me0vjEu5ZWnX8SvTqdlm07hXtPdTkWUXLfo1p0sF9bZiueqz77HLSHgKSD69i17BtoXl5Xi_EnBLAfY3LUooew-GPfZ00VOwLsdRsV5zd_fbaJEmJtwdiUag7a-NUHQn4c4AhEtx2VzUnjeL6xy6dWLjdwBRfTEgIiTaOGdUNDt3pl_WDKNQ.jpg",
+          "thumbnail": "https://cdn4.telesco.pe/file/X3S-NWkgt7RPJxt_e96SIPDwwhSzuGlI6t9hvmVO5IBMwsmcplPdSzgn3x9rSWzsXE7kxmupLNuJMOJrZFiQiFKw8iOKuIgFvkFEbRZnS415xSMaewmtXZ1znQH27AE1MuynZsJNMRwo26Xws57iA9zQFqF2EMw8Q-Me0vjEu5ZWnX8SvTqdlm07hXtPdTkWUXLfo1p0sF9bZiueqz77HLSHgKSD69i17BtoXl5Xi_EnBLAfY3LUooew-GPfZ00VOwLsdRsV5zd_fbaJEmJtwdiUag7a-NUHQn4c4AhEtx2VzUnjeL6xy6dWLjdwBRfTEgIiTaOGdUNDt3pl_WDKNQ.jpg",
+          "link": "https://t.me/durov/522",
+          "sourceId": "telegram",
+          "matchReasons": [
+            "username exact dans le compte public"
+          ],
+          "confidenceScore": 100
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 1,
+        "queryRelevantSamples": 1,
+        "sourceDomainSamples": 1,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "wayback",
+      "label": "Wayback",
+      "category": "normal",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "purpose": "media",
+      "adapterMode": "wayback-cdx",
+      "implementation": "dedicated-adapter",
+      "availability": "frontend-streaming-with-server-cdx",
+      "domains": [
+        "web.archive.org"
+      ],
+      "query": "nasa.gov",
+      "httpStatus": 200,
+      "durationMs": 7401,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "wayback-host-search+cdx",
+        "imagesCount": 5,
+        "videosCount": 5,
+        "pagesDiscovered": 4,
+        "pagesCrawled": 1,
+        "accounts": [
+          "https://nasa.gov/",
+          "https://section508.nasa.gov/",
+          "https://spaceflight1.nasa.gov/",
+          "https://science1.nasa.gov/"
+        ],
+        "pageSamples": [
+          {
+            "url": "https://nasa.gov/",
+            "title": "nasa.gov"
+          },
+          {
+            "url": "https://section508.nasa.gov/",
+            "title": "section508.nasa.gov"
+          },
+          {
+            "url": "https://spaceflight1.nasa.gov/",
+            "title": "spaceflight1.nasa.gov"
+          },
+          {
+            "url": "https://science1.nasa.gov/",
+            "title": "science1.nasa.gov"
+          }
+        ],
+        "filteredUiAssets": 0,
+        "rateLimitedResponses": 0,
+        "attempts": [
+          {
+            "domain": "nasa.gov",
+            "success": true,
+            "rows": 251
+          }
+        ],
+        "note": "5 domaine(s) via la recherche officielle Wayback; 1/4 domaine(s) interroge(s) via CDX",
+        "zeroReason": "",
+        "rawImagesCount": 5,
+        "rawVideosCount": 5,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "http://www.nasa.gov:80/101948main_calvingstill_1850_2003.tiff",
+          "description": "",
+          "url": "https://web.archive.org/web/20041204155609if_/http://www.nasa.gov:80/101948main_calvingstill_1850_2003.tiff",
+          "thumbnail": "https://web.archive.org/web/20041204155609if_/http://www.nasa.gov:80/101948main_calvingstill_1850_2003.tiff",
+          "link": "https://web.archive.org/web/20041204155609/http://www.nasa.gov:80/101948main_calvingstill_1850_2003.tiff",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "http://www.nasa.gov:80/101952main_calvingstill_2001_2003.tiff",
+          "description": "",
+          "url": "https://web.archive.org/web/20041204160436if_/http://www.nasa.gov:80/101952main_calvingstill_2001_2003.tiff",
+          "thumbnail": "https://web.archive.org/web/20041204160436if_/http://www.nasa.gov:80/101952main_calvingstill_2001_2003.tiff",
+          "link": "https://web.archive.org/web/20041204160436/http://www.nasa.gov:80/101952main_calvingstill_2001_2003.tiff",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "http://www.nasa.gov/107616main_globe.tiff",
+          "description": "",
+          "url": "https://web.archive.org/web/20080923153940if_/http://www.nasa.gov/107616main_globe.tiff",
+          "thumbnail": "https://web.archive.org/web/20080923153940if_/http://www.nasa.gov/107616main_globe.tiff",
+          "link": "https://web.archive.org/web/20080923153940/http://www.nasa.gov/107616main_globe.tiff",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "http://www.nasa.gov/107671main_atlantic.tiff",
+          "description": "",
+          "url": "https://web.archive.org/web/20080923153913if_/http://www.nasa.gov/107671main_atlantic.tiff",
+          "thumbnail": "https://web.archive.org/web/20080923153913if_/http://www.nasa.gov/107671main_atlantic.tiff",
+          "link": "https://web.archive.org/web/20080923153913/http://www.nasa.gov/107671main_atlantic.tiff",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "http://www.nasa.gov:80/111382main_ANEWLIFE1.TIF",
+          "description": "",
+          "url": "https://web.archive.org/web/20060104022128if_/http://www.nasa.gov:80/111382main_ANEWLIFE1.TIF",
+          "thumbnail": "https://web.archive.org/web/20060104022128if_/http://www.nasa.gov:80/111382main_ANEWLIFE1.TIF",
+          "link": "https://web.archive.org/web/20060104022128/http://www.nasa.gov:80/111382main_ANEWLIFE1.TIF",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "http://www.nasa.gov:80/102169main_AURALAUNCH_NASAWEBAV_1.MPG",
+          "description": "",
+          "url": "https://web.archive.org/web/20041215235750if_/http://www.nasa.gov:80/102169main_AURALAUNCH_NASAWEBAV_1.MPG",
+          "thumbnail": "",
+          "link": "https://web.archive.org/web/20041215235750/http://www.nasa.gov:80/102169main_AURALAUNCH_NASAWEBAV_1.MPG",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "http://www.nasa.gov/102171main_TES_NASAWEBV_1.MPG",
+          "description": "",
+          "url": "https://web.archive.org/web/20080925023023if_/http://www.nasa.gov/102171main_TES_NASAWEBV_1.MPG",
+          "thumbnail": "",
+          "link": "https://web.archive.org/web/20080925023023/http://www.nasa.gov/102171main_TES_NASAWEBV_1.MPG",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "http://www.nasa.gov/112095main_DNA_NASAWEBV_1.MPG",
+          "description": "",
+          "url": "https://web.archive.org/web/20091028155147if_/http://www.nasa.gov/112095main_DNA_NASAWEBV_1.MPG",
+          "thumbnail": "",
+          "link": "https://web.archive.org/web/20091028155147/http://www.nasa.gov/112095main_DNA_NASAWEBV_1.MPG",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "http://www.nasa.gov:80/112096main_GRB_EARTH_NASAWEBV_1.MPG",
+          "description": "",
+          "url": "https://web.archive.org/web/20051127152638if_/http://www.nasa.gov:80/112096main_GRB_EARTH_NASAWEBV_1.MPG",
+          "thumbnail": "",
+          "link": "https://web.archive.org/web/20051127152638/http://www.nasa.gov:80/112096main_GRB_EARTH_NASAWEBV_1.MPG",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "http://www.nasa.gov:80/112098main_SWIFTSAT_NASAWEBV_1.MPG",
+          "description": "",
+          "url": "https://web.archive.org/web/20051130233841if_/http://www.nasa.gov:80/112098main_SWIFTSAT_NASAWEBV_1.MPG",
+          "thumbnail": "",
+          "link": "https://web.archive.org/web/20051130233841/http://www.nasa.gov:80/112098main_SWIFTSAT_NASAWEBV_1.MPG",
+          "sourceId": "wayback",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 10,
+        "queryRelevantSamples": 10,
+        "sourceDomainSamples": 10,
+        "missingThumbnails": 5,
+        "missingUrls": 0
+      },
+      "state": "degraded"
+    },
+    {
+      "id": "erome",
+      "label": "Erome",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "video"
+      ],
+      "purpose": "media",
+      "adapterMode": "source-crawl",
+      "implementation": "source-crawl-adapter",
+      "availability": "direct-html-with-search-engine-fallbacks",
+      "domains": [
+        "erome.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 3862,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "source-crawl",
+        "note": "8 pages correspondantes; 8 ouvertes; fr.erome.com: HTTP 200; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200",
+        "imagesCount": 5,
+        "videosCount": 5,
+        "pagesDiscovered": 8,
+        "pagesCrawled": 8,
+        "attemptedUrls": 3,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [
+          "https://fr.erome.com/a/Vne5r97l",
+          "https://fr.erome.com/a/JbtLK9vr",
+          "https://fr.erome.com/a/2G6CZP12",
+          "https://fr.erome.com/a/2r0aCiZb",
+          "https://fr.erome.com/a/75F1rSl1",
+          "https://fr.erome.com/a/FijnkIpQ",
+          "https://fr.erome.com/a/OB2bLia3",
+          "https://fr.erome.com/a/bQyLfEYl"
+        ],
+        "accounts": [],
+        "identityAliases": [
+          {
+            "value": "Mia",
+            "kind": "display_name",
+            "confidence": 84,
+            "evidence": [
+              "https://fr.erome.com/a/Vne5r97l"
+            ]
+          }
+        ],
+        "zeroReason": "",
+        "rawImagesCount": 5,
+        "rawVideosCount": 5,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://s202.erome.com/386/Vne5r97l/iY495iYc.jpg",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/iY495iYc.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://s202.erome.com/386/Vne5r97l/6fygawfS.jpg",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/6fygawfS.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://s202.erome.com/386/Vne5r97l/JqGEkpLk.jpg",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/JqGEkpLk.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://s202.erome.com/386/Vne5r97l/G0YTx5H3.jpg",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/G0YTx5H3.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "image",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://s202.erome.com/386/Vne5r97l/uXsiFmmb.jpg",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/uXsiFmmb.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://v202.erome.com/386/Vne5r97l/iY495iYc_480p.mp4",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/iY495iYc.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://v202.erome.com/386/Vne5r97l/6fygawfS_480p.mp4",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/6fygawfS.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://v202.erome.com/386/Vne5r97l/JqGEkpLk_480p.mp4",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/JqGEkpLk.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://v202.erome.com/386/Vne5r97l/G0YTx5H3_480p.mp4",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/G0YTx5H3.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa",
+          "description": "",
+          "url": "https://v202.erome.com/386/Vne5r97l/uXsiFmmb_480p.mp4",
+          "thumbnail": "https://s202.erome.com/386/Vne5r97l/uXsiFmmb.jpg",
+          "link": "https://fr.erome.com/a/Vne5r97l",
+          "sourceId": "erome",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 10,
+        "queryRelevantSamples": 10,
+        "sourceDomainSamples": 10,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "eporner",
+      "label": "Eporner",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "video"
+      ],
+      "purpose": "media",
+      "adapterMode": "eporner-api-v2",
+      "implementation": "source-crawl-adapter",
+      "availability": "official-public-api-with-html-fallback",
+      "domains": [
+        "eporner.com"
+      ],
+      "query": "mia khalifa",
+      "httpStatus": 200,
+      "durationMs": 138,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "eporner-api-v2",
+        "note": "5 videos via API publique Eporner (1342 correspondances annoncees)",
+        "imagesCount": 0,
+        "videosCount": 5,
+        "pagesDiscovered": 5,
+        "pagesCrawled": 0,
+        "pages": [
+          "https://www.eporner.com/video-eBPjMSBvYTn/naked-and-horny-all-day-long-mia-khalifa/",
+          "https://www.eporner.com/video-CImnzC9O7Jf/mia-khalifa-arab-big-tits/",
+          "https://www.eporner.com/video-RhTelbE44eG/extreme-milky-cum-squirt-in-perfect-pink-anal-virgin-pussy/",
+          "https://www.eporner.com/video-DX0rFrXnRch/mia-khalifa-gets-a-big-dick-from-nilxius-i0-pghxk-xkp9/",
+          "https://www.eporner.com/video-FT9NYcDfjPm/mia-khalifa-try-on-hot-dresses-and-bikini-naked-new-ppv/"
+        ],
+        "accounts": [],
+        "zeroReason": "",
+        "rawImagesCount": 0,
+        "rawVideosCount": 5,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "video",
+          "title": "Naked And Horny All Day Long , Mia Khalifa",
+          "description": ", big ass, big tits, Naked And Horny All Day Long , Mia Khalifa",
+          "url": "https://www.eporner.com/video-eBPjMSBvYTn/naked-and-horny-all-day-long-mia-khalifa/",
+          "thumbnail": "https://static-ca-cdn.eporner.com/thumbs/static4/1/17/177/17753918/14_360.jpg",
+          "link": "https://www.eporner.com/video-eBPjMSBvYTn/naked-and-horny-all-day-long-mia-khalifa/",
+          "sourceId": "eporner",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa Arab Big Tits",
+          "description": "big dick, big tits, interracial, teens, stepsister, Mia Khalifa Arab Big Tits, blowjob, brunette, cumshot",
+          "url": "https://www.eporner.com/video-CImnzC9O7Jf/mia-khalifa-arab-big-tits/",
+          "thumbnail": "https://static-ca-cdn.eporner.com/thumbs/static4/1/17/177/17741760/14_360.jpg",
+          "link": "https://www.eporner.com/video-CImnzC9O7Jf/mia-khalifa-arab-big-tits/",
+          "sourceId": "eporner",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Extreme milky cum squirt in perfect pink anal virgin pussy",
+          "description": "breast milk, mia khalifa, asian lesbian, cosplay anime, girl masturbating, big ass, big tits blonde, perfect pink pussy, camping sex, all my roomates love, best friend, big ass ebony, cum on feet, feet fetish, swinger, lesbian massage, big dick, big tits,, Extreme milky cum squirt in perfect pink anal virgin pussy",
+          "url": "https://www.eporner.com/video-RhTelbE44eG/extreme-milky-cum-squirt-in-perfect-pink-anal-virgin-pussy/",
+          "thumbnail": "https://static-ca-cdn.eporner.com/thumbs/static4/1/17/177/17743538/7_360.jpg",
+          "link": "https://www.eporner.com/video-RhTelbE44eG/extreme-milky-cum-squirt-in-perfect-pink-anal-virgin-pussy/",
+          "sourceId": "eporner",
+          "matchReasons": [
+            "terme exact dans la description"
+          ],
+          "confidenceScore": 82
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa Gets A Big Dick From Nilxius I0 PgHXK xkp9",
+          "description": "redhead, mature, hairy, cum-swallowing, pov porn, orgy, squirt, redhead, toys, cumshot, Mia Khalifa Gets A Big Dick From Nilxius I0 PgHXK xkp9",
+          "url": "https://www.eporner.com/video-DX0rFrXnRch/mia-khalifa-gets-a-big-dick-from-nilxius-i0-pghxk-xkp9/",
+          "thumbnail": "https://static-ca-cdn.eporner.com/thumbs/static4/1/17/176/17634985/9_360.jpg",
+          "link": "https://www.eporner.com/video-DX0rFrXnRch/mia-khalifa-gets-a-big-dick-from-nilxius-i0-pghxk-xkp9/",
+          "sourceId": "eporner",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        },
+        {
+          "type": "video",
+          "title": "Mia Khalifa Try On Hot Dresses And Bikini Naked NEW PPV",
+          "description": "blowjob, tits, big tits, fuck, Bikini, Khalifa, horny, Dresses, big ass, sex, pussy, big booty, big ass, Mia Khalifa Try On Hot Dresses And Bikini Naked NEW PPV",
+          "url": "https://www.eporner.com/video-FT9NYcDfjPm/mia-khalifa-try-on-hot-dresses-and-bikini-naked-new-ppv/",
+          "thumbnail": "https://static-ca-cdn.eporner.com/thumbs/static4/1/17/176/17622418/15_360.jpg",
+          "link": "https://www.eporner.com/video-FT9NYcDfjPm/mia-khalifa-try-on-hot-dresses-and-bikini-naked-new-ppv/",
+          "sourceId": "eporner",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 5,
+        "queryRelevantSamples": 5,
+        "sourceDomainSamples": 5,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "wikidata",
+      "label": "Wikidata identite",
+      "category": "identity",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "image",
+        "page"
+      ],
+      "purpose": "identity",
+      "adapterMode": "wikidata-api",
+      "implementation": "dedicated-adapter",
+      "availability": "public-api-or-dedicated-adapter",
+      "domains": [
+        "wikidata.org"
+      ],
+      "query": "Douglas Adams",
+      "httpStatus": 200,
+      "durationMs": 942,
+      "status": {
+        "success": true,
+        "available": true,
+        "skipped": false,
+        "adapter": "wikidata-api",
+        "imagesCount": 1,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "Entite retenue: Douglas Adams (Q42), 8 candidates analyses",
+        "accounts": [],
+        "identityAliases": [
+          {
+            "value": "Douglas Adams",
+            "kind": "display_name",
+            "confidence": 96,
+            "evidence": [
+              "https://www.wikidata.org/wiki/Q42"
+            ]
+          },
+          {
+            "value": "Douglas Noël Adams",
+            "kind": "display_name",
+            "confidence": 94,
+            "evidence": [
+              "https://www.wikidata.org/wiki/Q42"
+            ]
+          },
+          {
+            "value": "David Agnew",
+            "kind": "display_name",
+            "confidence": 94,
+            "evidence": [
+              "https://www.wikidata.org/wiki/Q42"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://www.wikidata.org/wiki/Q28421831",
+            "title": "Douglas Adams",
+            "description": "ingénieur américain"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q42",
+            "title": "Douglas Adams",
+            "description": "écrivain de science-fiction et humoriste anglais (1952–2001)"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q5301194",
+            "title": "Douglas Adams",
+            "description": "page d'homonymie d'un projet Wikimédia"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q61853920",
+            "title": "Douglas H Adams",
+            "description": "researcher ORCID ID = 0000-0002-3539-6629"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q932869",
+            "title": "Douglas Q. Adams",
+            "description": "American professor of English"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q21454969",
+            "title": "Douglas Adams",
+            "description": "peintre anglais du XIXe siècle"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q75630160",
+            "title": "Douglas Jerrold Adams",
+            "description": "(1868-1961)"
+          },
+          {
+            "url": "https://www.wikidata.org/wiki/Q117249850",
+            "title": "Douglas Adams",
+            "description": "Global Co-Head of Equity Capital Markets, Citi"
+          }
+        ],
+        "rawImagesCount": 1,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Douglas Adams",
+          "description": "écrivain de science-fiction et humoriste anglais (1952–2001)",
+          "url": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Douglas%20adams%20portrait.jpg",
+          "thumbnail": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Douglas%20adams%20portrait.jpg",
+          "link": "https://www.wikidata.org/wiki/Q42",
+          "sourceId": "wikidata",
+          "matchReasons": [
+            "terme exact dans le titre"
+          ],
+          "confidenceScore": 96
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 1,
+        "queryRelevantSamples": 1,
+        "sourceDomainSamples": 1,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    },
+    {
+      "id": "coomer",
+      "label": "Coomer public profiles",
+      "category": "nsfw",
+      "nsfw": true,
+      "auth": "none",
+      "authRequired": false,
+      "configured": true,
+      "supports": [
+        "page"
+      ],
+      "purpose": "identity",
+      "adapterMode": "coomer-profile-api-v1",
+      "implementation": "source-crawl-adapter",
+      "availability": "public-identity-metadata-only",
+      "domains": [
+        "site1.coomer.com.co"
+      ],
+      "query": "amouranth",
+      "httpStatus": 200,
+      "durationMs": 869,
+      "status": {
+        "success": true,
+        "available": true,
+        "directReachable": true,
+        "fallbackUsed": false,
+        "adapter": "coomer-profile-api-v1",
+        "note": "1 pages correspondantes; 1 ouvertes; api Coomer: onlyfans: profil exact; metadonnees uniquement; duckduckgo.com: HTTP 202; www.bing.com: HTTP 200; profils publics uniquement",
+        "imagesCount": 0,
+        "videosCount": 0,
+        "pagesDiscovered": 1,
+        "pagesCrawled": 1,
+        "attemptedUrls": 2,
+        "blockedResponses": 0,
+        "rateLimitedResponses": 0,
+        "indexedFallbackCount": 0,
+        "pages": [
+          "https://site1.coomer.com.co/onlyfans/user/amouranth"
+        ],
+        "accounts": [
+          "https://site1.coomer.com.co/onlyfans/user/amouranth"
+        ],
+        "identityAliases": [
+          {
+            "value": "amouranth",
+            "kind": "display_name",
+            "confidence": 92,
+            "sources": [],
+            "evidence": [
+              "https://site1.coomer.com.co/onlyfans/user/amouranth"
+            ],
+            "count": 1
+          }
+        ],
+        "zeroReason": "identity_metadata_only",
+        "rawImagesCount": 0,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 0
+      },
+      "samples": [],
+      "error": "",
+      "quality": {
+        "sampleCount": 0,
+        "queryRelevantSamples": 0,
+        "sourceDomainSamples": 0,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    }
+  ]
+}

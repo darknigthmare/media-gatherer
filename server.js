@@ -17,8 +17,14 @@ const ENV_PATH = process.pkg ? path.join(path.dirname(process.execPath), '.env')
 dotenv.config({ path: ENV_PATH });
 const { version: APP_VERSION } = require('./package.json');
 const DEFAULT_GOOGLE_CX = '155c4d451e53743c2';
-const { CORE_SOURCE_DEFINITIONS } = require('./src/sources/coreSources');
-const { EXTENDED_SOURCE_DEFINITIONS, EXTENDED_SOURCE_ADAPTERS } = require('./src/sources/extendedSources');
+const {
+  SOURCE_IDS,
+  NSFW_SOURCES,
+  SOURCE_LABELS,
+  SOURCE_CRAWL_ADAPTERS,
+  SOURCE_META
+} = require('./src/sources/sourceRegistry');
+const { sourceCanary } = require('./src/sources/sourceCanaries');
 const {
   textMatchesAllQueryTokens,
   runExtendedApiSource,
@@ -56,6 +62,14 @@ const {
 const { normalizeIdentityValue, mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
 const { buildPersonGraph, buildPersonPublicReport } = require('./src/services/personGraph.service');
+const {
+  normalizeDepth: normalizePlannedPersonDepth,
+  buildPersonSearchPlan,
+  personSourcesForDepth: plannedPersonSourcesForDepth
+} = require('./src/services/personQueryPlanner.service');
+const { executePersonSearchPlan } = require('./src/services/personSearch.service');
+const { classifyMediaQuality } = require('./src/services/mediaQuality.service');
+const { createMonitorRouter } = require('./src/routes/monitor.routes');
 const { createRemoteStore } = require('./src/storage/remoteStore');
 const { normalizeBoundedStore } = require('./src/storage/storePolicy');
 const {
@@ -94,123 +108,6 @@ const REMOTE_STORE = createRemoteStore({
 });
 const REMOTE_HYDRATION_PROMISES = new Map();
 let lastSessionStoreCleanupAt = 0;
-const DEFAULT_SELECTED_SOURCES = new Set(['duckduckgo', 'bing', 'flickr', 'wikimedia', 'youtube', 'reddit', 'wayback', 'vimeo', 'dailymotion', 'wikidata', 'internetarchive', 'bluesky']);
-
-const SOURCE_IDS = [
-  'duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'reddit', 'telegram',
-  'instagram', 'facebook', 'tiktok', 'x', 'pinterest', 'snapchat', 'threads', 'wayback', 'vimeo', 'dailymotion',
-  'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon',
-  ...EXTENDED_SOURCE_DEFINITIONS.map(source => source.id)
-];
-
-const NSFW_SOURCES = new Set([
-  'freeones', 'freeonesforum', 'babesource', 'erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics',
-  'babepedia', 'camwhores', 'pornzog', 'onlyfans', 'fansly', 'mym', 'xhamster', 'xvideos', 'spankbang',
-  'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid',
-  'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon',
-  ...EXTENDED_SOURCE_DEFINITIONS.filter(source => source.nsfw).map(source => source.id)
-]);
-
-const SOURCE_LABELS = {
-  duckduckgo: 'DuckDuckGo',
-  redgifs: 'RedGIFs',
-  imagebam: 'ImageBam',
-  imagefap: 'ImageFap',
-  pornpics: 'PornPics',
-  babepedia: 'BabePedia',
-  camwhores: 'CamWhores',
-  pornzog: 'PornZog',
-  freeones: 'FreeOnes',
-  freeonesforum: 'FreeOnes Forum',
-  babesource: 'BabeSource',
-  onlyfans: 'OnlyFans public',
-  fansly: 'Fansly public',
-  mym: 'MYM public',
-  xhamster: 'xHamster',
-  xvideos: 'XVideos',
-  spankbang: 'SpankBang',
-  pornhub: 'Pornhub',
-  youporn: 'YouPorn',
-  tube8: 'Tube8',
-  tnaflix: 'TNAFlix',
-  motherless: 'Motherless',
-  eporner: 'Eporner',
-  xnxx: 'XNXX',
-  hqporner: 'HQPorner',
-  nuvid: 'Nuvid',
-  drtuber: 'DrTuber',
-  pornone: 'PornOne',
-  youjizz: 'YouJizz',
-  phunforum: 'Phun Forum',
-  planetsuzy: 'PlanetSuzy',
-  bellazon: 'Bellazon Forum',
-  ...Object.fromEntries(EXTENDED_SOURCE_DEFINITIONS.map(source => [source.id, source.label]))
-};
-
-const SOURCE_CRAWL_ADAPTERS = {
-  freeones: { domains: ['freeones.com'], pagePatterns: [/\/html\//i, /\/forums\//i], media: ['image', 'page'] },
-  freeonesforum: { domains: ['freeones.com'], pagePatterns: [/\/forums\//i, /\/threads\//i], media: ['image', 'page'] },
-  babesource: { domains: ['babesource.com'], pagePatterns: [/\/(?:model|babe|gallery|video)\//i], media: ['image', 'video'] },
-  erome: { domains: ['erome.com'], pagePatterns: [/\/a\//i, /\/i\//i], media: ['image', 'video'], crawlLimit: 8 },
-  redgifs: { domains: ['redgifs.com'], pagePatterns: [/\/watch\//i, /\/gifs\//i], media: ['video'], crawlLimit: 8 },
-  imagebam: { domains: ['imagebam.com'], pagePatterns: [/\/(?:gallery|image)\//i], media: ['image'], crawlLimit: 8 },
-  imagefap: { domains: ['imagefap.com'], pagePatterns: [/\/(?:gallery|photo|pictures)\//i], media: ['image'], crawlLimit: 8 },
-  pornpics: { domains: ['pornpics.com'], pagePatterns: [/\/(?:galleries|gallery|photos?)\//i], media: ['image'], crawlLimit: 8 },
-  babepedia: { domains: ['babepedia.com'], pagePatterns: [/\/babe\//i, /\/gallery\//i], media: ['image'], crawlLimit: 8 },
-  camwhores: { domains: ['camwhores.tv', 'camwhores.video', 'camwhoreshd.com'], pagePatterns: [/\/(?:videos?|models?|tags?)\//i], media: ['image', 'video'], crawlLimit: 6 },
-  pornzog: { domains: ['pornzog.com'], pagePatterns: [/\/(?:video|watch)\//i], media: ['video'], crawlLimit: 6 },
-  onlyfans: { domains: ['onlyfans.com'], pagePatterns: [/\/[^/?#]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
-  fansly: { domains: ['fansly.com'], pagePatterns: [/\/(?:creator|profile)\//i, /^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
-  mym: { domains: ['mym.fans'], pagePatterns: [/\/[^/?#]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
-  xhamster: { domains: ['xhamster.com'], pagePatterns: [/\/videos\//i, /\/users\//i], media: ['video'], crawlLimit: 6 },
-  xvideos: { domains: ['xvideos.com'], pagePatterns: [/\/video[^/]*\//i, /\/profiles?\//i], media: ['video'], crawlLimit: 6 },
-  spankbang: { domains: ['spankbang.com'], pagePatterns: [/\/video\//i, /\/profile\//i], media: ['video'], crawlLimit: 6 },
-  pornhub: { domains: ['pornhub.com'], pagePatterns: [/\/view_video\.php/i, /\/(?:model|pornstar|users?)\//i], media: ['video'], crawlLimit: 6 },
-  youporn: { domains: ['youporn.com'], pagePatterns: [/\/watch\//i, /\/(?:porntags|pornstar)\//i], media: ['video'], crawlLimit: 6 },
-  tube8: { domains: ['tube8.com'], pagePatterns: [/\/(?:porn-video|video|pornstar)\//i, /\/[^/]+\/[^/]+\/\d+/i], media: ['video'], crawlLimit: 6 },
-  tnaflix: { domains: ['tnaflix.com'], pagePatterns: [/\/(?:hd-videos?|videos?|profile)\//i], media: ['video'], crawlLimit: 6 },
-  motherless: { domains: ['motherless.com'], pagePatterns: [/\/(?:G|GI|GV|term|m)\//i], media: ['image', 'video'], crawlLimit: 6 },
-  eporner: {
-    domains: ['eporner.com'],
-    pagePatterns: [/\/video-[^/]+\//i, /\/embed\//i],
-    media: ['video'],
-    crawlLimit: 4,
-    transport: 'eporner-api-v2'
-  },
-  xnxx: { domains: ['xnxx.com'], pagePatterns: [/\/video-[^/]+\//i], media: ['video'], crawlLimit: 5 },
-  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5, trustSearchResults: true },
-  nuvid: { domains: ['nuvid.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
-  drtuber: { domains: ['drtuber.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
-  pornone: { domains: ['pornone.com'], pagePatterns: [/\/[^/]+\/[^/]*video-\d+\/\d+\/?$/i], media: ['video'], crawlLimit: 5 },
-  youjizz: { domains: ['youjizz.com'], pagePatterns: [/\/videos\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 },
-  phunforum: { domains: ['forum.phun.org', 'phun.org'], pagePatterns: [/\/threads\/[^/]+\.\d+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
-  planetsuzy: { domains: ['planetsuzy.org'], pagePatterns: [/\/showthread\.php\?.*\bt=\d+/i, /\/t\d+[^/]*\.html/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-form' },
-  bellazon: { domains: ['bellazon.com'], pagePatterns: [/\/main\/topic\/\d+-[^/]+\/?/i], media: ['image', 'video'], crawlLimit: 4, forum: true, transport: 'public-forum-get' },
-  ...EXTENDED_SOURCE_ADAPTERS
-};
-
-const SOURCE_META = SOURCE_IDS.reduce((map, id) => {
-  const definition = CORE_SOURCE_DEFINITIONS[id] || EXTENDED_SOURCE_DEFINITIONS.find(source => source.id === id) || {};
-  const nsfw = definition.nsfw === true || NSFW_SOURCES.has(id);
-  map[id] = {
-    id,
-    label: SOURCE_LABELS[id] || id.replace(/\b\w/g, char => char.toUpperCase()),
-    category: definition.category || (nsfw ? 'nsfw' : (['reddit', 'telegram', 'instagram', 'facebook', 'tiktok', 'x', 'pinterest'].includes(id) ? 'social' : 'normal')),
-    nsfw,
-    enabled: true,
-    supports: definition.supports || SOURCE_CRAWL_ADAPTERS[id]?.media || (id === 'youtube' || id === 'vimeo' || id === 'dailymotion' ? ['video'] : ['image', 'video', 'page']),
-    adapter: definition.adapter || (SOURCE_CRAWL_ADAPTERS[id] ? 'source-crawl' : 'generic-public'),
-    publicOnly: true,
-    subtype: definition.subtype || (SOURCE_CRAWL_ADAPTERS[id]?.forum ? 'forum' : (nsfw ? 'platform' : 'general')),
-    purpose: definition.purpose || 'media',
-    auth: definition.auth || 'none',
-    defaultSelected: definition.defaultSelected === true || DEFAULT_SELECTED_SOURCES.has(id)
-  };
-  return map;
-}, {});
 
 app.set('trust proxy', 1);
 const configuredOrigins = String(process.env.CORS_ORIGINS || '')
@@ -416,6 +313,7 @@ function defaultStore() {
     queue: [],
     persons: [],
     personMediaLinks: [],
+    personSearchRuns: [],
     personValidationRules: [],
     aliasCandidates: [],
     sourceDiagnostics: {},
@@ -746,7 +644,7 @@ function enrichMedia(item, query, sourceId, kind = 'image') {
   const source = normalizedItem.source || sourceLabel(sourceId);
   const url = normalizedItem.url || normalizedItem.thumbnail || normalizedItem.link;
   const thumbnail = normalizedItem.thumbnail || ((normalizedItem.type || kind) === 'image' && looksLikeImage(url) ? url : '');
-  return {
+  const media = {
     ...normalizedItem,
     type: normalizedItem.type || kind,
     source,
@@ -759,8 +657,14 @@ function enrichMedia(item, query, sourceId, kind = 'image') {
     confidenceScore: score,
     confidenceLabel: score >= 80 ? 'haute' : (score >= 55 ? 'moyenne' : 'faible'),
     matchReasons: normalizedItem.matchReasons || match.reasons,
-    visualSignature: normalizedItem.visualSignature || stableHash({ type: normalizedItem.type || kind, media: canonicalMediaKey({ ...normalizedItem, url }) }),
-    qualityLabel: normalizedItem.qualityLabel || (normalizedItem.width && normalizedItem.height ? `${normalizedItem.width}x${normalizedItem.height}` : 'source publique')
+    visualSignature: normalizedItem.visualSignature || stableHash({ type: normalizedItem.type || kind, media: canonicalMediaKey({ ...normalizedItem, url }) })
+  };
+  const quality = classifyMediaQuality(media, media.type);
+  return {
+    ...media,
+    ...quality,
+    qualityLabel: normalizedItem.qualityLabel ||
+      (normalizedItem.width && normalizedItem.height ? `${normalizedItem.width}x${normalizedItem.height}` : quality.qualityStateLabel)
   };
 }
 
@@ -800,6 +704,9 @@ function mediaQualityScore(item = {}) {
   const url = String(item.url || '');
   const pixels = Math.min((Number(item.width) || 0) * (Number(item.height) || 0), 100000000) / 1000000;
   return pixels +
+    (item.originalConfirmed === true || item.qualityState === 'original_confirmed' ? 30 : 0) +
+    (item.bestDeclared === true || item.qualityState === 'best_declared' ? 15 : 0) +
+    (item.qualityVerified === true ? 5 : 0) +
     (/original|master|source|full|large|1080|2160|4k/i.test(url) ? 12 : 0) +
     (/\/(?:thumbs?|thumbnails?|previews?|small|medium)\//i.test(url) ? -20 : 0) +
     (/(?:\/|[-_.])(?:thumb|thumbnail|preview)(?:[\/_\-.]|$)/i.test(url) ? -20 : 0) +
@@ -1172,7 +1079,7 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
   $('img').each((_, el) => {
     const linkedHref = $(el).closest('a[href]').attr('href');
     const linkedImage = absolutize(linkedHref, baseUrl);
-    const src = bestMediaCandidate([
+    const declaredBestCandidate = bestMediaCandidate([
       $(el).attr('data-full'),
       $(el).attr('data-full-image'),
       $(el).attr('data-fullsrc'),
@@ -1182,15 +1089,19 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
       $(el).attr('data-original'),
       $(el).attr('data-original-src'),
       $(el).attr('data-lazy-src'),
-      $(el).attr('data-thumb'),
-      $(el).attr('data-thumbnail'),
       $(el).attr('srcset'),
       $(el).attr('data-srcset'),
-      /\.(?:jpg|jpeg|png|gif|webp|avif)(?:[?#]|$)/i.test(linkedImage) ? linkedHref : '',
+      /\.(?:jpg|jpeg|png|gif|webp|avif)(?:[?#]|$)/i.test(linkedImage) ? linkedHref : ''
+    ]);
+    const previewCandidate = bestMediaCandidate([
+      $(el).attr('data-thumb'),
+      $(el).attr('data-thumbnail'),
       $(el).attr('src')
     ]);
+    const src = bestMediaCandidate([declaredBestCandidate, previewCandidate]);
     if (!src) return;
     const url = absolutize(src, baseUrl);
+    const thumbnail = absolutize(previewCandidate, baseUrl) || url;
     if (!/^https?:\/\//.test(url)) return;
     const title = $(el).attr('alt') || $(el).attr('title') || `${sourceLabel(sourceId)} image`;
     const width = Number($(el).attr('width') || $(el).attr('data-width')) || 0;
@@ -1199,7 +1110,16 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
     const context = [title, card.text()].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
     if (isLikelyUiAsset(url, title, width, height)) return;
     if (!trustedDetailPage && !textMatchesQuery(context, query) && !textMatchesQuery(url, query)) return;
-    rows.push(enrichMedia({ url, thumbnail: url, title, link: baseUrl, width, height, trustedContext: trustedDetailPage }, query, sourceId, 'image'));
+    rows.push(enrichMedia({
+      url,
+      thumbnail,
+      title,
+      link: baseUrl,
+      width,
+      height,
+      trustedContext: trustedDetailPage,
+      bestDeclared: Boolean(declaredBestCandidate)
+    }, query, sourceId, 'image'));
   });
   $('meta[property="og:image"], meta[name="twitter:image"], link[rel="image_src"], video[poster], source[srcset]').each((_, el) => {
     const src = bestMediaCandidate([$(el).attr('content'), $(el).attr('href'), $(el).attr('poster'), $(el).attr('srcset')]);
@@ -1887,7 +1807,7 @@ function parseBingImageResults(html, query, limit = 35) {
     const title = raw.t || raw.title || $(element).attr('aria-label') || '';
     if (!url || !link || !textMatchesQuery(`${title} ${link} ${url}`, query)) return;
     if (isLikelyUiAsset(url, title)) return;
-    rows.push(enrichMedia({ url, thumbnail, link, title: title || query, width: raw.w, height: raw.h }, query, 'bing', 'image'));
+    rows.push(enrichMedia({ url, thumbnail, link, title: title || query, width: raw.w, height: raw.h, bestDeclared: true }, query, 'bing', 'image'));
   });
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
@@ -2309,7 +2229,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const data = await fetchText(url);
     const images = Object.values(data?.query?.pages || {}).map(page => {
       const info = page.imageinfo?.[0] || {};
-      return enrichMedia({ url: info.url, thumbnail: info.thumburl || info.url, link: info.descriptionurl, title: page.title?.replace(/^File:/i, ''), width: info.width, height: info.height, description: page.title }, query, 'wikimedia', 'image');
+      return enrichMedia({ url: info.url, thumbnail: info.thumburl || info.url, link: info.descriptionurl, title: page.title?.replace(/^File:/i, ''), width: info.width, height: info.height, description: page.title, originalConfirmed: true }, query, 'wikimedia', 'image');
     }).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'wikimedia-api', imagesCount: images.length, videosCount: 0, note: 'API Wikimedia Commons' } };
   }
@@ -2325,7 +2245,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
       const original = row.url_o || row.url_k || row.url_h || row.url_l || row.url_c || row.media?.m;
       const link = row.link || (row.id ? `https://www.flickr.com/photos/${row.owner}/${row.id}` : '');
       const title = row.title || row.ownername || '';
-      return enrichMedia({ url: original, thumbnail: original, link, title, description: row.description?._content || row.tags }, query, 'flickr', 'image');
+      return enrichMedia({ url: original, thumbnail: original, link, title, description: row.description?._content || row.tags, bestDeclared: true }, query, 'flickr', 'image');
     }).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: apiKey ? 'flickr-api' : 'flickr-public-feed', imagesCount: images.length, videosCount: 0, note: apiKey ? 'API Flickr configuree' : 'Flux public Flickr' } };
   }
@@ -2387,7 +2307,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const cx = connectionValue('google', 'cx', 'GOOGLE_CX', DEFAULT_GOOGLE_CX);
     if (!apiKey) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'google-cse', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Google API requise; moteur CX deja preconfigure dans Connexions API' } };
     const data = await fetchText(buildGoogleCseUrl(query, { ...options, imageLimit }, apiKey, cx));
-    const images = (data?.items || []).map(row => enrichMedia({ url: row.link, thumbnail: row.image?.thumbnailLink || row.link, link: row.image?.contextLink, title: row.title, width: row.image?.width, height: row.image?.height, description: row.snippet }, query, 'google', 'image')).filter(item => item.url);
+    const images = (data?.items || []).map(row => enrichMedia({ url: row.link, thumbnail: row.image?.thumbnailLink || row.link, link: row.image?.contextLink, title: row.title, width: row.image?.width, height: row.image?.height, description: row.snippet, bestDeclared: true }, query, 'google', 'image')).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'google-cse', imagesCount: images.length, videosCount: 0, engineCx: cx, note: `Google Programmable Search API; SafeSearch ${options.safe === false ? 'inactif' : 'actif'}` } };
   }
 
@@ -2395,7 +2315,7 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
     const apiKey = connectionValue('brave', 'apiKey', 'BRAVE_API_KEY');
     if (!apiKey) return { images: [], videos: [], status: { success: false, skipped: true, adapter: 'brave-api', imagesCount: 0, videosCount: 0, zeroReason: 'missing_credentials', note: 'Cle Brave Search API requise' } };
     const data = await fetchText(`https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=${Math.min(imageLimit, 20)}`, { headers: { 'X-Subscription-Token': apiKey, accept: 'application/json' } });
-    const images = (data?.results || []).map(row => enrichMedia({ url: row.properties?.url || row.url, thumbnail: row.thumbnail?.src, link: row.source, title: row.title, width: row.properties?.width, height: row.properties?.height }, query, 'brave', 'image')).filter(item => item.url);
+    const images = (data?.results || []).map(row => enrichMedia({ url: row.properties?.url || row.url, thumbnail: row.thumbnail?.src, link: row.source, title: row.title, width: row.properties?.width, height: row.properties?.height, bestDeclared: true }, query, 'brave', 'image')).filter(item => item.url);
     return { images, videos: [], status: { success: true, adapter: 'brave-api', imagesCount: images.length, videosCount: 0, note: 'Brave Search API' } };
   }
 
@@ -2924,12 +2844,6 @@ function removeAliasCandidateFromPerson(store, candidate) {
 const PERSON_TYPES = new Set(['public_figure', 'creator', 'artist', 'journalist', 'athlete', 'consented_person', 'unknown_public']);
 const PERSON_DEPTHS = new Set(['quick', 'normal', 'deep', 'archive']);
 const PERSON_STATUSES = new Set(['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved']);
-const PERSON_SOURCE_PLANS = {
-  quick: ['duckduckgo', 'bing', 'wikimedia', 'wikidata'],
-  normal: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon'],
-  deep: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
-  archive: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo']
-};
 
 function boundedString(value, maxLength = 200) {
   return String(value == null ? '' : value).trim().slice(0, maxLength);
@@ -2941,8 +2855,7 @@ function boundedStringList(value, maxItems = 50, maxLength = 120) {
 }
 
 function normalizePersonDepth(value) {
-  const depth = boundedString(value, 20).toLowerCase();
-  return PERSON_DEPTHS.has(depth) ? depth : 'normal';
+  return normalizePlannedPersonDepth(value);
 }
 
 function normalizePersonBirthYear(value) {
@@ -3034,48 +2947,15 @@ function validatePersonPayload(input = {}, current = null) {
 }
 
 function personSourcesForDepth(depth = 'normal', requestedSources = '') {
-  const normalizedDepth = normalizePersonDepth(depth);
-  const requested = uniq(String(requestedSources || '').split(',')).filter(source => SOURCE_META[source]);
-  return requested.length ? requested : PERSON_SOURCE_PLANS[normalizedDepth].filter(source => SOURCE_META[source]);
+  return plannedPersonSourcesForDepth(depth, requestedSources, SOURCE_META);
 }
 
 function buildPersonQueries(person, depth = 'normal') {
-  const normalizedDepth = normalizePersonDepth(depth);
-  const base = uniq([person.displayName, person.name, ...(person.aliases || []), ...(person.usernames || [])]);
-  const positives = uniq(person.positiveKeywords || []);
-  const accounts = normalizePublicAccounts(person.accounts || []).filter(account => account.status === 'confirmed');
-  const queries = [];
-  base.forEach(term => {
-    queries.push(`"${term}"`);
-    positives.forEach(keyword => queries.push(`"${term}" ${keyword}`));
-    if (normalizedDepth !== 'quick') {
-      queries.push(`"${term}" photo`);
-      queries.push(`"${term}" video`);
-      queries.push(`"${term}" interview`);
-    }
-    if (['deep', 'archive'].includes(normalizedDepth)) {
-      queries.push(`"${term}" profile`);
-      queries.push(`"${term}" creator`);
-      queries.push(`"${term}" gallery`);
-      queries.push(`"${term}" social`);
-    }
-    if (normalizedDepth === 'archive') {
-      queries.push(`"${term}" archive`);
-      queries.push(`"${term}" wayback`);
-      queries.push(`"${term}" old username`);
-    }
-  });
-  accounts.forEach(account => {
-    if (account.url) {
-      queries.push(account.url);
-      try {
-        queries.push(`site:${new URL(account.url).hostname} "${account.username || person.displayName || person.name}"`);
-      } catch {}
-    }
-    if (account.username) queries.push(`"${account.username}"`);
-  });
-  const limits = { quick: 8, normal: 20, deep: 32, archive: 40 };
-  return uniq(queries).slice(0, limits[normalizedDepth]);
+  return buildPersonSearchPlan(person, {
+    depth,
+    sourceIds: personSourcesForDepth(depth),
+    sourceMeta: SOURCE_META
+  }).queries;
 }
 
 function scorePersonMedia(person, item) {
@@ -3266,6 +3146,22 @@ function buildPersonTimeline(store, personId) {
         details: { linkId: link.id, note: link.validationNote || '' }
       });
     }
+  });
+  (store.personSearchRuns || []).filter(run => run.personId === person.id).forEach(run => {
+    events.push({
+      id: `${run.id}:finished`,
+      type: 'search_completed',
+      date: run.finishedAt || run.startedAt,
+      title: `Recherche ${run.depth || 'normal'}: ${Number(run.created || 0)} media(s) lie(s)`,
+      status: run.failures?.length ? 'partial' : 'completed',
+      details: {
+        runId: run.id,
+        sources: run.sources || [],
+        queries: run.queries || [],
+        created: run.created || 0,
+        failures: run.failures || []
+      }
+    });
   });
   (store.personValidationRules || []).filter(rule => rule.personId === person.id).forEach(rule => {
     events.push({
@@ -4139,39 +4035,24 @@ app.delete('/api/collection/:id', (req, res) => {
   return res.json({ ok: true });
 });
 
-app.get('/api/monitors', (req, res) => res.json({ items: readStore().monitors || [] }));
-app.post('/api/monitors', (req, res) => {
-  const query = String(req.body?.query || '').trim();
-  if (!query) return res.status(400).json({ error: 'Requete requise' });
-  const existing = readStore().monitors.find(item => item.query === query);
-  const monitor = { ...existing, ...req.body, id: existing?.id || makeId('monitor'), createdAt: existing?.createdAt || new Date().toISOString(), query, updatedAt: new Date().toISOString() };
-  mutateStore(store => { store.monitors = [monitor, ...store.monitors.filter(item => item.id !== monitor.id)].slice(0, 50); });
-  return res.json(monitor);
-});
-app.patch('/api/monitors/:id', (req, res) => {
-  if (!readStore().monitors.some(item => item.id === req.params.id)) return res.status(404).json({ error: 'Veille introuvable' });
-  let monitor;
-  mutateStore(store => {
-    store.monitors = store.monitors.map(item => {
-      if (item.id !== req.params.id) return item;
-      monitor = { ...item, ...req.body, updatedAt: new Date().toISOString() };
-      return monitor;
-    });
-  });
-  return res.json(monitor);
-});
-app.delete('/api/monitors', (req, res) => { mutateStore(store => { store.monitors = []; }); res.json({ ok: true }); });
-app.delete('/api/monitors/:id', (req, res) => {
-  if (!readStore().monitors.some(item => item.id === req.params.id)) return res.status(404).json({ error: 'Veille introuvable' });
-  mutateStore(store => { store.monitors = store.monitors.filter(item => item.id !== req.params.id); });
-  return res.json({ ok: true });
-});
+app.use('/api/monitors', createMonitorRouter({
+  readStore,
+  mutateStore,
+  makeId,
+  sourceMeta: SOURCE_META,
+  nsfwSources: NSFW_SOURCES,
+  adultSearchGuard,
+  scrape: scrapeImageSearchWithFallback
+}));
 
-app.get('/api/sources', (req, res) => res.json({ sources: Object.values(SOURCE_META) }));
+app.get('/api/sources', (req, res) => res.json({
+  sources: Object.values(SOURCE_META).map(source => ({ ...source, canary: sourceCanary(source) }))
+}));
 app.get('/api/sources/diagnostics', (req, res) => {
   const diagnostics = readStore().sourceDiagnostics || {};
   res.json({ sources: Object.values(SOURCE_META).map(source => ({
     ...source,
+    canary: sourceCanary(source),
     state: diagnostics[source.id]?.state || 'untested',
     lastTest: diagnostics[source.id]?.lastTest || null,
     diagnostics: diagnostics[source.id] || null
@@ -4230,6 +4111,7 @@ function sourceAdapterContract(source) {
     publicProfileOnly: Boolean(crawlAdapter?.publicProfileOnly),
     availability,
     fallbacks: uniq(fallbacks),
+    canary: sourceCanary(source),
     testEndpoint: `/api/sources/${source.id}/test`
   };
 }
@@ -4239,9 +4121,10 @@ app.get('/api/sources/adapters', (req, res) => res.json({
 }));
 app.get('/api/sources/:id/test', async (req, res) => {
   const sourceId = String(req.params.id || '').toLowerCase();
-  const query = String(req.query.q || '').trim();
   if (!SOURCE_META[sourceId]) return res.status(404).json({ error: 'source inconnue' });
-  if (!query) return res.status(400).json({ error: 'parametre q requis' });
+  const canary = sourceCanary(SOURCE_META[sourceId]);
+  const query = String(req.query.q || canary?.query || '').trim();
+  if (!query) return res.status(400).json({ error: 'parametre q ou canari requis' });
   if (SOURCE_META[sourceId].nsfw && String(req.query.safe || 'true') !== 'false') {
     return res.status(400).json({ error: 'safe=false requis pour tester une source NSFW publique' });
   }
@@ -4280,6 +4163,7 @@ app.get('/api/sources/:id/test', async (req, res) => {
     res.json({
       source: SOURCE_META[sourceId],
       query,
+      canary,
       status: retainedStatus,
       samples: [...retainedImages, ...retainedVideos].slice(0, 10).map(item => ({
         type: item.type,
@@ -4633,6 +4517,7 @@ app.delete('/api/persons/:id', (req, res) => {
   const store = readStore();
   store.persons = store.persons.filter(person => person.id !== req.params.id);
   store.personMediaLinks = store.personMediaLinks.filter(link => link.personId !== req.params.id);
+  store.personSearchRuns = (store.personSearchRuns || []).filter(run => run.personId !== req.params.id);
   store.personValidationRules = store.personValidationRules.filter(rule => rule.personId !== req.params.id);
   store.aliasCandidates = store.aliasCandidates.filter(candidate => candidate.personId !== req.params.id);
   writeStore(store);
@@ -4702,7 +4587,15 @@ app.delete('/api/persons/:id/accounts/:accountId', (req, res) => {
 app.get('/api/persons/:id/queries', (req, res) => {
   const person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
-  res.json({ queries: buildPersonQueries(person, req.query.depth || 'normal'), guard: publicOnlyPersonGuard(person) });
+  const depth = normalizePersonDepth(req.query.depth);
+  const sources = personSourcesForDepth(depth, req.query.sources);
+  const plan = buildPersonSearchPlan(person, {
+    depth,
+    sourceIds: sources,
+    sourceMeta: SOURCE_META,
+    maxQueries: req.query.maxQueries
+  });
+  res.json({ ...plan, guard: publicOnlyPersonGuard(person) });
 });
 app.post('/api/persons/:id/identity/resolve', async (req, res) => {
   const person = readStore().persons.find(item => item.id === req.params.id);
@@ -4727,7 +4620,25 @@ app.get('/api/persons/:id/search-plan', (req, res) => {
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   const depth = normalizePersonDepth(req.query.depth);
   const sources = personSourcesForDepth(depth, req.query.sources);
-  res.json({ personId: person.id, depth, queries: buildPersonQueries(person, depth), sources, guard: publicOnlyPersonGuard(person) });
+  const plan = buildPersonSearchPlan(person, {
+    depth,
+    sourceIds: sources,
+    sourceMeta: SOURCE_META,
+    maxQueries: req.query.maxQueries
+  });
+  res.json({ ...plan, guard: publicOnlyPersonGuard(person) });
+});
+app.get('/api/persons/:id/search-runs', (req, res) => {
+  const store = readStore();
+  if (!store.persons.some(item => item.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
+  const runs = (store.personSearchRuns || []).filter(run => run.personId === req.params.id);
+  res.json({ runs, latest: runs[0] || null });
+});
+app.get('/api/persons/:id/search-coverage', (req, res) => {
+  const store = readStore();
+  if (!store.persons.some(item => item.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
+  const latest = (store.personSearchRuns || []).find(run => run.personId === req.params.id) || null;
+  res.json({ personId: req.params.id, latest, coverage: latest?.coverage || [], sources: latest?.sourceCoverage || [] });
 });
 app.post('/api/persons/:id/search', searchLimiter, async (req, res) => {
   let person = readStore().persons.find(item => item.id === req.params.id);
@@ -4753,20 +4664,25 @@ app.post('/api/persons/:id/search', searchLimiter, async (req, res) => {
   }
   const maxQueries = Math.max(1, Math.min(40, Number(req.body.maxQueries) || { quick: 8, normal: 20, deep: 32, archive: 40 }[depth]));
   const minScore = Math.max(0, Math.min(100, Number(req.body.minScore) || 30));
-  const queries = buildPersonQueries(person, depth).slice(0, maxQueries);
-  if (req.body.dryRun) return res.json({ dryRun: true, queries, sources: selectedSourceIds, depth, guard: publicOnlyPersonGuard(person) });
-  const created = [];
-  const failures = [];
-  for (const query of queries) {
-    try {
-      const payload = await scrapeImageSearchWithFallback(query, selectedSourceIds.join(','), {
+  const plan = buildPersonSearchPlan(person, {
+    depth,
+    sourceIds: selectedSourceIds,
+    sourceMeta: SOURCE_META,
+    maxQueries
+  });
+  if (req.body.dryRun) return res.json({ dryRun: true, ...plan, guard: publicOnlyPersonGuard(person) });
+  const startedAt = new Date().toISOString();
+  const execution = await executePersonSearchPlan({
+    plan,
+    runTask: task => scrapeImageSearchWithFallback(task.query, task.sourceIds.join(','), {
         safe,
         adultConfirmed: adultGuard.adultConfirmed,
         matchMode: 'strict',
         riskMode: 'cautious'
-      });
+      }),
+    mapItems: (items, task) => {
       const currentStore = readStore();
-      const queryLinks = [...payload.images, ...payload.videos].flatMap(item => {
+      return items.flatMap(item => {
         const score = scorePersonMedia(person, item);
         if (score.score < minScore) return [];
         return [applyPersonRules(currentStore, person.id, {
@@ -4777,32 +4693,65 @@ app.post('/api/persons/:id/search', searchLimiter, async (req, res) => {
           status: score.suggestedStatus,
           personScore: score.score,
           evidence: score.evidence,
-          query,
+          query: task.query,
           depth,
+          searchTaskId: task.id,
+          identityId: task.identityId,
+          identityKind: task.identityKind,
+          identityValue: task.identityValue,
           createdAt: new Date().toISOString()
         })];
       });
-      created.push(...queryLinks);
-      if (queryLinks.length) {
-        mutateStore(store => {
-          store.personMediaLinks = dedupeBy([...queryLinks, ...store.personMediaLinks], link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
-        });
-      }
-    } catch (error) {
-      failures.push({ query, error: error.message });
+    },
+    onLinks: queryLinks => {
+      mutateStore(store => {
+        store.personMediaLinks = dedupeBy([...queryLinks, ...store.personMediaLinks], link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
+      });
     }
-  }
-  const uniqueCreated = dedupeBy(created, link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
+  });
+  const uniqueCreated = dedupeBy(execution.links, link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
+  const finishedAt = new Date().toISOString();
+  const run = {
+    id: makeId('psearch'),
+    personId: person.id,
+    depth,
+    sources: selectedSourceIds,
+    queries: plan.queries,
+    tasks: plan.tasks.map(task => ({
+      id: task.id,
+      identityId: task.identityId,
+      identityKind: task.identityKind,
+      identityValue: task.identityValue,
+      query: task.query,
+      sourceIds: task.sourceIds,
+      reason: task.reason,
+      strategy: task.strategy
+    })),
+    coverage: execution.coverage.slice(0, 1000),
+    sourceCoverage: execution.sourceCoverage,
+    executions: execution.executions,
+    created: uniqueCreated.length,
+    failures: execution.failures,
+    startedAt,
+    finishedAt
+  };
+  mutateStore(store => {
+    store.personSearchRuns = [run, ...(store.personSearchRuns || []).filter(item => item.id !== run.id)].slice(0, 100);
+  });
   res.json({
     personId: person.id,
     depth,
     sources: selectedSourceIds,
-    queries,
-    completedQueries: queries.length - failures.length,
-    failedQueries: failures.length,
-    failures,
+    queries: plan.queries,
+    tasks: plan.tasks,
+    coverage: execution.coverage,
+    sourceCoverage: execution.sourceCoverage,
+    completedQueries: execution.completedTasks,
+    failedQueries: execution.failedTasks,
+    failures: execution.failures,
     created: uniqueCreated.length,
     links: uniqueCreated,
+    run,
     identityResolution,
     identityResolutionError
   });
@@ -4893,6 +4842,7 @@ app.get('/api/persons/:id/graph', (req, res) => {
     person,
     aliasCandidates: store.aliasCandidates,
     mediaLinks: store.personMediaLinks,
+    searchRuns: store.personSearchRuns,
     validationRules: store.personValidationRules
   }));
 });
@@ -4904,6 +4854,7 @@ app.get('/api/persons/:id/report', (req, res) => {
     person,
     aliasCandidates: store.aliasCandidates,
     mediaLinks: store.personMediaLinks,
+    searchRuns: store.personSearchRuns,
     validationRules: store.personValidationRules
   }));
 });
@@ -4913,7 +4864,7 @@ app.get('/api/persons/:id/media/:linkId/details', (req, res) => {
   res.json({ link, proof: { query: link.query, evidence: link.evidence || [], source: link.media?.source, url: link.media?.link || link.media?.url } });
 });
 app.get('/api/persons/timeline/options', (req, res) => res.json({
-  eventTypes: ['profile_created', 'profile_updated', 'alias_added', 'account_added', 'media_discovered', 'media_validated', 'rule_created'],
+  eventTypes: ['profile_created', 'profile_updated', 'alias_added', 'account_added', 'search_completed', 'media_discovered', 'media_validated', 'rule_created'],
   sorts: ['newest', 'oldest']
 }));
 app.get('/api/persons/:id/timeline', (req, res) => {
@@ -5011,6 +4962,7 @@ app.get('/api/exports/person-report', (req, res) => {
     person,
     aliasCandidates: store.aliasCandidates,
     mediaLinks: store.personMediaLinks,
+    searchRuns: store.personSearchRuns,
     validationRules: store.personValidationRules
   });
   return sendExport(res, 'person-report', [report], req.query.format || 'json');

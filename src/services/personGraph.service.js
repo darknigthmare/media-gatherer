@@ -135,6 +135,7 @@ function graphInput(input = {}) {
       ...asArray(input.aliasCandidates)
     ], personId),
     mediaLinks: scopedRows(input.mediaLinks, personId),
+    searchRuns: scopedRows(input.searchRuns || input.personSearchRuns, personId),
     validationRules: scopedRows(input.validationRules || input.rules, personId)
   };
 }
@@ -453,6 +454,13 @@ function buildPersonPublicReport(input = {}) {
   const accountNodes = graph.nodes.filter(node => node.type === 'account');
   const queryNodes = graph.nodes.filter(node => node.type === 'query');
   const ruleNodes = graph.nodes.filter(node => node.type === 'rule');
+  const latestSearchRun = [...context.searchRuns]
+    .sort((left, right) => String(right.finishedAt || right.startedAt || '').localeCompare(String(left.finishedAt || left.startedAt || '')))[0];
+  const coverageCounts = {};
+  asArray(latestSearchRun?.coverage).forEach(row => {
+    const state = cleanText(row.state, 40) || 'unknown';
+    increment(coverageCounts, state);
+  });
   const confirmedAliases = aliasNodes
     .filter(node => node.state === 'confirmed')
     .map(node => ({ value: node.label, kind: node.aliasKind }));
@@ -519,7 +527,21 @@ function buildPersonPublicReport(input = {}) {
         || left.label.localeCompare(right.label)
       )),
       queries: queryNodes.length,
-      rules: ruleNodes.length
+      rules: ruleNodes.length,
+      searches: {
+        runs: context.searchRuns.length,
+        latestAt: publicText(latestSearchRun?.finishedAt || latestSearchRun?.startedAt, 60) || null,
+        created: Math.max(0, Number(latestSearchRun?.created || 0) || 0),
+        coverage: sortedCounts(coverageCounts),
+        sources: asArray(latestSearchRun?.sourceCoverage).map(row => ({
+          id: publicText(row.sourceId, 100),
+          planned: Math.max(0, Number(row.planned || 0) || 0),
+          interrogated: Math.max(0, Number(row.interrogated || 0) || 0),
+          skipped: Math.max(0, Number(row.skipped || 0) || 0),
+          errors: Math.max(0, Number(row.errors || 0) || 0),
+          results: Math.max(0, Number(row.results || 0) || 0)
+        })).filter(row => row.id)
+      }
     },
     proofs
   };

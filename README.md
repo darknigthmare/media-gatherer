@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 97 sources : 22 normales, 15 sociales, 8 d'identite et 52 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.7.1 ajoute un espace de donnees isole par navigateur sur Vercel, un transport Telegram Web public borne, la persistance Redis par session et la signature Windows optionnelle en CI. Elle conserve les corrections 1.7.0: Coomer en metadonnees uniquement, Person Finder durci, queue progressive, identifiants API isoles, galerie filtree, preuves, graphe, rapport public et timeline exacte. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
+La version 1.8.0 ajoute un plan Person Finder specialise par source, une couverture reelle par alias/username/compte, un canari public pour chacune des 97 sources, une surveillance hebdomadaire des contrats, quatre etats honnetes de qualite media et une veille automatique locale avec diff. Le registre, le planificateur, l'execution Person Finder, la qualite et les veilles sont maintenant des modules distincts du serveur. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -27,6 +27,7 @@ Ouvrir ensuite [http://localhost:3000](http://localhost:3000).
 ```powershell
 npm run qa
 npm audit --omit=dev
+npm run audit:source-contracts
 npm run audit:sources -- --base http://127.0.0.1:3000
 ```
 
@@ -78,28 +79,33 @@ Les identifiants saisis dans l'onglet Connexions sont isoles par session navigat
 - Une page de compte publique validee peut etre extraite entierement sans imposer le nom dans chaque media.
 - Wayback decouvre d'abord les domaines via la recherche officielle, complete les usernames avec des domaines personnels probables, puis lit les medias CDX avec `matchType=domain`, sans filtre de nom.
 - Chaque source expose un statut, le nombre brut, le nombre retenu, les pages ouvertes et une raison explicite en cas de zero.
-- `/api/sources/adapters` indique le transport reel, l'authentification, l'etat de configuration, les domaines et les fallbacks de chaque source.
+- `/api/sources/adapters` indique le transport reel, l'authentification, l'etat de configuration, les domaines, les fallbacks et le canari public de chaque source.
 - L'audit live verifie aussi la pertinence des echantillons, les miniatures manquantes et les faux positifs, au lieu de se limiter au code HTTP.
+- L'audit live choisit le canari adapte a chaque transport : username brut pour Telegram/GitHub, domaine pour les archives, nom public pour les bases d'identite et terme media pour les moteurs.
 - Le navigateur conserve pendant 30 jours les resultats par requete, selection de sources et niveau adulte; une relance ou un refresh les restaure avant d'ajouter les nouveautes.
 - Les diagnostics et la longue liste NSFW sont des tiroirs a hauteur bornee avec defilement interne.
 - Les sources NSFW distinguent acces direct, fallback moteur, blocage, limitation de debit et indisponibilite reseau.
 - Phun Forum, PlanetSuzy et Bellazon utilisent leur recherche publique avant les fallbacks moteurs.
 - Eporner utilise son API publique en priorite, puis repasse sur la recherche HTML et les moteurs publics si elle ne repond pas.
-- La meilleure URL connue est conservee lors du dedoublonnage ; une miniature ne remplace pas un original.
+- La meilleure URL connue est conservee lors du dedoublonnage ; la qualite distingue `Original confirme`, `Meilleure version declaree`, `Miniature seulement` et `Qualite non verifiee`.
+- Les dimensions sont confirmees progressivement lorsque le navigateur charge vraiment le fichier principal, sans retarder les resultats.
 - Les alias ne sont proposes qu'avec une preuve de profil ou de nom public ; les liens sortants des hubs publics restent des candidats a verifier et les chemins techniques de forum sont exclus.
 - Un alias trouve ouvre un panneau d'actions : rechercher, fusionner ses medias avec les resultats visibles, l'envoyer vers une fiche Person Finder ou le rejeter. La confiance, les sources et les preuves restent attachees au candidat.
 - Person Finder separe les alias a verifier, confirmes et rejetes. Un alias confirme devient un terme de recherche direct; un rejet n'est pas reintroduit silencieusement par la resolution d'identite suivante.
 - La resolution d'identite croise Wikidata, les reseaux publics et les hubs de liens avant la recherche Person Finder.
+- Person Finder distribue equitablement le budget de requetes entre le nom, les alias, les usernames et les comptes confirmes. Telegram ne recoit qu'un username brut; les archives privilegient les URLs/domaines de comptes confirmes.
+- Chaque recherche Person Finder conserve les couples identite/source planifies, interroges, ignores ou en erreur et leur nombre de resultats.
 - Les resultats Person Finder sont conserves requete par requete et apparaissent dans la galerie pendant que la recherche continue.
 - La galerie Person Finder est filtree et defilable, avec statut, ouverture de source et tiroir de preuves.
 - Le graphe relationnel et le rapport n'exposent que les alias, comptes, medias et preuves publics.
 - Coomer interroge uniquement un profil exact et remonte ses metadonnees d'identite; ses publications et medias ne sont pas reextraits.
 - Telegram accepte un username exact, parcourt au maximum 40 messages de `t.me/s/<username>` et conserve les images, videos, miniatures et URLs de preuve du canal public correspondant.
 - Les empreintes dHash sont calculees apres affichage via le proxy local, sans retarder l'arrivee progressive des resultats.
+- Une veille sauvegardee peut etre activee toutes les 15 minutes a une semaine. Le planificateur tourne uniquement tant que l'application locale ou l'EXE reste ouvert, execute une seule veille due a la fois et expose seulement les nouveaux medias depuis le dernier baseline.
 
 ## Stockage
 
-En local et dans l'EXE, l'historique, la collection, les profils, le cache, la queue et les veilles sont durables dans `data/mediagatherer.store.json`. Les collections sont bornees afin d'eviter une croissance illimitee.
+En local et dans l'EXE, l'historique, la collection, les profils, les couvertures Person Finder, le cache, la queue et les veilles sont durables dans `data/mediagatherer.store.json`. Les collections sont bornees afin d'eviter une croissance illimitee.
 
 Sur Vercel, chaque navigateur recoit un identifiant `HttpOnly` et un magasin distinct. Le stockage fichier reste temporaire, mais aucune collection, fiche personne ou historique n'est partage avec une autre session. Si `KV_REST_API_URL` et `KV_REST_API_TOKEN` sont configures, chaque session est hydratee et repliquee dans sa propre cle Upstash Redis REST avec la retention configuree. Sans ces variables, l'interface indique le mode volatil isole.
 
@@ -114,4 +120,4 @@ Sur Vercel, chaque navigateur recoit un identifiant `HttpOnly` et un magasin dis
 - Les recherches NSFW sont bloquees sans confirmation 18+; Person Finder les interdit aussi lorsqu'une annee de naissance rend la majorite impossible a confirmer.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/WINDOWS_SIGNING.md](docs/WINDOWS_SIGNING.md), [docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md](docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md), [docs/audits/2026-07-26/telegram-public.md](docs/audits/2026-07-26/telegram-public.md), [docs/AUDIT_COMPLET_1.7.0_2026-07-26.md](docs/AUDIT_COMPLET_1.7.0_2026-07-26.md), [docs/audits/2026-07-26/sources-live-complete.md](docs/audits/2026-07-26/sources-live-complete.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/WINDOWS_SIGNING.md](docs/WINDOWS_SIGNING.md), [docs/AUDIT_1.8.0_2026-07-26.md](docs/AUDIT_1.8.0_2026-07-26.md), [docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md](docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md), [docs/audits/2026-07-26/telegram-public.md](docs/audits/2026-07-26/telegram-public.md), [docs/audits/2026-07-26/sources-live-complete.md](docs/audits/2026-07-26/sources-live-complete.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).

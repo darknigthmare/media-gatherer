@@ -161,3 +161,38 @@ test('le responsive couvre explicitement les ecrans inferieurs a 392px', () => {
   assert.match(css, /\.media-grid\.grid-large[\s\S]*grid-template-columns: minmax\(0, 1fr\) !important/);
   assert.match(css, /\.connections-grid[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 });
+
+test('Person Finder affiche la couverture reelle par identite et source', () => {
+  const render = functionBody('renderPersonPlan');
+  assert.match(render, /coverageByIdentity/);
+  assert.match(render, /person-coverage-scroll/);
+  assert.match(render, /state-\$\{escapeHtml\(row\.state/);
+  assert.match(render, /row\.results/);
+  const select = functionBody('selectPerson');
+  assert.match(select, /\/search-coverage/);
+  assert.match(css, /\.person-coverage-scroll\s*\{[^}]*overflow-y:\s*auto;/s);
+});
+
+test('la qualite media distingue miniature variante et original puis mesure le rendu', () => {
+  const prepare = functionBody('prepareMediaItems');
+  const tracking = functionBody('trackRenderedImageQuality');
+  const lightbox = functionBody('openLightbox');
+  assert.match(prepare, /inferClientMediaQuality/);
+  assert.match(tracking, /naturalWidth/);
+  assert.match(tracking, /qualityVerifiedAt/);
+  assert.match(lightbox, /qualityStateText\(img\)/);
+  assert.match(app, /original_confirmed: 'Original confirm/);
+  assert.match(app, /thumbnail_only: 'Miniature seulement'/);
+});
+
+test('la veille locale planifie seulement les recherches dues sans chevauchement', () => {
+  const scheduler = functionBody('checkDueMonitors');
+  const run = functionBody('runSavedMonitor');
+  assert.match(scheduler, /monitorSchedulerRunning \|\| document\.hidden \|\| navigator\.onLine === false/);
+  assert.match(scheduler, /api\/monitors\?due=true/);
+  assert.match(scheduler, /dueItems\[0\]/);
+  assert.match(run, /api\/monitors\/\$\{encodeURIComponent\(id\)\}\/run/);
+  assert.match(app, /setInterval\(\(\) => void checkDueMonitors\(\), 30000\)/);
+  assert.match(app, /void loadMonitors\(\)\.then\(startMonitorScheduler\)/);
+  assert.match(css, /\.monitor-controls\s*\{/);
+});

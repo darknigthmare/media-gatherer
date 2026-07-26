@@ -37,6 +37,8 @@ let refreshInProgress = false;
 let refreshCycleCount = 0;
 let searchHistory = readLocalArray(['mediagatherer_history', 'aerogatherer_history']);
 let savedMonitors = readLocalArray(['mediagatherer_monitors', 'aerogatherer_monitors']);
+let monitorSchedulerTimer = null;
+let monitorSchedulerRunning = false;
 let batchQueue = [];
 let activeBatchJobId = null;
 let activeBatchJob = null;
@@ -1066,10 +1068,50 @@ function renderPersonPlan(plan) {
   if (!personQueryPlan) return;
   const queries = Array.isArray(plan) ? plan : (plan?.queries || []);
   const sources = Array.isArray(plan?.sources) ? plan.sources : [];
+  const coverage = Array.isArray(plan?.coverage) ? plan.coverage : [];
+  const coverageByIdentity = coverage.reduce((map, row) => {
+    if (!map.has(row.identityId)) map.set(row.identityId, []);
+    map.get(row.identityId).push(row);
+    return map;
+  }, new Map());
+  const stateLabel = {
+    planned: 'Planifiée',
+    interrogated: 'Interrogée',
+    skipped: 'Ignorée',
+    error: 'Erreur'
+  };
   personQueryPlan.innerHTML = `
-    ${sources.length ? `<span class="person-query-source-summary">${sources.length} sources: ${escapeHtml(sources.join(', '))}</span>` : ''}
-    ${queries.map(query => `<span class="person-query-chip">${escapeHtml(query)}</span>`).join('') || '<span class="person-empty">Aucune requête générée.</span>'}
+    <div class="person-query-summary">
+      ${sources.length ? `<span class="person-query-source-summary">${sources.length} sources · ${coverage.filter(row => row.state === 'interrogated').length} couples interrogés · ${coverage.reduce((sum, row) => sum + Number(row.results || 0), 0)} résultats</span>` : ''}
+      <div class="person-query-chips">${queries.map(query => `<span class="person-query-chip">${escapeHtml(query)}</span>`).join('') || '<span class="person-empty">Aucune requête générée.</span>'}</div>
+    </div>
+    ${coverage.length ? `
+      <details class="person-coverage-drawer" open>
+        <summary><span><i data-lucide="scan-search"></i> Couverture réelle des identités</span><span>${coverage.length} couples identité/source</span></summary>
+        <div class="person-coverage-scroll">
+          ${[...coverageByIdentity.entries()].map(([, rows]) => {
+            const first = rows[0] || {};
+            const resultCount = rows.reduce((sum, row) => sum + Number(row.results || 0), 0);
+            return `
+              <section class="person-coverage-identity">
+                <header><strong>${escapeHtml(first.identityValue || 'Identité')}</strong><span>${escapeHtml(first.identityLabel || first.identityKind || '')} · ${resultCount} résultat${resultCount > 1 ? 's' : ''}</span></header>
+                <div class="person-coverage-sources">
+                  ${rows.map(row => `
+                    <span class="person-coverage-source state-${escapeHtml(row.state || 'planned')}" title="${escapeHtml(row.reason || '')}">
+                      <i data-lucide="${row.state === 'error' ? 'circle-alert' : (row.state === 'skipped' ? 'circle-minus' : (row.state === 'interrogated' ? 'circle-check' : 'clock-3'))}"></i>
+                      ${escapeHtml(row.sourceLabel || row.sourceId)}
+                      <small>${escapeHtml(stateLabel[row.state] || row.state || 'Planifiée')}${row.results ? ` · ${Number(row.results)}` : ''}</small>
+                    </span>
+                  `).join('')}
+                </div>
+              </section>
+            `;
+          }).join('')}
+        </div>
+      </details>
+    ` : ''}
   `;
+  lucide.createIcons();
 }
 
 function renderPersonMedia(links) {
@@ -1162,7 +1204,9 @@ async function showPersonMediaDetails(linkId) {
         <div><span>Titre</span><strong>${escapeHtml(media.title || 'Sans titre')}</strong></div>
         <div><span>Statut</span><strong>${escapeHtml(link.status || 'to_review')}</strong></div>
         <div><span>Score personne</span><strong>${Number(link.personScore || 0)}%</strong></div>
+        <div><span>Identité utilisée</span><strong>${escapeHtml(link.identityValue || link.identityKind || 'Non renseignée')}</strong></div>
         <div><span>Requête</span><strong>${escapeHtml(data.proof?.query || link.query || 'Non renseignée')}</strong></div>
+        <div><span>Qualité média</span><strong>${escapeHtml(media.qualityStateLabel || media.qualityLabel || 'Qualité non vérifiée')}</strong></div>
       </div>
       <div class="person-proof-list">
         ${(data.proof?.evidence || link.evidence || []).map(reason => `<span><i data-lucide="check"></i>${escapeHtml(reason)}</span>`).join('') || '<span>Aucune preuve textuelle enregistrée.</span>'}
@@ -1197,6 +1241,8 @@ async function showPersonAnalysis(kind) {
           <div><span>Alias confirmés</span><strong>${Number(stats.aliases?.confirmed || 0)}</strong></div>
           <div><span>Comptes confirmés</span><strong>${Number(stats.accounts?.confirmed || 0)}</strong></div>
           <div><span>Sources</span><strong>${Number(stats.sources?.length || 0)}</strong></div>
+          <div><span>Recherches</span><strong>${Number(stats.searches?.runs || 0)}</strong></div>
+          <div><span>Couples interrogés</span><strong>${Number(stats.searches?.coverage?.interrogated || 0)}</strong></div>
         </div>
         <div class="person-source-report">${(stats.sources || []).map(source => `<span>${escapeHtml(source.label || source.id)} · ${Number(source.validated || 0)}/${Number(source.total || 0)}</span>`).join('') || '<span>Aucune source.</span>'}</div>
         <a class="btn btn-secondary" href="${API_BASE}/api/exports/person-report?personId=${encodeURIComponent(selectedPersonId)}&format=json"><i data-lucide="download"></i><span>Exporter le rapport JSON</span></a>
@@ -1253,9 +1299,14 @@ async function selectPerson(id, rerenderList = true) {
   if (localPerson) renderPersonDetail(localPerson);
   personSection?.setAttribute('aria-busy', 'true');
   try {
-    const [personRes, planRes, galleryRes, timelineRes, rulesRes, aliasesRes] = await Promise.all([
+    const planParams = new URLSearchParams({
+      depth: personDepth?.value || 'normal',
+      maxQueries: String(Math.max(1, Math.min(40, Number(personMaxQueries?.value || 10))))
+    });
+    const [personRes, planRes, coverageRes, galleryRes, timelineRes, rulesRes, aliasesRes] = await Promise.all([
       fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`),
-      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/search-plan?depth=${encodeURIComponent(personDepth?.value || 'normal')}`),
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/search-plan?${planParams}`),
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/search-coverage`),
       fetch(personGalleryUrl(id)),
       fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/timeline`),
       fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`),
@@ -1269,7 +1320,12 @@ async function selectPerson(id, rerenderList = true) {
       renderPersonList();
       renderPersonDetail(latestPerson);
     }
-    if (planRes.ok) renderPersonPlan(await planRes.json());
+    if (planRes.ok) {
+      const plan = await planRes.json();
+      const latestCoverage = coverageRes.ok ? await coverageRes.json() : {};
+      const sameDepth = latestCoverage.latest?.depth === plan.depth;
+      renderPersonPlan(sameDepth ? { ...plan, coverage: latestCoverage.coverage || [] } : plan);
+    }
     if (galleryRes.ok) renderPersonMedia((await galleryRes.json()).links || []);
     if (timelineRes.ok) renderPersonTimeline((await timelineRes.json()).events || []);
     if (rulesRes.ok) renderPersonRules((await rulesRes.json()).rules || []);
@@ -1354,7 +1410,11 @@ async function deletePersonProfile(id) {
 async function previewPersonPlan() {
   if (!selectedPersonId) return;
   try {
-    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?depth=${encodeURIComponent(personDepth?.value || 'normal')}`);
+    const params = new URLSearchParams({
+      depth: personDepth?.value || 'normal',
+      maxQueries: String(Math.max(1, Math.min(40, Number(personMaxQueries?.value || 10))))
+    });
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?${params}`);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     renderPersonPlan(data);
@@ -1421,7 +1481,11 @@ async function runPersonSearch() {
   if (btnPersonSearch) btnPersonSearch.disabled = true;
   personSection?.setAttribute('aria-busy', 'true');
   try {
-    const planResponse = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?depth=${encodeURIComponent(depth)}`);
+    const planParams = new URLSearchParams({
+      depth,
+      maxQueries: String(Math.max(1, Math.min(40, Number(personMaxQueries?.value || 10))))
+    });
+    const planResponse = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?${planParams}`);
     const plan = await planResponse.json().catch(() => ({}));
     if (!planResponse.ok) throw new Error(plan.error || `HTTP ${planResponse.status}`);
     const sources = [...new Set([...(plan.sources || []), ...(includeNsfw ? adultSources : [])])];
@@ -1445,6 +1509,7 @@ async function runPersonSearch() {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Recherche Person Finder impossible.');
+    renderPersonPlan(data.run || data);
     addConsoleLog(`[PERSON] ${data.created || 0} médias liés; ${data.completedQueries || 0}/${data.queries?.length || 0} requêtes terminées${data.failedQueries ? `; ${data.failedQueries} échec(s)` : ''}.`, data.failedQueries ? 'warning' : 'success');
     await selectPerson(selectedPersonId);
   } catch (error) {
@@ -1875,8 +1940,79 @@ function scoreMediaItem(item) {
   return 20;
 }
 
+const MEDIA_QUALITY_LABELS = {
+  original_confirmed: 'Original confirmé',
+  best_declared: 'Meilleure version déclarée',
+  thumbnail_only: 'Miniature seulement',
+  unverified: 'Qualité non vérifiée'
+};
+
+function clientThumbnailUrl(value) {
+  return /(?:^|[\/_.-])(?:thumb|thumbnail|tmb|preview|poster|small|medium|avatar)(?:[\/_.?=-]|$)/i.test(String(value || ''));
+}
+
+function inferClientMediaQuality(item) {
+  if (item.qualityState && MEDIA_QUALITY_LABELS[item.qualityState]) return item;
+  const url = String(item.url || '');
+  const thumbnail = String(item.thumbnail || '');
+  let qualityState = 'unverified';
+  if (item.originalConfirmed === true && url) qualityState = 'original_confirmed';
+  else if (item.bestDeclared === true || (url && thumbnail && url !== thumbnail && !clientThumbnailUrl(url))) qualityState = 'best_declared';
+  else if (thumbnail || clientThumbnailUrl(url)) qualityState = 'thumbnail_only';
+  return {
+    ...item,
+    qualityState,
+    qualityStateLabel: MEDIA_QUALITY_LABELS[qualityState]
+  };
+}
+
+function qualityStateText(item) {
+  return item?.qualityStateLabel || MEDIA_QUALITY_LABELS[item?.qualityState] || item?.qualityLabel || MEDIA_QUALITY_LABELS.unverified;
+}
+
+function trackRenderedImageQuality(imageElement, item, loadedUrl, card = null) {
+  if (!imageElement || !item || imageElement.dataset.qualityTracked === '1') return;
+  imageElement.dataset.qualityTracked = '1';
+  const update = () => {
+    const width = Number(imageElement.naturalWidth || 0);
+    const height = Number(imageElement.naturalHeight || 0);
+    if (!width || !height) return;
+    const mainLoaded = Boolean(item.url && loadedUrl === item.url && imageElement.dataset.proxyRetried !== '1');
+    item.previewWidth = width;
+    item.previewHeight = height;
+    item.qualityVerified = true;
+    item.qualityVerifiedAt = new Date().toISOString();
+    if (mainLoaded) {
+      item.width = width;
+      item.height = height;
+      item.qualityLabel = `${width}x${height}`;
+    }
+    if (item.originalConfirmed === true && mainLoaded) {
+      item.qualityState = 'original_confirmed';
+      item.qualityStateLabel = MEDIA_QUALITY_LABELS.original_confirmed;
+      item.qualityReason = `Fichier original chargé en ${width}x${height}.`;
+    } else if (mainLoaded && !clientThumbnailUrl(item.url)) {
+      item.qualityState = 'best_declared';
+      item.qualityStateLabel = MEDIA_QUALITY_LABELS.best_declared;
+      item.qualityReason = `Variante principale chargée et mesurée en ${width}x${height}.`;
+    } else if (!item.qualityState || item.qualityState === 'unverified') {
+      item.qualityState = 'thumbnail_only';
+      item.qualityStateLabel = MEDIA_QUALITY_LABELS.thumbnail_only;
+      item.qualityReason = `Aperçu chargé en ${width}x${height}; le fichier principal reste à confirmer.`;
+    }
+    const submeta = card?.querySelector('.media-card-submeta');
+    if (submeta) {
+      const reasons = (item.matchReasons || []).slice(0, 2).join(' · ');
+      submeta.textContent = `${qualityStateText(item)}${item.qualityLabel ? ` · ${item.qualityLabel}` : ''}${reasons ? ` · ${reasons}` : ''}`;
+    }
+    scheduleSearchSnapshotSave(500);
+  };
+  imageElement.addEventListener('load', update);
+  if (imageElement.complete) queueMicrotask(update);
+}
+
 function prepareMediaItems(items) {
-  return (items || []).map(item => ({
+  return (items || []).map(item => inferClientMediaQuality({
     ...item,
     relevanceScore: item.relevanceScore || scoreMediaItem(item),
     confidenceScore: item.confidenceScore || scoreMediaItem(item),
@@ -2561,7 +2697,17 @@ async function saveMonitor() {
     config: lastSearchConfig,
     lastRunAt: new Date().toISOString(),
     lastImages: allImages.length,
-    lastVideos: allVideos.length
+    lastVideos: allVideos.length,
+    enabled: true,
+    intervalMinutes: existing?.intervalMinutes || 60,
+    newOnly: existing?.newOnly !== false,
+    baselineItems: [...allImages, ...allVideos].slice(0, 1000).map(item => ({
+      type: item.type,
+      visualSignature: item.visualSignature,
+      url: item.url,
+      link: item.link,
+      thumbnail: item.thumbnail
+    }))
   };
   try {
     const response = await fetch(`${API_BASE}/api/monitors`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor) });
@@ -2593,26 +2739,130 @@ function renderMonitors() {
   if (monitorCount) monitorCount.textContent = `${savedMonitors.length} veille${savedMonitors.length > 1 ? 's' : ''}`;
   monitorList.innerHTML = savedMonitors.length
     ? savedMonitors.map(item => `
-      <div class="workflow-row">
-        <div>
+      <div class="workflow-row monitor-row">
+        <div class="monitor-main">
           <strong>${escapeHtml(item.query)}</strong>
-          <span>${item.lastImages || 0} photos · ${item.lastVideos || 0} vidéos · ${item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : 'jamais'}</span>
+          <span>${item.lastImages || 0} photos · ${item.lastVideos || 0} vidéos · ${item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : 'jamais vérifiée'}</span>
+          <small class="${item.lastError ? 'monitor-error' : 'monitor-diff'}">${item.lastError
+            ? escapeHtml(item.lastError)
+            : `${Number(item.newImages || 0) + Number(item.newVideos || 0)} nouveau${Number(item.newImages || 0) + Number(item.newVideos || 0) > 1 ? 'x' : ''} · prochaine vérification ${item.enabled && item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : 'désactivée'}`}</small>
+          ${(item.lastNewItems || []).length ? `<div class="monitor-new-list">${item.lastNewItems.slice(0, 6).map(media => {
+            const url = safeHttpUrl(media.link || media.url || '');
+            return url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(media.title || media.sourceId || 'Nouveau média')}</a>` : '';
+          }).join('')}</div>` : ''}
         </div>
-        <button type="button" class="btn btn-secondary btn-small" data-monitor-run="${escapeHtml(item.id)}">
-          <i data-lucide="refresh-cw"></i><span>Vérifier</span>
-        </button>
+        <div class="monitor-controls">
+          <label class="monitor-toggle"><input type="checkbox" data-monitor-enabled="${escapeHtml(item.id)}" ${item.enabled ? 'checked' : ''}><span>Auto</span></label>
+          <label class="sr-only" for="monitor-interval-${escapeHtml(item.id)}">Fréquence</label>
+          <select id="monitor-interval-${escapeHtml(item.id)}" data-monitor-interval="${escapeHtml(item.id)}" title="Fréquence de vérification">
+            ${[
+              [15, '15 min'], [30, '30 min'], [60, '1 h'], [180, '3 h'],
+              [360, '6 h'], [720, '12 h'], [1440, '1 jour'], [10080, '1 semaine']
+            ].map(([minutes, label]) => `<option value="${minutes}" ${Number(item.intervalMinutes || 60) === minutes ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+          <button type="button" class="icon-btn" data-monitor-run="${escapeHtml(item.id)}" title="Vérifier maintenant" aria-label="Vérifier cette veille maintenant"><i data-lucide="refresh-cw"></i></button>
+          <button type="button" class="icon-btn" data-monitor-delete="${escapeHtml(item.id)}" title="Supprimer" aria-label="Supprimer cette veille"><i data-lucide="trash-2"></i></button>
+        </div>
       </div>
     `).join('')
     : '<div class="muted-line">Aucune veille sauvegardée.</div>';
   monitorList.querySelectorAll('[data-monitor-run]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const monitor = savedMonitors.find(item => item.id === btn.dataset.monitorRun);
-      if (!monitor) return;
-      restoreSearchConfig(monitor.config || { query: monitor.query });
-      await runSearchWithCurrentControls({ monitorId: monitor.id });
-    });
+    btn.addEventListener('click', () => void runSavedMonitor(btn.dataset.monitorRun, { manual: true }));
+  });
+  monitorList.querySelectorAll('[data-monitor-enabled]').forEach(input => {
+    input.addEventListener('change', () => void patchSavedMonitor(input.dataset.monitorEnabled, { enabled: input.checked }));
+  });
+  monitorList.querySelectorAll('[data-monitor-interval]').forEach(select => {
+    select.addEventListener('change', () => void patchSavedMonitor(select.dataset.monitorInterval, { intervalMinutes: Number(select.value) }));
+  });
+  monitorList.querySelectorAll('[data-monitor-delete]').forEach(button => {
+    button.addEventListener('click', () => void deleteSavedMonitor(button.dataset.monitorDelete));
   });
   lucide.createIcons();
+}
+
+async function patchSavedMonitor(id, patch) {
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    savedMonitors = savedMonitors.map(item => item.id === id ? data : item);
+    localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+    renderMonitors();
+  } catch (error) {
+    addConsoleLog(`[VEILLE] Mise à jour impossible : ${error.message}`, 'error');
+    await loadMonitors();
+  }
+}
+
+async function deleteSavedMonitor(id) {
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
+    savedMonitors = savedMonitors.filter(item => item.id !== id);
+    localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+    renderMonitors();
+  } catch (error) {
+    addConsoleLog(`[VEILLE] Suppression impossible : ${error.message}`, 'error');
+  }
+}
+
+async function runSavedMonitor(id, options = {}) {
+  const monitor = savedMonitors.find(item => item.id === id);
+  if (!monitor) return null;
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(id)}/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (data.monitor) {
+        savedMonitors = savedMonitors.map(item => item.id === id ? data.monitor : item);
+        localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+        renderMonitors();
+      }
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    savedMonitors = savedMonitors.map(item => item.id === id ? data.monitor : item);
+    localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
+    renderMonitors();
+    const newCount = Number(data.monitor?.newImages || 0) + Number(data.monitor?.newVideos || 0);
+    addConsoleLog(`[VEILLE] ${monitor.query} : ${newCount} nouveau${newCount > 1 ? 'x' : ''} média${newCount > 1 ? 's' : ''}.`, newCount ? 'success' : 'info');
+    return data.monitor;
+  } catch (error) {
+    if (options.manual) addConsoleLog(`[VEILLE] Vérification impossible : ${error.message}`, 'error');
+    return null;
+  }
+}
+
+async function checkDueMonitors() {
+  if (monitorSchedulerRunning || document.hidden || navigator.onLine === false) return;
+  monitorSchedulerRunning = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/monitors?due=true`);
+    if (!response.ok) return;
+    const dueItems = (await response.json()).items || [];
+    if (dueItems[0]) await runSavedMonitor(dueItems[0].id);
+  } catch {
+    // The scheduler resumes automatically when the local API is reachable again.
+  } finally {
+    monitorSchedulerRunning = false;
+  }
+}
+
+function startMonitorScheduler() {
+  if (monitorSchedulerTimer) clearInterval(monitorSchedulerTimer);
+  monitorSchedulerTimer = setInterval(() => void checkDueMonitors(), 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void checkDueMonitors();
+  });
+  void checkDueMonitors();
 }
 
 function attachImageProxyFallback(imgElement, originalUrl) {
@@ -3353,19 +3603,6 @@ async function runSearchWithCurrentControls(options = {}) {
     assertActiveSearch(token, signal);
     await refreshSearchHistory();
     assertActiveSearch(token, signal);
-    if (options.monitorId) {
-      const monitor = savedMonitors.find(item => item.id === options.monitorId);
-      if (monitor) {
-        monitor.lastRunAt = new Date().toISOString();
-        monitor.lastImages = allImages.length;
-        monitor.lastVideos = allVideos.length;
-        monitor.config = searchConfig;
-        await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(monitor.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor), signal });
-        localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
-        renderMonitors();
-      }
-    }
-    
   } catch (error) {
     if (isSearchAbort(error, signal)) return;
     const networkHint = error instanceof TypeError || /NetworkError|Failed to fetch|fetch resource/i.test(error.message || '')
@@ -3445,7 +3682,7 @@ function renderMedia() {
         </div>
         <div class="media-card-details">
           <span class="media-card-title" title="${escapeHtml(img.title)}">${escapeHtml(img.title)}</span>
-          <span class="media-card-submeta">${escapeHtml(img.qualityLabel || img.bestQuality || 'Qualité source')} · ${escapeHtml((img.matchReasons || []).slice(0, 2).join(' · '))}</span>
+          <span class="media-card-submeta">${escapeHtml(qualityStateText(img))}${img.qualityLabel ? ` · ${escapeHtml(img.qualityLabel)}` : ''} · ${escapeHtml((img.matchReasons || []).slice(0, 2).join(' · '))}</span>
         </div>
       `;
       
@@ -3456,7 +3693,11 @@ function renderMedia() {
         toggleFavorite(img, favBtn);
       });
 
-      if (previewUrl) attachImageProxyFallback(card.querySelector('img'), previewUrl);
+      if (previewUrl) {
+        const imageElement = card.querySelector('img');
+        attachImageProxyFallback(imageElement, previewUrl);
+        trackRenderedImageQuality(imageElement, img, previewUrl, card);
+      }
       
       // Click event opens Lightbox
       card.tabIndex = 0;
@@ -3496,7 +3737,7 @@ function renderMedia() {
         </div>
         <div class="media-card-details">
           <span class="media-card-title" title="${escapeHtml(vid.title)}">${escapeHtml(vid.title)}</span>
-          <span class="media-card-submeta">${escapeHtml((vid.matchReasons || []).slice(0, 2).join(' · ') || 'Analyse locale')}</span>
+          <span class="media-card-submeta">${escapeHtml(qualityStateText(vid))} · ${escapeHtml((vid.matchReasons || []).slice(0, 2).join(' · ') || 'Analyse locale')}</span>
         </div>
       `;
       
@@ -3613,6 +3854,24 @@ function openLightbox(img, trigger = document.activeElement) {
   const imageUrl = safeHttpUrl(img.url);
   if (!imageUrl) return;
   if (validModalTrigger(trigger, lightbox)) lastLightboxTrigger = trigger;
+  lightboxImg.onload = () => {
+    const width = Number(lightboxImg.naturalWidth || 0);
+    const height = Number(lightboxImg.naturalHeight || 0);
+    if (!width || !height) return;
+    img.width = width;
+    img.height = height;
+    img.qualityVerified = true;
+    img.qualityVerifiedAt = new Date().toISOString();
+    img.qualityLabel = `${width}x${height}`;
+    img.qualityState = img.originalConfirmed === true
+      ? 'original_confirmed'
+      : (clientThumbnailUrl(imageUrl) ? 'thumbnail_only' : 'best_declared');
+    img.qualityStateLabel = MEDIA_QUALITY_LABELS[img.qualityState];
+    img.qualityReason = `${img.originalConfirmed === true ? 'Original' : (img.qualityState === 'thumbnail_only' ? 'Aperçu' : 'Variante principale')} chargé et mesuré en ${width}x${height}.`;
+    lightboxResolutionWrapper.style.display = 'inline-flex';
+    lightboxResolution.textContent = `${width} x ${height} · ${qualityStateText(img)}`;
+    scheduleSearchSnapshotSave(500);
+  };
   lightboxImg.src = imageUrl;
   const accessibleTitle = img.title || 'Image sans titre';
   lightboxTitle.textContent = accessibleTitle;
@@ -3621,7 +3880,7 @@ function openLightbox(img, trigger = document.activeElement) {
   
   if (img.width && img.height) {
     lightboxResolutionWrapper.style.display = 'inline-flex';
-    lightboxResolution.textContent = `${img.width} x ${img.height}`;
+    lightboxResolution.textContent = `${img.width} x ${img.height} · ${qualityStateText(img)}`;
   } else {
     lightboxResolutionWrapper.style.display = 'none';
   }
@@ -4151,8 +4410,7 @@ if (btnMonitorSave) btnMonitorSave.addEventListener('click', saveMonitor);
 if (btnMonitorRun) {
   btnMonitorRun.addEventListener('click', async () => {
     for (const monitor of savedMonitors) {
-      restoreSearchConfig(monitor.config || { query: monitor.query });
-      await runSearchWithCurrentControls({ monitorId: monitor.id });
+      await runSavedMonitor(monitor.id, { manual: true });
     }
   });
 }
@@ -4170,7 +4428,7 @@ if (btnMonitorClear) {
 
 renderBatchQueue();
 refreshSearchHistory();
-loadMonitors();
+void loadMonitors().then(startMonitorScheduler);
 loadCollection();
 updatePersonActions();
 async function initializeRuntimeAndPersons() {

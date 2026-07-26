@@ -44,8 +44,10 @@ function sampleMatchesDomains(sample, domains = []) {
   return hosts.some(host => domains.some(domain => host === domain || host.endsWith(`.${domain}`)));
 }
 
-function queryForSource(source) {
+function queryForSource(source, adapter = {}) {
   if (forcedQuery) return forcedQuery;
+  if (adapter.canary?.query) return adapter.canary.query;
+  if (source.canary?.query) return source.canary.query;
   if (source.nsfw) return 'mia khalifa';
   if (source.category === 'identity' || source.purpose === 'identity') return 'Douglas Adams';
   return 'NASA';
@@ -137,7 +139,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       partial,
       baseUrl,
-      queryMode: `${forcedQuery ? `forced:${forcedQuery}` : 'category-smoke-queries'}; safe=${unsafeMode ? 'false' : 'per-source'}`,
+      queryMode: `${forcedQuery ? `forced:${forcedQuery}` : 'per-source-canaries'}; safe=${unsafeMode ? 'false' : 'per-source'}`,
       catalog: {
         sources: catalogSources.length,
         selectedSources: sources.length,
@@ -159,7 +161,7 @@ async function main() {
       const index = cursor++;
       const source = sources[index];
       const adapter = adaptersById.get(source.id) || {};
-      const query = queryForSource(source);
+      const query = queryForSource(source, adapter);
       const params = new URLSearchParams({ q: query, safe: (unsafeMode || source.nsfw) ? 'false' : 'true', timeout: '9000' });
       if (source.nsfw) params.set('adultConfirmed', 'true');
       const startedAt = Date.now();

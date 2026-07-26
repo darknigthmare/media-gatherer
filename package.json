@@ -1,12 +1,12 @@
 {
   "name": "media-gatherer",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Aspirateur de medias web photos/videos avec Person Finder",
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/js/app.js && node --check src/services/personGraph.service.js && node --check src/storage/remoteStore.js && node --check src/storage/storePolicy.js && node --check src/storage/storeScope.js && node --check src/sources/discoveryAdapters.js && node --check src/sources/coomerAdapter.js && node --check src/sources/telegramPublicAdapter.js && node --check scripts/audit-sources.js",
+    "check": "node --check server.js && node --check public/js/app.js && node --check src/services/personGraph.service.js && node --check src/services/personQueryPlanner.service.js && node --check src/services/personSearch.service.js && node --check src/services/mediaQuality.service.js && node --check src/services/monitor.service.js && node --check src/routes/monitor.routes.js && node --check src/storage/remoteStore.js && node --check src/storage/storePolicy.js && node --check src/storage/storeScope.js && node --check src/sources/sourceRegistry.js && node --check src/sources/sourceCanaries.js && node --check src/sources/discoveryAdapters.js && node --check src/sources/coomerAdapter.js && node --check src/sources/telegramPublicAdapter.js && node --check scripts/audit-sources.js && node --check scripts/audit-source-contracts.js && node --check scripts/compare-source-audits.js",
     "test": "node --test --test-concurrency=1",
     "qa": "npm run check && npm test",
     "build": "npm run qa",
@@ -15,7 +15,9 @@
     "sign:exe": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 -ExecutablePath dist/MediaGatherer.exe",
     "storage:status": "node -e \"fetch('http://127.0.0.1:3000/api/storage/status').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\"",
     "persons:status": "node -e \"fetch('http://127.0.0.1:3000/api/persons/stats').then(r=>r.json()).then(console.log).catch(e=>{console.error(e.message); process.exit(1)})\"",
-    "audit:sources": "node scripts/audit-sources.js"
+    "audit:sources": "node scripts/audit-sources.js",
+    "audit:source-contracts": "node scripts/audit-source-contracts.js",
+    "compare:source-audits": "node scripts/compare-source-audits.js"
   },
   "pkg": {
     "assets": [
