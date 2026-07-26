@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-07-26T15:19:45.699Z",
+  "partial": false,
+  "baseUrl": "http://127.0.0.1:4318",
+  "queryMode": "forced:durov; safe=per-source",
+  "catalog": {
+    "sources": 97,
+    "selectedSources": 1,
+    "adapters": 97,
+    "missingAdapters": [],
+    "duplicateSourceIds": []
+  },
+  "summary": {
+    "total": 1,
+    "operational": 1,
+    "degraded": 0,
+    "false_positive": 0,
+    "empty": 0,
+    "skipped": 0,
+    "configuration_required": 0,
+    "access_blocked": 0,
+    "rate_limited": 0,
+    "error": 0
+  },
+  "results": [
+    {
+      "id": "telegram",
+      "label": "Telegram",
+      "category": "social",
+      "nsfw": false,
+      "auth": "none",
+      "authRequired": false,
+      "configured": false,
+      "supports": [
+        "image",
+        "video",
+        "page"
+      ],
+      "purpose": "identity",
+      "adapterMode": "telegram-web-public-bounded",
+      "implementation": "generic-public-adapter",
+      "availability": "public-html-or-api",
+      "domains": [
+        "t.me"
+      ],
+      "query": "durov",
+      "httpStatus": 200,
+      "durationMs": 379,
+      "status": {
+        "success": true,
+        "available": true,
+        "adapter": "telegram-web-public-bounded",
+        "imagesCount": 1,
+        "videosCount": 0,
+        "zeroReason": "",
+        "note": "20 bounded public messages parsed",
+        "accounts": [
+          "https://t.me/durov"
+        ],
+        "identityAliases": [
+          {
+            "value": "@durov",
+            "kind": "username",
+            "confidence": 98,
+            "evidence": [
+              "https://t.me/durov",
+              "https://t.me/durov/514",
+              "https://t.me/durov/515",
+              "https://t.me/durov/516",
+              "https://t.me/durov/517",
+              "https://t.me/durov/518",
+              "https://t.me/durov/519",
+              "https://t.me/durov/520",
+              "https://t.me/durov/521",
+              "https://t.me/durov/522",
+              "https://t.me/durov/523",
+              "https://t.me/durov/524",
+              "https://t.me/durov/525",
+              "https://t.me/durov/526",
+              "https://t.me/durov/527",
+              "https://t.me/durov/528",
+              "https://t.me/durov/529",
+              "https://t.me/durov/531",
+              "https://t.me/durov/532",
+              "https://t.me/durov/533",
+              "https://t.me/durov/534"
+            ]
+          }
+        ],
+        "pageSamples": [
+          {
+            "url": "https://t.me/s/durov",
+            "title": "Pavel Durov",
+            "description": "Founder of Telegram."
+          }
+        ],
+        "rawImagesCount": 1,
+        "rawVideosCount": 0,
+        "rejectedByRelevance": 0
+      },
+      "samples": [
+        {
+          "type": "image",
+          "title": "Pavel Durov - Telegram message 522",
+          "description": "",
+          "url": "https://cdn4.telesco.pe/file/X3S-NWkgt7RPJxt_e96SIPDwwhSzuGlI6t9hvmVO5IBMwsmcplPdSzgn3x9rSWzsXE7kxmupLNuJMOJrZFiQiFKw8iOKuIgFvkFEbRZnS415xSMaewmtXZ1znQH27AE1MuynZsJNMRwo26Xws57iA9zQFqF2EMw8Q-Me0vjEu5ZWnX8SvTqdlm07hXtPdTkWUXLfo1p0sF9bZiueqz77HLSHgKSD69i17BtoXl5Xi_EnBLAfY3LUooew-GPfZ00VOwLsdRsV5zd_fbaJEmJtwdiUag7a-NUHQn4c4AhEtx2VzUnjeL6xy6dWLjdwBRfTEgIiTaOGdUNDt3pl_WDKNQ.jpg",
+          "thumbnail": "https://cdn4.telesco.pe/file/X3S-NWkgt7RPJxt_e96SIPDwwhSzuGlI6t9hvmVO5IBMwsmcplPdSzgn3x9rSWzsXE7kxmupLNuJMOJrZFiQiFKw8iOKuIgFvkFEbRZnS415xSMaewmtXZ1znQH27AE1MuynZsJNMRwo26Xws57iA9zQFqF2EMw8Q-Me0vjEu5ZWnX8SvTqdlm07hXtPdTkWUXLfo1p0sF9bZiueqz77HLSHgKSD69i17BtoXl5Xi_EnBLAfY3LUooew-GPfZ00VOwLsdRsV5zd_fbaJEmJtwdiUag7a-NUHQn4c4AhEtx2VzUnjeL6xy6dWLjdwBRfTEgIiTaOGdUNDt3pl_WDKNQ.jpg",
+          "link": "https://t.me/durov/522",
+          "sourceId": "telegram",
+          "matchReasons": [
+            "username exact dans le compte public"
+          ],
+          "confidenceScore": 100
+        }
+      ],
+      "error": "",
+      "quality": {
+        "sampleCount": 1,
+        "queryRelevantSamples": 1,
+        "sourceDomainSamples": 1,
+        "missingThumbnails": 0,
+        "missingUrls": 0
+      },
+      "state": "operational"
+    }
+  ]
+}

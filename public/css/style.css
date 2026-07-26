@@ -261,6 +261,61 @@ body {
   margin: -0.25rem 0 1rem;
 }
 
+.write-session-control {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 320px) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.write-session-status {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.write-session-status strong {
+  margin-right: 0.15rem;
+  font-size: 0.9rem;
+}
+
+.write-session-field {
+  min-width: 0;
+}
+
+.write-session-actions {
+  flex-wrap: nowrap;
+}
+
+.write-session-message {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.write-session-message:empty {
+  display: none;
+}
+
+.write-session-control.is-busy {
+  opacity: 0.78;
+}
+
+.connection-state.warning {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.35);
+}
+
+.connection-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .safety-control {
   display: grid;
   gap: 0.35rem;
@@ -3118,6 +3173,19 @@ body {
 
   #tab-connections {
     margin-left: 0;
+  }
+
+  .write-session-control {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .write-session-actions {
+    width: 100%;
+  }
+
+  .write-session-actions .btn {
+    flex: 1 1 0;
   }
 
   .person-search-controls,

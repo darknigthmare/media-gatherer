@@ -49,11 +49,22 @@ const {
   coomerProfileMatches,
   resolveCoomerPublicProfile
 } = require('./src/sources/coomerAdapter');
+const {
+  normalizeTelegramUsername,
+  runTelegramPublicAdapter
+} = require('./src/sources/telegramPublicAdapter');
 const { normalizeIdentityValue, mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
 const { buildPersonGraph, buildPersonPublicReport } = require('./src/services/personGraph.service');
 const { createRemoteStore } = require('./src/storage/remoteStore');
 const { normalizeBoundedStore } = require('./src/storage/storePolicy');
+const {
+  normalizeSessionId,
+  generateSessionId,
+  resolveStoreScope,
+  deriveLocalStorePath,
+  planSessionFileCleanup
+} = require('./src/storage/storeScope');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -61,22 +72,28 @@ const APP_DATA_ROOT = process.pkg ? path.dirname(process.execPath) : __dirname;
 const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? path.join(os.tmpdir(), 'mediagatherer-data') : path.join(APP_DATA_ROOT, 'data'));
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
+const SESSION_STORE_DIR = path.join(DATA_DIR, 'sessions');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_SCHEMA_VERSION = '2026-07-26-media-13';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_PROXY_BYTES = 32 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
+const IS_SESSION_SCOPED_STORE = Boolean(process.env.VERCEL);
 const SESSION_CONNECTIONS = new Map();
 const SESSION_CONTEXT = new AsyncLocalStorage();
 const SESSION_CONNECTION_TTL_MS = 2 * 60 * 60 * 1000;
+const DATA_SESSION_TTL_DAYS = Math.max(1, Math.min(Number(process.env.MEDIAGATHERER_SESSION_TTL_DAYS) || 30, 365));
+const DATA_SESSION_TTL_MS = DATA_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 const MAX_CONNECTION_SESSIONS = 100;
 const SOURCE_HEALTH = new Map();
 const REMOTE_STORE = createRemoteStore({
   url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN,
-  key: process.env.MEDIAGATHERER_REMOTE_KEY || 'mediagatherer:store'
+  key: process.env.MEDIAGATHERER_REMOTE_KEY || 'mediagatherer:store',
+  ttlSeconds: Math.floor(DATA_SESSION_TTL_MS / 1000)
 });
-let remoteHydrationPromise = null;
+const REMOTE_HYDRATION_PROMISES = new Map();
+let lastSessionStoreCleanupAt = 0;
 const DEFAULT_SELECTED_SOURCES = new Set(['duckduckgo', 'bing', 'flickr', 'wikimedia', 'youtube', 'reddit', 'wayback', 'vimeo', 'dailymotion', 'wikidata', 'internetarchive', 'bluesky']);
 
 const SOURCE_IDS = [
@@ -238,10 +255,9 @@ app.use('/api', (req, res, next) => {
   const cookieHeader = String(req.headers.cookie || '');
   const cookieValue = cookieHeader.split(';').map(value => value.trim()).find(value => value.startsWith('mg_session='));
   const candidate = cookieValue ? cookieValue.slice('mg_session='.length) : '';
-  const sessionId = /^[a-f0-9]{32}$/i.test(candidate) ? candidate : crypto.randomBytes(16).toString('hex');
-  if (req.path.startsWith('/connections')) {
-    res.setHeader('set-cookie', `mg_session=${sessionId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_CONNECTION_TTL_MS / 1000)}${process.env.VERCEL ? '; Secure' : ''}`);
-  }
+  const sessionId = normalizeSessionId(candidate) || generateSessionId(crypto.randomBytes);
+  const maxAgeSeconds = Math.floor(DATA_SESSION_TTL_MS / 1000);
+  res.setHeader('set-cookie', `mg_session=${sessionId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${process.env.VERCEL ? '; Secure' : ''}`);
   SESSION_CONTEXT.run({ sessionId }, next);
 });
 
@@ -266,11 +282,87 @@ const proxyLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Limite du proxy atteinte. Reessayez plus tard.' }
 });
+const unlockLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de deverrouillage. Reessayez plus tard.' }
+});
 app.use('/api', apiLimiter);
+
+function requestCookie(req, name) {
+  const prefix = `${name}=`;
+  const row = String(req.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+  return row ? row.slice(prefix.length) : '';
+}
+
+function safeSecretEqual(left, right) {
+  const leftDigest = crypto.createHash('sha256').update(String(left || '')).digest();
+  const rightDigest = crypto.createHash('sha256').update(String(right || '')).digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest);
+}
+
+function writeSessionSignature(sessionId, expiresAt) {
+  if (
+    !process.env.APP_WRITE_TOKEN ||
+    !normalizeSessionId(sessionId) ||
+    !Number.isSafeInteger(expiresAt)
+  ) {
+    return '';
+  }
+  return crypto.createHmac('sha256', process.env.APP_WRITE_TOKEN).update(`write:${sessionId}:${expiresAt}`).digest('hex');
+}
+
+function writeSessionUnlocked(req) {
+  if (!process.env.APP_WRITE_TOKEN) return true;
+  const sessionId = SESSION_CONTEXT.getStore()?.sessionId;
+  const match = requestCookie(req, 'mg_write').match(/^(\d{13})\.([a-f0-9]{64})$/i);
+  if (!match) return false;
+  const expiresAt = Number(match[1]);
+  if (
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt <= Date.now() ||
+    expiresAt > Date.now() + SESSION_CONNECTION_TTL_MS + 60 * 1000
+  ) {
+    return false;
+  }
+  return safeSecretEqual(match[2], writeSessionSignature(sessionId, expiresAt));
+}
+
+app.get('/api/session/status', (req, res) => {
+  res.json({
+    configured: Boolean(process.env.APP_WRITE_TOKEN),
+    required: Boolean(process.env.APP_WRITE_TOKEN),
+    unlocked: writeSessionUnlocked(req),
+    expiresInMs: SESSION_CONNECTION_TTL_MS
+  });
+});
+
+app.post('/api/session/unlock', unlockLimiter, (req, res) => {
+  const requiredToken = process.env.APP_WRITE_TOKEN;
+  if (!requiredToken) return res.status(400).json({ error: 'Aucun jeton ecriture configure sur le serveur' });
+  const token = String(req.body?.token || '');
+  if (!token || token.length > 512 || !safeSecretEqual(token, requiredToken)) {
+    return res.status(401).json({ error: 'Jeton ecriture invalide' });
+  }
+  const sessionId = SESSION_CONTEXT.getStore()?.sessionId;
+  const expiresAt = Date.now() + SESSION_CONNECTION_TTL_MS;
+  const signature = `${expiresAt}.${writeSessionSignature(sessionId, expiresAt)}`;
+  res.append('set-cookie', `mg_write=${signature}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_CONNECTION_TTL_MS / 1000)}${process.env.VERCEL ? '; Secure' : ''}`);
+  return res.json({ ok: true, configured: true, required: true, unlocked: true, expiresInMs: SESSION_CONNECTION_TTL_MS });
+});
+
+app.delete('/api/session/lock', (req, res) => {
+  res.append('set-cookie', `mg_write=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${process.env.VERCEL ? '; Secure' : ''}`);
+  return res.json({ ok: true, configured: Boolean(process.env.APP_WRITE_TOKEN), required: Boolean(process.env.APP_WRITE_TOKEN), unlocked: !process.env.APP_WRITE_TOKEN });
+});
+
 app.use('/api', (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const requiredToken = process.env.APP_WRITE_TOKEN;
-  if (requiredToken && req.get('x-app-token') !== requiredToken) return res.status(401).json({ error: 'Jeton ecriture requis' });
+  const headerUnlocked = requiredToken && safeSecretEqual(req.get('x-app-token'), requiredToken);
+  if (requiredToken && !headerUnlocked && !writeSessionUnlocked(req)) return res.status(401).json({ error: 'Jeton ecriture requis' });
   const origin = req.get('origin');
   if (origin && !allowedOrigins.has(origin)) return res.status(403).json({ error: 'Origine ecriture interdite' });
   return next();
@@ -279,6 +371,41 @@ app.use('/api', (req, res, next) => {
 function ensureLocalDirs() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(EXPORT_DIR, { recursive: true });
+  if (IS_SESSION_SCOPED_STORE) fs.mkdirSync(SESSION_STORE_DIR, { recursive: true });
+}
+
+function currentStoreScope() {
+  return resolveStoreScope({
+    vercel: IS_SESSION_SCOPED_STORE,
+    sessionId: SESSION_CONTEXT.getStore()?.sessionId
+  });
+}
+
+function storePathForScope(scope = currentStoreScope()) {
+  return scope.type === 'global' ? STORE_PATH : deriveLocalStorePath(DATA_DIR, scope);
+}
+
+function maybeCleanupSessionStores() {
+  if (!IS_SESSION_SCOPED_STORE || Date.now() - lastSessionStoreCleanupAt < 60 * 1000) return;
+  lastSessionStoreCleanupAt = Date.now();
+  ensureLocalDirs();
+  const files = fs.readdirSync(SESSION_STORE_DIR, { withFileTypes: true })
+    .filter(entry => entry.isFile())
+    .map(entry => {
+      const stat = fs.statSync(path.join(SESSION_STORE_DIR, entry.name));
+      return { name: entry.name, mtimeMs: stat.mtimeMs, size: stat.size };
+    });
+  const cleanup = planSessionFileCleanup(files, {
+    nowMs: Date.now(),
+    ttlMs: DATA_SESSION_TTL_MS,
+    maxFiles: 100,
+    maxTotalBytes: 64 * 1024 * 1024
+  });
+  [...cleanup.expired, ...cleanup.overflow].forEach(file => {
+    if (/^[a-f0-9]{32}\.json$/i.test(file.name)) {
+      fs.unlinkSync(path.join(SESSION_STORE_DIR, file.name));
+    }
+  });
 }
 
 function defaultStore() {
@@ -298,68 +425,83 @@ function defaultStore() {
   };
 }
 
-function readStore() {
+function readStore(scope = currentStoreScope()) {
   ensureLocalDirs();
-  if (!fs.existsSync(STORE_PATH)) return defaultStore();
+  const storePath = storePathForScope(scope);
+  if (!fs.existsSync(storePath)) return defaultStore();
   try {
-    return normalizeBoundedStore(JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')), defaultStore());
+    return normalizeBoundedStore(JSON.parse(fs.readFileSync(storePath, 'utf8')), defaultStore());
   } catch (error) {
     console.warn('[STORE] Lecture impossible, fallback vide:', error.message);
     return defaultStore();
   }
 }
 
-function writeLocalStore(store) {
+function writeLocalStore(store, scope = currentStoreScope()) {
   ensureLocalDirs();
+  const storePath = storePathForScope(scope);
+  fs.mkdirSync(path.dirname(storePath), { recursive: true });
   const payload = JSON.stringify(normalizeBoundedStore(store, defaultStore()), null, 2);
-  const temporaryPath = `${STORE_PATH}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  const temporaryPath = `${storePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(temporaryPath, payload, 'utf8');
   try {
-    fs.renameSync(temporaryPath, STORE_PATH);
+    fs.renameSync(temporaryPath, storePath);
   } catch (error) {
-    fs.copyFileSync(temporaryPath, STORE_PATH);
+    fs.copyFileSync(temporaryPath, storePath);
     fs.unlinkSync(temporaryPath);
   }
+  maybeCleanupSessionStores();
 }
 
-function writeStore(store) {
+function writeStore(store, scope = currentStoreScope()) {
   const normalized = normalizeBoundedStore(store, defaultStore());
-  writeLocalStore(normalized);
+  writeLocalStore(normalized, scope);
   if (REMOTE_STORE.enabled) {
-    REMOTE_STORE.persist(normalized).catch(error => console.warn('[STORE] Persistance distante impossible:', error.message));
+    REMOTE_STORE.persist(normalized, scope.id).catch(error => console.warn('[STORE] Persistance distante impossible:', error.message));
   }
 }
 
 function ensureRemoteStoreReady() {
   if (!REMOTE_STORE.enabled) return Promise.resolve();
-  if (!remoteHydrationPromise) {
-    remoteHydrationPromise = REMOTE_STORE.load()
+  const scope = currentStoreScope();
+  if (!REMOTE_HYDRATION_PROMISES.has(scope.id)) {
+    const hydration = REMOTE_STORE.load(scope.id)
       .then(remotePayload => {
-        if (remotePayload) writeLocalStore({ ...defaultStore(), ...remotePayload });
-        else if (fs.existsSync(STORE_PATH)) return REMOTE_STORE.persist(readStore());
+        if (remotePayload) writeLocalStore({ ...defaultStore(), ...remotePayload }, scope);
+        else if (fs.existsSync(storePathForScope(scope))) return REMOTE_STORE.persist(readStore(scope), scope.id);
         return null;
       })
-      .catch(error => console.warn('[STORE] Hydratation distante impossible, fallback local:', error.message));
+      .catch(error => {
+        REMOTE_HYDRATION_PROMISES.delete(scope.id);
+        console.warn('[STORE] Hydratation distante impossible, fallback local:', error.message);
+      });
+    REMOTE_HYDRATION_PROMISES.set(scope.id, hydration);
+    if (REMOTE_HYDRATION_PROMISES.size > 100) {
+      const oldestScope = REMOTE_HYDRATION_PROMISES.keys().next().value;
+      if (oldestScope !== scope.id) REMOTE_HYDRATION_PROMISES.delete(oldestScope);
+    }
   }
-  return remoteHydrationPromise;
+  return REMOTE_HYDRATION_PROMISES.get(scope.id);
 }
 
 function mutateStore(mutator) {
-  const store = readStore();
+  const scope = currentStoreScope();
+  const store = readStore(scope);
   const result = mutator(store);
-  writeStore(store);
+  writeStore(store, scope);
   return result;
 }
 
 app.use('/api', async (req, res, next) => {
   await ensureRemoteStoreReady();
   if (!REMOTE_STORE.enabled) return next();
+  const scope = currentStoreScope();
   const originalJson = res.json.bind(res);
   let responseScheduled = false;
   res.json = body => {
     if (responseScheduled) return res;
     responseScheduled = true;
-    REMOTE_STORE.flush().finally(() => {
+    REMOTE_STORE.flush(scope.id).finally(() => {
       if (!res.headersSent) originalJson(body);
     });
     return res;
@@ -2020,6 +2162,24 @@ function extractArchivedMedia(html, pageUrl, query, sourceId) {
 async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
   const imageLimit = options.imageLimit || 35;
   const videoLimit = options.videoLimit || 20;
+  if (sourceId === 'telegram' && normalizeTelegramUsername(query)) {
+    const telegram = await runTelegramPublicAdapter(query, {
+      ...options,
+      imageLimit,
+      videoLimit
+    }, { fetchText });
+    const images = telegram.images.map(item => enrichMedia(item, query, 'telegram', 'image'));
+    const videos = telegram.videos.map(item => enrichMedia(item, query, 'telegram', 'video'));
+    return {
+      images: dedupeBestMedia(images).slice(0, imageLimit),
+      videos: dedupeBestMedia(videos).slice(0, videoLimit),
+      status: {
+        ...telegram.status,
+        imagesCount: images.length,
+        videosCount: videos.length
+      }
+    };
+  }
   const discovery = await runDiscoverySource(sourceId, query, options, {
     fetchText,
     postJson,
@@ -2766,9 +2926,9 @@ const PERSON_DEPTHS = new Set(['quick', 'normal', 'deep', 'archive']);
 const PERSON_STATUSES = new Set(['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved']);
 const PERSON_SOURCE_PLANS = {
   quick: ['duckduckgo', 'bing', 'wikimedia', 'wikidata'],
-  normal: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'bluesky', 'mastodon'],
-  deep: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
-  archive: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo']
+  normal: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon'],
+  deep: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
+  archive: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo']
 };
 
 function boundedString(value, maxLength = 200) {
@@ -3179,23 +3339,31 @@ async function resolveIdentityProfile(person, options = {}) {
 }
 
 app.get('/api/health', (req, res) => {
+  const scope = currentStoreScope();
   const store = readStore();
+  const remoteStatus = REMOTE_STORE.status(scope.id);
   res.json({
     ok: true,
     app: 'MediaGatherer',
     version: APP_VERSION,
     security: {
       writeTokenConfigured: Boolean(process.env.APP_WRITE_TOKEN),
-      writeMode: process.env.APP_WRITE_TOKEN ? 'token-protected' : (process.env.VERCEL ? 'shared-public-demo' : 'local-single-user'),
+      writeMode: process.env.APP_WRITE_TOKEN ? 'token-protected' : (process.env.VERCEL ? 'isolated-browser-session' : 'local-single-user'),
       connectionCredentials: 'isolated-session-memory',
       connectionSessionTtlMs: SESSION_CONNECTION_TTL_MS,
+      dataSessionTtlMs: DATA_SESSION_TTL_MS,
       proxyMaxBytes: MAX_PROXY_BYTES
     },
     storage: {
       mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json',
       persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE,
-      warning: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled ? 'Stockage Vercel temporaire; configurez KV_REST_API_URL et KV_REST_API_TOKEN.' : null,
-      remote: REMOTE_STORE.status(),
+      scope: scope.type === 'session' ? 'isolated-browser-session' : 'global-single-user',
+      warning: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled ? 'Stockage Vercel temporaire et isole par navigateur; configurez KV_REST_API_URL et KV_REST_API_TOKEN pour le rendre durable.' : null,
+      remote: {
+        ...remoteStatus,
+        key: scope.type === 'session' ? `${process.env.MEDIAGATHERER_REMOTE_KEY || 'mediagatherer:store'}:session:<isolated>` : remoteStatus.key,
+        scope: scope.type
+      },
       historyCount: store.history.length,
       collectionCount: store.collection.length,
       personCount: store.persons.length,
@@ -3224,8 +3392,14 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/storage/status', (req, res) => {
+  const scope = currentStoreScope();
   const store = readStore();
-  res.json({ mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json', persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE, volatile: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled, remote: REMOTE_STORE.status(), path: process.env.VERCEL ? null : STORE_PATH, exportDir: process.env.VERCEL ? null : EXPORT_DIR, counts: {
+  const remoteStatus = REMOTE_STORE.status(scope.id);
+  res.json({ mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json', persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE, volatile: IS_VOLATILE_STORAGE && !REMOTE_STORE.enabled, scope: scope.type === 'session' ? 'isolated-browser-session' : 'global-single-user', remote: {
+    ...remoteStatus,
+    key: scope.type === 'session' ? `${process.env.MEDIAGATHERER_REMOTE_KEY || 'mediagatherer:store'}:session:<isolated>` : remoteStatus.key,
+    scope: scope.type
+  }, path: process.env.VERCEL ? null : storePathForScope(scope), exportDir: process.env.VERCEL ? null : EXPORT_DIR, counts: {
     history: store.history.length,
     collection: store.collection.length,
     persons: store.persons.length,
@@ -3744,7 +3918,7 @@ const CONNECTION_PROVIDERS = {
   gelbooru: { label: 'Gelbooru DAPI', env: ['GELBOORU_API_KEY', 'GELBOORU_USER_ID'], unlocks: 'Quotas DAPI personnels pour les illustrations 18+', fields: [{ name: 'apiKey', label: 'API key', type: 'password', required: false }, { name: 'userId', label: 'User ID', type: 'password', required: false }] },
   danbooru: { label: 'Danbooru API', env: ['DANBOORU_LOGIN', 'DANBOORU_API_KEY'], unlocks: 'Quotas personnels pour les illustrations 18+', fields: [{ name: 'login', label: 'Login', type: 'text', required: false }, { name: 'apiKey', label: 'API key', type: 'password', required: false }] },
   stashdb: { label: 'StashDB GraphQL', env: ['STASHDB_API_KEY'], unlocks: 'Metadonnees et alias avec votre propre cle StashDB', fields: [{ name: 'apiKey', label: 'API key personnelle', type: 'password', required: true }] },
-  telegram: { label: 'Telegram', env: [], unlocks: 'Non disponible: OAuth/session MTProto non integre', fields: [], available: false }
+  telegram: { label: 'Telegram MTProto (optionnel)', env: [], unlocks: 'Le canal Web public fonctionne sans connexion. Une session MTProto personnelle pour les contenus non publics ou restreints n est pas integree.', fields: [], available: false }
 };
 
 function providerConfigured(id, definition) {
@@ -4008,6 +4182,7 @@ function sourceAdapterContract(source) {
   const crawlAdapter = SOURCE_CRAWL_ADAPTERS[source.id];
   const dedicatedAdapters = new Set([
     'duckduckgo', 'bing', 'google', 'brave', 'flickr', 'wikimedia', 'youtube', 'reddit', 'wayback', 'dailymotion',
+    'telegram',
     'wikidata', 'tmdb', 'openverse', 'internetarchive', 'arquivo', 'imgur', 'peertube', 'bluesky', 'mastodon',
     'tumblr', 'twitch', 'stashdb', 'commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz',
     'gdelt', 'podcastindex', 'pixelfed', 'pexels', 'giphy', 'gelbooru', 'danbooru'
@@ -4023,6 +4198,7 @@ function sourceAdapterContract(source) {
   else if (optionalAuth) availability = configured ? 'official-api-configured-with-public-fallback' : 'public-fallback-available';
   else if (crawlAdapter?.transport === 'eporner-api-v2') availability = 'official-public-api-with-html-fallback';
   else if (crawlAdapter?.transport === 'coomer-profile-api-v1') availability = 'public-identity-metadata-only';
+  else if (source.id === 'telegram') availability = 'bounded-public-channel-web';
   else if (crawlAdapter?.transport === 'public-forum-form') availability = 'public-form-with-search-engine-fallbacks';
   else if (crawlAdapter) availability = 'direct-html-with-search-engine-fallbacks';
   else if (/api|feed|images|cse|json/i.test(mode)) availability = 'public-api-or-dedicated-adapter';

@@ -88,6 +88,36 @@ jobs:
       - name: Build executable
         run: npm run build:exe
 
+      - name: Sign executable when a certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          MEDIA_GATHERER_SIGNING_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificateConfigured = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)
+          $passwordConfigured = -not [string]::IsNullOrWhiteSpace($env:MEDIA_GATHERER_SIGNING_PASSWORD)
+          if (-not $certificateConfigured -and -not $passwordConfigured) {
+            Write-Host "No signing certificate configured; keeping the verified unsigned build."
+            exit 0
+          }
+          if (-not $certificateConfigured -or -not $passwordConfigured) {
+            throw "Both WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD are required."
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP "mediagatherer-signing.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $certificatePath,
+              [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+            )
+            & ".\scripts\sign-windows.ps1" `
+              -ExecutablePath "dist\MediaGatherer.exe" `
+              -PfxPath $certificatePath
+          } finally {
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
+
       - name: Verify MZ header and create checksum
         shell: pwsh
         run: |

@@ -51,6 +51,28 @@
         <h3>Connexions API</h3>
       </div>
       <p class="connections-note">Les identifiants personnels restent uniquement en mémoire dans l'instance active. Chaque fournisseur indique les champs requis et teste son API ou son instance publique. Aucun compte partagé, accès privé ou contournement de connexion n'est utilisé.</p>
+      <form class="write-session-control" id="write-session-form" aria-busy="false">
+        <div class="write-session-status" aria-label="État des écritures">
+          <strong>Écritures</strong>
+          <span class="connection-state idle" id="write-session-configured">État inconnu</span>
+          <span class="connection-state idle" id="write-session-state">État inconnu</span>
+        </div>
+        <label class="connection-field write-session-field" for="write-session-token">
+          <span>Jeton d'écriture</span>
+          <input id="write-session-token" name="token" type="password" maxlength="512" autocomplete="current-password" required aria-required="true">
+        </label>
+        <div class="connection-actions write-session-actions">
+          <button class="btn btn-primary btn-small" id="btn-write-session-unlock" type="submit">
+            <i data-lucide="unlock"></i>
+            <span>Déverrouiller</span>
+          </button>
+          <button class="btn btn-secondary btn-small" id="btn-write-session-lock" type="button">
+            <i data-lucide="lock"></i>
+            <span>Verrouiller</span>
+          </button>
+        </div>
+        <div class="connection-message write-session-message" id="write-session-message" role="status" aria-live="polite"></div>
+      </form>
       <div class="connections-grid" id="connections-grid"></div>
     </section>
 

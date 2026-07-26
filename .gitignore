@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.local
+.env.*.local
 .vercel/
 data/
 cache/
@@ -8,6 +10,6 @@ logs/
 dist/
 launcher/
 .tools/
+*.pfx
+*.p12
 Thumbs.db
-
-.vercel

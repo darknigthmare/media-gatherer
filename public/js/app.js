@@ -267,6 +267,13 @@ const btnMonitorClear = document.getElementById('btn-monitor-clear');
 const appTabs = document.querySelectorAll('.app-tab');
 const connectionsSection = document.getElementById('connections-section');
 const connectionsGrid = document.getElementById('connections-grid');
+const writeSessionForm = document.getElementById('write-session-form');
+const writeSessionToken = document.getElementById('write-session-token');
+const writeSessionConfigured = document.getElementById('write-session-configured');
+const writeSessionState = document.getElementById('write-session-state');
+const writeSessionMessage = document.getElementById('write-session-message');
+const btnWriteSessionUnlock = document.getElementById('btn-write-session-unlock');
+const btnWriteSessionLock = document.getElementById('btn-write-session-lock');
 const reverseSection = document.getElementById('reverse-section');
 const reverseImageUrl = document.getElementById('reverse-image-url');
 const btnReverseGoogle = document.getElementById('btn-reverse-google');
@@ -480,8 +487,136 @@ appTabs.forEach(tab => {
   });
 });
 
+let currentWriteSessionStatus = { configured: false, unlocked: false };
+let writeSessionStatusKnown = false;
+let writeSessionBusy = false;
+
+function setWriteSessionMessage(message = '', type = 'info') {
+  if (!writeSessionMessage) return;
+  writeSessionMessage.className = `connection-message write-session-message ${type}`;
+  writeSessionMessage.textContent = message;
+  writeSessionMessage.setAttribute('role', type === 'error' ? 'alert' : 'status');
+}
+
+function renderWriteSessionStatus() {
+  const configured = Boolean(currentWriteSessionStatus.configured);
+  const unlocked = Boolean(currentWriteSessionStatus.unlocked);
+
+  if (writeSessionConfigured) {
+    writeSessionConfigured.textContent = writeSessionStatusKnown
+      ? (configured ? 'Configuré' : 'Non configuré')
+      : 'État indisponible';
+    writeSessionConfigured.className = `connection-state ${writeSessionStatusKnown && configured ? 'ok' : 'warning'}`;
+  }
+  if (writeSessionState) {
+    writeSessionState.textContent = writeSessionStatusKnown
+      ? (unlocked ? 'Déverrouillé' : 'Verrouillé')
+      : 'État inconnu';
+    writeSessionState.className = `connection-state ${writeSessionStatusKnown && unlocked ? 'ok' : 'warning'}`;
+  }
+
+  const canUnlock = writeSessionStatusKnown && configured && !unlocked;
+  const canLock = writeSessionStatusKnown && configured && unlocked;
+  if (writeSessionToken) writeSessionToken.disabled = writeSessionBusy || !canUnlock;
+  if (btnWriteSessionUnlock) btnWriteSessionUnlock.disabled = writeSessionBusy || !canUnlock;
+  if (btnWriteSessionLock) btnWriteSessionLock.disabled = writeSessionBusy || !canLock;
+}
+
+function setWriteSessionBusy(busy) {
+  writeSessionBusy = Boolean(busy);
+  writeSessionForm?.setAttribute('aria-busy', writeSessionBusy ? 'true' : 'false');
+  writeSessionForm?.classList.toggle('is-busy', writeSessionBusy);
+  renderWriteSessionStatus();
+}
+
+async function loadWriteSessionStatus() {
+  if (!writeSessionForm) return;
+  setWriteSessionBusy(true);
+  setWriteSessionMessage();
+  try {
+    const response = await fetch(`${API_BASE}/api/session/status`, {
+      credentials: 'same-origin'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    currentWriteSessionStatus = {
+      configured: Boolean(data.configured),
+      unlocked: Boolean(data.unlocked)
+    };
+    writeSessionStatusKnown = true;
+  } catch (error) {
+    writeSessionStatusKnown = false;
+    setWriteSessionMessage(`État des écritures indisponible : ${error.message}`, 'error');
+  } finally {
+    setWriteSessionBusy(false);
+  }
+}
+
+async function unlockWriteSession() {
+  if (!writeSessionForm || !writeSessionToken || writeSessionBusy) return;
+  if (!writeSessionForm.reportValidity()) return;
+  const token = writeSessionToken.value;
+  setWriteSessionBusy(true);
+  setWriteSessionMessage();
+  try {
+    const response = await fetch(`${API_BASE}/api/session/unlock`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    currentWriteSessionStatus = {
+      configured: Boolean(data.configured),
+      unlocked: Boolean(data.unlocked)
+    };
+    writeSessionStatusKnown = true;
+    setWriteSessionMessage('Écritures déverrouillées pour cette session.', 'success');
+  } catch (error) {
+    setWriteSessionMessage(error.message || 'Déverrouillage impossible.', 'error');
+  } finally {
+    writeSessionToken.value = '';
+    setWriteSessionBusy(false);
+  }
+}
+
+async function lockWriteSession() {
+  if (!writeSessionForm || writeSessionBusy) return;
+  setWriteSessionBusy(true);
+  setWriteSessionMessage();
+  try {
+    const response = await fetch(`${API_BASE}/api/session/lock`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    currentWriteSessionStatus = {
+      configured: Boolean(data.configured),
+      unlocked: Boolean(data.unlocked)
+    };
+    writeSessionStatusKnown = true;
+    setWriteSessionMessage('Écritures verrouillées pour cette session.', 'success');
+  } catch (error) {
+    setWriteSessionMessage(error.message || 'Verrouillage impossible.', 'error');
+  } finally {
+    if (writeSessionToken) writeSessionToken.value = '';
+    setWriteSessionBusy(false);
+  }
+}
+
+writeSessionForm?.addEventListener('submit', event => {
+  event.preventDefault();
+  void unlockWriteSession();
+});
+btnWriteSessionLock?.addEventListener('click', () => {
+  void lockWriteSession();
+});
+
 async function loadConnections() {
   if (!connectionsGrid) return;
+  await loadWriteSessionStatus();
   connectionsGrid.innerHTML = '<div class="connection-loading">Chargement des connexions...</div>';
   try {
     const response = await fetch(`${API_BASE}/api/connections/providers`);

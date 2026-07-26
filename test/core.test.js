@@ -743,6 +743,9 @@ test('expose des contrats API coherents', async () => {
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'google').authRequired, true);
   assert.match(adapters.adapters.find(adapter => adapter.id === 'flickr').availability, /^(?:public-fallback-available|official-api-configured-with-public-fallback)$/);
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'wayback').mode, 'wayback-cdx');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'telegram').mode, 'telegram-web-public-bounded');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'telegram').implementation, 'dedicated-adapter');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'telegram').availability, 'bounded-public-channel-web');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'openverse').implementation, 'dedicated-adapter');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'commoncrawl').mode, 'commoncrawl-warc');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'github').mode, 'github-users-api');

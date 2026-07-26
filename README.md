@@ -9,7 +9,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 
 Le registre contient 97 sources : 22 normales, 15 sociales, 8 d'identite et 52 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.7.0 ajoute le profil public Coomer en metadonnees uniquement, durcit Person Finder, rend la queue batch progressive, isole les identifiants API par session et ajoute galerie filtree, preuves, graphe, rapport public et timeline exacte. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
+La version 1.7.1 ajoute un espace de donnees isole par navigateur sur Vercel, un transport Telegram Web public borne, la persistance Redis par session et la signature Windows optionnelle en CI. Elle conserve les corrections 1.7.0: Coomer en metadonnees uniquement, Person Finder durci, queue progressive, identifiants API isoles, galerie filtree, preuves, graphe, rapport public et timeline exacte. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -42,14 +42,17 @@ npm run build:exe
 
 Le binaire autonome est cree dans `dist/MediaGatherer.exe`. Au premier lancement, les donnees sont creees dans `dist/data/`, a cote du binaire. Le fichier EXE n'est pas versionne dans Git : il est destine aux releases GitHub.
 
+La signature Authenticode est disponible avec `npm run sign:exe` lorsqu'un certificat PFX valide est fourni. Voir [docs/WINDOWS_SIGNING.md](docs/WINDOWS_SIGNING.md). Aucun certificat auto-signe n'est cree en fallback.
+
 ## Configuration
 
 Copier les valeurs utiles de `.env.example` dans `.env` :
 
 - `PORT` : port local, `3000` par defaut.
 - `MEDIAGATHERER_DATA_DIR` : dossier de stockage local personnalise.
+- `MEDIAGATHERER_SESSION_TTL_DAYS` : retention d'une session de donnees Vercel, `30` jours par defaut et `365` maximum.
 - `CORS_ORIGINS` : origines navigateur autorisees, separees par des virgules.
-- `APP_WRITE_TOKEN` : protection facultative des routes de modification.
+- `APP_WRITE_TOKEN` : protection facultative des routes de modification. Sur une instance partagee, le jeton se saisit dans l'onglet Connexions et devient un cookie `HttpOnly` de deux heures; il n'est ni conserve ni exporte.
 - `GOOGLE_API_KEY` : cle requise pour Google Programmable Search. `GOOGLE_CX` est facultatif et remplace le moteur public preconfigure `155c4d451e53743c2`.
 - `BRAVE_API_KEY`, `FLICKR_API_KEY`, `YOUTUBE_API_KEY` : APIs officielles correspondantes.
 - `TMDB_API_KEY`, `IMGUR_CLIENT_ID`, `TUMBLR_API_KEY` : metadonnees et medias publics correspondants.
@@ -91,22 +94,24 @@ Les identifiants saisis dans l'onglet Connexions sont isoles par session navigat
 - La galerie Person Finder est filtree et defilable, avec statut, ouverture de source et tiroir de preuves.
 - Le graphe relationnel et le rapport n'exposent que les alias, comptes, medias et preuves publics.
 - Coomer interroge uniquement un profil exact et remonte ses metadonnees d'identite; ses publications et medias ne sont pas reextraits.
+- Telegram accepte un username exact, parcourt au maximum 40 messages de `t.me/s/<username>` et conserve les images, videos, miniatures et URLs de preuve du canal public correspondant.
 - Les empreintes dHash sont calculees apres affichage via le proxy local, sans retarder l'arrivee progressive des resultats.
 
 ## Stockage
 
 En local et dans l'EXE, l'historique, la collection, les profils, le cache, la queue et les veilles sont durables dans `data/mediagatherer.store.json`. Les collections sont bornees afin d'eviter une croissance illimitee.
 
-Sur Vercel, le stockage fichier est temporaire. Si `KV_REST_API_URL` et `KV_REST_API_TOKEN` sont configures, l'application hydrate et replique le magasin JSON dans Upstash Redis REST avant de repondre aux mutations. Sans ces variables, l'interface continue d'indiquer le mode volatil.
+Sur Vercel, chaque navigateur recoit un identifiant `HttpOnly` et un magasin distinct. Le stockage fichier reste temporaire, mais aucune collection, fiche personne ou historique n'est partage avec une autre session. Si `KV_REST_API_URL` et `KV_REST_API_TOKEN` sont configures, chaque session est hydratee et repliquee dans sa propre cle Upstash Redis REST avec la retention configuree. Sans ces variables, l'interface indique le mode volatil isole.
 
 ## Securite et limites
 
 - URLs publiques HTTP(S) uniquement, ports 80/443, redirections revalidees.
 - Blocage des IP locales/privees et de leur resolution DNS.
 - CORS restreint, CSP/Helmet, limites de debit et tailles de reponse bornees.
+- Ecritures Vercel isolees par cookie navigateur `HttpOnly` et `SameSite=Strict`; identifiants API limites a deux heures en memoire.
 - Proxy media limite a 32 Mio et flux binaires generiques refuses sans extension media.
 - Person Finder interdit l'adresse privee, le telephone prive et la localisation temps reel.
 - Les recherches NSFW sont bloquees sans confirmation 18+; Person Finder les interdit aussi lorsqu'une annee de naissance rend la majorite impossible a confirmer.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_COMPLET_1.7.0_2026-07-26.md](docs/AUDIT_COMPLET_1.7.0_2026-07-26.md), [docs/audits/2026-07-26/sources-live-complete.md](docs/audits/2026-07-26/sources-live-complete.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/WINDOWS_SIGNING.md](docs/WINDOWS_SIGNING.md), [docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md](docs/AUDIT_COMPLEMENT_1.7.1_2026-07-26.md), [docs/audits/2026-07-26/telegram-public.md](docs/audits/2026-07-26/telegram-public.md), [docs/AUDIT_COMPLET_1.7.0_2026-07-26.md](docs/AUDIT_COMPLET_1.7.0_2026-07-26.md), [docs/audits/2026-07-26/sources-live-complete.md](docs/audits/2026-07-26/sources-live-complete.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).
