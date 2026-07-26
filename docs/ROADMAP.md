@@ -1,9 +1,9 @@
 # Etat et suite
 
-## Integre jusqu'a la version 1.6.1
+## Integre jusqu'a la version 1.7.0
 
 - Media Finder, Connexions API, Recherche inversee et Person Finder dans quatre onglets exclusifs.
-- Resultats progressifs par source, recherche batch, queue, cache, historique, collection, veilles et exports.
+- Resultats progressifs par source, recherche batch, queue cooperative par etapes, cache, historique, collection, veilles et exports.
 - Galeries photo et video a hauteur responsive bornee, avec defilement interne independant et navigation clavier.
 - Google Programmable Search preconfigure avec le CX fourni, surcharge possible et SafeSearch synchronise avec le mode de recherche.
 - Modes photo, video ou mixte, pertinence stricte/intelligente/large et conservation de la meilleure qualite.
@@ -11,17 +11,18 @@
 - Recherche Wayback par terme, domaines officiels ou personnels probables et extraction CDX rapide par domaine sans filtre de nom apres validation du site.
 - Cache navigateur IndexedDB separe par requete, sources et niveau adulte, restaure pendant les recherches et complete par le refresh.
 - Diagnostics bruts/retenus/rejetes pour expliquer precisement les baisses de volume.
-- 51 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
+- 52 sources NSFW publiques avec extraction image/video, meilleure image connue, pages decouvertes et raison des zeros.
 - Eporner API v2 prioritaire, plus XNXX, HQPorner, Nuvid, DrTuber, PornOne et YouJizz en HTML public.
 - Recherches publiques Phun Forum, PlanetSuzy et Bellazon, avec crawl borne des sujets correspondants.
-- 96 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
+- 97 sources au total, classees en moteurs generaux, reseaux sociaux, identite/archives et NSFW.
+- Coomer public profiles sur `site1.coomer.com.co`, limite aux metadonnees d'identite d'un profil exact; aucune publication issue d'un miroir de contenu payant n'est reextraite.
 - Openverse via API publique, plus Snapchat et Threads en profils publics.
 - Audit live reproductible de toutes les sources, avec etats operationnel, degrade, vide, configuration, blocage, limitation, faux positif et erreur.
 - Second transport Bing Images asynchrone et fallback indexe limite au domaine pour les sites rendus en JavaScript.
 - Verification d'identite stricte pour Bluesky, Mastodon, PeerTube et IAFD afin d'eliminer les correspondances partielles.
 - Adaptateurs API publics pour Wikidata, Internet Archive, Arquivo.pt, Bluesky, Mastodon et PeerTube.
 - Adaptateurs optionnels avec identifiants personnels pour TMDB, Imgur, Tumblr, Twitch et StashDB.
-- Resolution d'identite centralisee : alias, comptes publics, preuves et fusion avec Person Finder.
+- Resolution d'identite centralisee : alias confirmes, comptes publics a verifier, preuves et fusion avec Person Finder.
 - Anti-homonymes Wikidata/TMDB : une seule identite principale est retenue selon le nom, l'annee, les mots-cles, les exclusions et la qualite de l'entite.
 - Confirmation explicite de majorite avant toute recherche NSFW, y compris en batch, queue et diagnostic de source.
 - Dedoublonnage perceptuel optionnel des images en plus des URL et signatures visuelles.
@@ -30,10 +31,13 @@
 - Workflow d'alias complet : candidats structures, provenance, recherche de remplacement, fusion aux resultats, pont Media Finder vers Person Finder, confirmation, rejet et suppression.
 - Tiroir de validation des alias par fiche personne et relance directe de Media Finder depuis chaque alias confirme ou candidat.
 - Etats distincts pour acces direct, fallback actif, blocage, limitation et source indisponible.
-- Profils Person Finder, alias detectes ou saisis, comptes publics, score, galerie, timeline, validation et exclusions.
+- Profils Person Finder, alias detectes ou saisis, comptes publics, score, galerie progressive, preuves, timeline, validation, exclusions, graphe relationnel public et rapport exportable.
+- Validation stricte des profils Person Finder, recherche NSFW interdite si la majorite est impossible a confirmer et plans de sources distincts selon la profondeur.
+- Identifiants de connexion isoles par session HTTP et jamais persistants dans le stockage partage.
+- Collections du stockage local bornees, proxy media limite a 32 Mo et embeds video restreints aux domaines approuves.
 - Securite HTTP, SSRF, CORS, CSP, rate limits, limites de taille et token d'ecriture facultatif.
 - Executable Windows Node 24 autonome et workflow GitHub Actions.
-- Stockage distant optionnel par API REST Upstash Redis, avec fallback JSON/SQLite local.
+- Stockage distant optionnel par API REST Upstash Redis, avec fallback JSON local durable dans l'EXE.
 - Tests de contrat garantissant qu'aucune source declaree n'est sans transport de recherche.
 
 ## Limites externes connues

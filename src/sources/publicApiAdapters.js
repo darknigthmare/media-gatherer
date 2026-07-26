@@ -187,10 +187,17 @@ function parseImgurResults(payload = {}) {
       const link = image.link || entry.link;
       if (!link) continue;
       const isVideo = Boolean(image.animated || image.mp4 || /^video\//i.test(image.type || ''));
+      const imageLink = String(link || '');
+      const imgurId = image.id || imageLink.match(/i\.imgur\.com\/([^/.?#]+)/i)?.[1];
+      const thumbnail = isVideo
+        ? (/\.(?:jpe?g|png|webp|gif)(?:[?#]|$)/i.test(imageLink)
+            ? imageLink
+            : (imgurId ? `https://i.imgur.com/${imgurId}h.jpg` : ''))
+        : imageLink;
       media.push({
         type: isVideo ? 'video' : 'image',
         url: isVideo ? (image.mp4 || link) : link,
-        thumbnail: isVideo ? (link.replace(/\.gifv?(?:[?#]|$)/i, '.jpg')) : link,
+        thumbnail,
         link: entry.link || link,
         title: entry.title || image.title || entry.description || 'Imgur media',
         description: entry.description || image.description || '',

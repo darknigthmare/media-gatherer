@@ -8,7 +8,7 @@
   <script src="vendor/jszip.min.js" defer></script>
   <script src="vendor/FileSaver.min.js" defer></script>
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=20260714-audit-2">
+  <link rel="stylesheet" href="css/style.css?v=20260726-complete-audit-1">
 </head>
 <body>
   
@@ -27,21 +27,21 @@
     </header>
 
     <nav class="app-tabs" role="tablist" aria-label="Navigation principale">
-      <button class="app-tab active" id="tab-search" role="tab" data-tab="search" aria-selected="true" aria-controls="media-search-view" tabindex="0">
+      <button class="app-tab app-tab-primary active" id="tab-search" role="tab" data-tab="search" aria-selected="true" aria-controls="media-search-view" tabindex="0">
         <i data-lucide="search"></i>
         <span>Media Finder</span>
       </button>
-      <button class="app-tab" id="tab-connections" role="tab" data-tab="connections" aria-selected="false" aria-controls="connections-section" tabindex="-1">
+      <button class="app-tab app-tab-primary" id="tab-persons" role="tab" data-tab="persons" aria-selected="false" aria-controls="person-section" tabindex="-1">
+        <i data-lucide="user-search"></i>
+        <span>Person Finder</span>
+      </button>
+      <button class="app-tab app-tab-tool" id="tab-connections" role="tab" data-tab="connections" aria-selected="false" aria-controls="connections-section" tabindex="-1">
         <i data-lucide="key-round"></i>
         <span>Connexions API</span>
       </button>
-      <button class="app-tab" id="tab-reverse" role="tab" data-tab="reverse" aria-selected="false" aria-controls="reverse-section" tabindex="-1">
+      <button class="app-tab app-tab-tool" id="tab-reverse" role="tab" data-tab="reverse" aria-selected="false" aria-controls="reverse-section" tabindex="-1">
         <i data-lucide="scan-search"></i>
         <span>Recherche inversée</span>
-      </button>
-      <button class="app-tab" id="tab-persons" role="tab" data-tab="persons" aria-selected="false" aria-controls="person-section" tabindex="-1">
-        <i data-lucide="user-search"></i>
-        <span>Person Finder</span>
       </button>
     </nav>
 
@@ -81,7 +81,7 @@
 
       <div class="person-layout">
         <form id="person-form" class="person-panel person-form">
-          <h4>Fiche personne</h4>
+          <h4 id="person-form-title">Nouvelle fiche personne</h4>
           <label>Nom / pseudo principal
             <input type="text" id="person-name" placeholder="Nom public, pseudo ou createur..." required>
           </label>
@@ -118,11 +118,14 @@
             <textarea id="person-notes" rows="3"></textarea>
           </label>
           <div class="person-checks">
-            <label><input type="checkbox" id="person-public-only" checked> Public only</label>
-            <label><input type="checkbox" id="person-safe-mode" checked> Safe mode</label>
+            <label><input type="checkbox" id="person-public-only" checked required> Public only obligatoire</label>
+            <label><input type="checkbox" id="person-safe-mode" checked required> Safe mode obligatoire</label>
             <label><input type="checkbox" id="person-adult-confirmed"> Identité adulte confirmée</label>
           </div>
-          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i><span>Enregistrer</span></button>
+          <div class="person-form-actions">
+            <button type="submit" id="btn-person-save" class="btn btn-primary"><i data-lucide="save"></i><span>Créer le profil</span></button>
+            <button type="button" id="btn-person-cancel-edit" class="btn btn-secondary hidden"><i data-lucide="x"></i><span>Annuler l'édition</span></button>
+          </div>
         </form>
 
         <div class="person-panel">
@@ -155,11 +158,45 @@
             <button id="btn-person-resolve" class="btn btn-secondary" type="button" disabled><i data-lucide="contact"></i><span>Résoudre les alias</span></button>
             <button id="btn-person-plan" class="btn btn-secondary" type="button" disabled><i data-lucide="list-checks"></i><span>Plan</span></button>
             <button id="btn-person-search" class="btn btn-primary" type="button" disabled><i data-lucide="radar"></i><span>Lancer</span></button>
+            <button id="btn-person-report" class="btn btn-secondary" type="button" disabled><i data-lucide="file-text"></i><span>Rapport</span></button>
+            <button id="btn-person-graph" class="btn btn-secondary" type="button" disabled><i data-lucide="network"></i><span>Graphe</span></button>
           </div>
           <div id="person-query-plan" class="person-query-plan"></div>
           <div class="person-subgrid">
             <div>
-              <h4>Galerie personne</h4>
+              <div class="person-panel-header">
+                <h4>Galerie personne</h4>
+                <button id="btn-person-gallery-export" class="icon-btn" type="button" disabled title="Exporter la galerie" aria-label="Exporter la galerie personne"><i data-lucide="download"></i></button>
+              </div>
+              <div class="person-gallery-filters" aria-label="Filtres de la galerie personne">
+                <label class="sr-only" for="person-gallery-query">Filtrer la galerie</label>
+                <input id="person-gallery-query" type="search" placeholder="Filtrer les médias...">
+                <label class="sr-only" for="person-gallery-type">Type de média</label>
+                <select id="person-gallery-type">
+                  <option value="all">Photos et vidéos</option>
+                  <option value="image">Photos</option>
+                  <option value="video">Vidéos</option>
+                  <option value="page">Pages</option>
+                </select>
+                <label class="sr-only" for="person-gallery-status">Statut de validation</label>
+                <select id="person-gallery-status">
+                  <option value="all">Tous les statuts</option>
+                  <option value="to_review">À vérifier</option>
+                  <option value="probable">Probable</option>
+                  <option value="confirmed">Confirmé</option>
+                  <option value="saved">Sauvegardé</option>
+                  <option value="false_positive">Faux positif</option>
+                  <option value="excluded">Exclu</option>
+                </select>
+                <label class="sr-only" for="person-gallery-sort">Tri de la galerie</label>
+                <select id="person-gallery-sort">
+                  <option value="newest">Plus récents</option>
+                  <option value="score">Meilleur score</option>
+                  <option value="source">Source</option>
+                  <option value="title">Titre</option>
+                  <option value="oldest">Plus anciens</option>
+                </select>
+              </div>
               <div id="person-media-list" class="person-media-list"></div>
             </div>
             <div>
@@ -167,18 +204,41 @@
               <div id="person-timeline-list" class="person-timeline-list"></div>
               <h4>Regles</h4>
               <form id="person-rule-form" class="person-rule-form">
+                <label class="sr-only" for="person-rule-value">Valeur de la règle</label>
                 <input type="text" id="person-rule-value" placeholder="mot, domaine, url a traiter...">
+                <label class="sr-only" for="person-rule-type">Type de la règle</label>
+                <select id="person-rule-type">
+                  <option value="keyword">Mot-clé</option>
+                  <option value="domain">Domaine</option>
+                  <option value="source">Source</option>
+                  <option value="url">URL</option>
+                  <option value="title">Titre</option>
+                  <option value="query">Requête</option>
+                  <option value="identity">Identité</option>
+                  <option value="custom">Personnalisée</option>
+                </select>
+                <label class="sr-only" for="person-rule-action">Action de la règle</label>
                 <select id="person-rule-action">
                   <option value="exclude">Exclure</option>
                   <option value="false_positive">Faux positif</option>
+                  <option value="review">À vérifier</option>
                   <option value="probable">Probable</option>
                   <option value="confirm">Confirmer</option>
+                  <option value="boost">Augmenter le score</option>
                 </select>
                 <button class="btn btn-secondary btn-small" type="submit" aria-label="Ajouter la règle"><i data-lucide="plus"></i></button>
               </form>
               <div id="person-rule-list" class="person-rule-list"></div>
             </div>
           </div>
+          <details class="person-evidence-drawer hidden" id="person-media-details-drawer">
+            <summary><span><i data-lucide="badge-check"></i> Preuves du média</span><span id="person-media-details-summary"></span></summary>
+            <div id="person-media-details" class="person-media-details"></div>
+          </details>
+          <details class="person-evidence-drawer hidden" id="person-analysis-drawer">
+            <summary><span><i data-lucide="chart-no-axes-combined"></i> Analyse publique</span><span id="person-analysis-summary"></span></summary>
+            <div id="person-analysis-content" class="person-analysis-content"></div>
+          </details>
         </div>
       </div>
     </section>
@@ -188,6 +248,7 @@
       <form id="search-form" class="search-form">
         <div class="search-input-wrapper">
           <i data-lucide="search" class="search-icon"></i>
+          <label class="sr-only" for="search-input">Termes de recherche</label>
           <input 
             type="text" 
             id="search-input" 
@@ -195,7 +256,11 @@
             required 
             autocomplete="off"
           >
-          <button type="submit" class="btn-submit">
+          <button type="button" id="btn-cancel-search" class="btn-search-cancel hidden">
+            <i data-lucide="square"></i>
+            <span>Annuler</span>
+          </button>
+          <button type="submit" id="btn-search-submit" class="btn-submit">
             <span>Aspirer</span>
             <i data-lucide="arrow-right"></i>
           </button>
@@ -709,6 +774,7 @@
             <div class="filters-group" style="min-width: 320px;">
               <span class="panel-label">Filtres média disponibles :</span>
               <div class="filters-dropdowns" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <label class="sr-only" for="filter-size">Taille des médias recherchés</label>
                 <select id="filter-size" class="select-custom">
                   <option value="">Toutes tailles</option>
                   <option value="Small">Petite</option>
@@ -716,6 +782,7 @@
                   <option value="Large">Grande (HD)</option>
                   <option value="Wallpaper">Fond d'écran</option>
                 </select>
+                <label class="sr-only" for="filter-type">Type des médias recherchés</label>
                 <select id="filter-type" class="select-custom">
                   <option value="">Tous types</option>
                   <option value="photo">Photos</option>
@@ -758,6 +825,7 @@
       </div>
       <div class="search-filter-wrapper">
         <i data-lucide="filter" class="filter-icon"></i>
+        <label class="sr-only" for="filter-input">Filtrer les résultats par titre ou source</label>
         <input type="text" id="filter-input" placeholder="Filtrer par titre ou source...">
       </div>
 
@@ -846,6 +914,7 @@
           </button>
         </div>
         <div class="auto-refresh-control" title="Relancer la recherche active et ajouter uniquement les nouveaux médias">
+          <label class="sr-only" for="auto-refresh-interval">Intervalle de rafraîchissement automatique</label>
           <select id="auto-refresh-interval" class="select-custom">
             <option value="0" selected>Refresh off</option>
             <option value="60">Chaque 1 min</option>
@@ -928,10 +997,14 @@
           <span id="batch-count">0 terme</span>
         </summary>
         <div class="workflow-body">
+          <label class="sr-only" for="batch-input">Termes ou usernames de la recherche batch</label>
           <textarea id="batch-input" rows="4" placeholder="Un terme ou username par ligne..."></textarea>
           <div class="workflow-actions">
             <button type="button" id="btn-batch-load" class="btn btn-secondary"><i data-lucide="plus"></i><span>Charger</span></button>
             <button type="button" id="btn-batch-run" class="btn btn-primary"><i data-lucide="play"></i><span>Lancer batch</span></button>
+            <button type="button" id="btn-batch-pause" class="btn btn-secondary hidden"><i data-lucide="pause"></i><span>Pause</span></button>
+            <button type="button" id="btn-batch-resume" class="btn btn-secondary hidden"><i data-lucide="play"></i><span>Reprendre</span></button>
+            <button type="button" id="btn-batch-cancel" class="btn btn-danger hidden"><i data-lucide="square"></i><span>Annuler</span></button>
             <button type="button" id="btn-batch-clear" class="btn btn-secondary"><i data-lucide="x"></i><span>Vider</span></button>
           </div>
           <div class="batch-list" id="batch-list"></div>
@@ -1020,7 +1093,7 @@
   <div id="lightbox" class="lightbox modal hidden" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" tabindex="-1">
     <button class="modal-close" id="lightbox-close" aria-label="Fermer l'image"><i data-lucide="x"></i></button>
     <div class="lightbox-content">
-      <img id="lightbox-img" src="" alt="">
+      <img id="lightbox-img" src="" alt="Aperçu de l'image sélectionnée">
       <div class="lightbox-details">
         <h4 id="lightbox-title">Image Title</h4>
         <div class="lightbox-meta">
@@ -1050,13 +1123,13 @@
     <button class="modal-close" id="video-modal-close" aria-label="Fermer la vidéo"><i data-lucide="x"></i></button>
     <div class="video-modal-content">
       <div class="video-player-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
-        <button id="video-btn-prev" class="nav-chevron chevron-left" title="Vidéo précédente">
+        <button id="video-btn-prev" class="nav-chevron chevron-left" title="Vidéo précédente" aria-label="Vidéo précédente">
           <i data-lucide="chevron-left"></i>
         </button>
         <div class="video-player-container" id="video-player-container" style="flex: 1;">
           <!-- Iframe or Video tag will be injected here -->
         </div>
-        <button id="video-btn-next" class="nav-chevron chevron-right" title="Vidéo suivante">
+        <button id="video-btn-next" class="nav-chevron chevron-right" title="Vidéo suivante" aria-label="Vidéo suivante">
           <i data-lucide="chevron-right"></i>
         </button>
       </div>
@@ -1075,7 +1148,7 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260714-identity-1" defer></script>
+  <script src="js/app.js?v=20260726-complete-audit-1" defer></script>
 </body>
 </html>
 

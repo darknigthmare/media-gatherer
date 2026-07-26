@@ -24,16 +24,25 @@ let filteredVideos = [];
 let favorites = readLocalArray(['mediagatherer_favorites', 'aerogatherer_favorites']);
 let showingFavorites = false;
 let currentVideoIndex = -1;
-let lastModalTrigger = null;
+let lastLightboxTrigger = null;
+let lastVideoModalTrigger = null;
 let currentSearchQuery = '';
 let detectedAccounts = [];
 let lastSearchConfig = null;
+let activeSearchController = null;
+let activeSearchToken = 0;
+let refreshSearchController = null;
 let refreshTimerId = null;
 let refreshInProgress = false;
 let refreshCycleCount = 0;
 let searchHistory = readLocalArray(['mediagatherer_history', 'aerogatherer_history']);
 let savedMonitors = readLocalArray(['mediagatherer_monitors', 'aerogatherer_monitors']);
 let batchQueue = [];
+let activeBatchJobId = null;
+let activeBatchJob = null;
+let batchLoopActive = false;
+let batchPaused = false;
+let batchCancelled = false;
 let currentAliases = [];
 let selectedAliasCandidate = null;
 let aliasActionFeedback = null;
@@ -41,8 +50,11 @@ let aliasCandidatePersistTimer = null;
 const pendingAliasCandidates = new Map();
 const rejectedAliasKeys = new Set(readLocalArray(['mediagatherer_alias_rejections']));
 let sourceDiagnostics = {};
-let runtimePersistentStorage = true;
+let runtimePersistentStorage = false;
+let runtimeStatusResolved = false;
+let runtimeStatusPromise = null;
 const perceptualHashCache = new Map();
+const searchConfigGuards = new WeakMap();
 let perceptualPassRunning = false;
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:3000' : '';
 let sourceCatalog = [];
@@ -122,22 +134,26 @@ function filterSnapshotItems(items, matchMode) {
   return (items || []).filter(item => Number(item.confidenceScore || item.relevanceScore || 0) >= threshold);
 }
 
-async function persistCurrentSearchSnapshot() {
-  if (!lastSearchConfig?.query) return false;
-  const previous = await readSearchSnapshot(lastSearchConfig);
-  const images = dedupeMedia([...(previous?.images || []), ...allImages])
+async function persistCurrentSearchSnapshot(config = lastSearchConfig) {
+  if (!config?.query) return false;
+  const snapshotConfig = { ...config, checkedSources: [...(config.checkedSources || [])] };
+  const currentImages = [...allImages];
+  const currentVideos = [...allVideos];
+  const aliases = [...currentAliases];
+  const previous = await readSearchSnapshot(snapshotConfig);
+  const images = dedupeMedia([...(previous?.images || []), ...currentImages])
     .sort((a, b) => Number(b.relevanceScore || b.confidenceScore || 0) - Number(a.relevanceScore || a.confidenceScore || 0))
     .slice(0, 2500);
-  const videos = dedupeMedia([...(previous?.videos || []), ...allVideos])
+  const videos = dedupeMedia([...(previous?.videos || []), ...currentVideos])
     .sort((a, b) => Number(b.relevanceScore || b.confidenceScore || 0) - Number(a.relevanceScore || a.confidenceScore || 0))
     .slice(0, 750);
   return writeSearchSnapshot({
-    key: searchSnapshotKey(lastSearchConfig),
+    key: searchSnapshotKey(snapshotConfig),
     updatedAt: Date.now(),
-    query: lastSearchConfig.query,
+    query: snapshotConfig.query,
     images,
     videos,
-    aliases: [...currentAliases].slice(0, 100)
+    aliases: aliases.slice(0, 100)
   });
 }
 
@@ -150,14 +166,17 @@ function scheduleSearchSnapshotSave(delay = 700) {
   }, delay);
 }
 
-async function restoreSearchSnapshot(config) {
+async function restoreSearchSnapshot(config, options = {}) {
+  const isActive = options.isActive || searchConfigGuards.get(config);
   const snapshot = await readSearchSnapshot(config);
+  if (isActive && !isActive()) return { images: 0, videos: 0 };
   if (!snapshot) return { images: 0, videos: 0 };
   let images = filterSnapshotItems(snapshot.images, config.matchMode || 'smart');
   let videos = filterSnapshotItems(snapshot.videos, config.matchMode || 'smart');
   if (config.mediaKind === 'photos') videos = [];
   if (config.mediaKind === 'videos') images = [];
   if (!images.length && !videos.length) return { images: 0, videos: 0 };
+  if (isActive && !isActive()) return { images: 0, videos: 0 };
   mergeSearchData({ images, videos, aliases: snapshot.aliases || [], restoredSnapshot: true }, { skipSnapshot: true });
   return { images: images.length, videos: videos.length, updatedAt: snapshot.updatedAt };
 }
@@ -190,6 +209,8 @@ function getSourceGroup(source) {
 // ----------------------------------------------------
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
+const btnSearchSubmit = document.getElementById('btn-search-submit');
+const btnCancelSearch = document.getElementById('btn-cancel-search');
 const statusConsoleWrapper = document.getElementById('status-console-wrapper');
 const runtimeStatus = document.getElementById('runtime-status');
 const statusConsole = document.getElementById('status-console');
@@ -231,6 +252,9 @@ const batchList = document.getElementById('batch-list');
 const batchCount = document.getElementById('batch-count');
 const btnBatchLoad = document.getElementById('btn-batch-load');
 const btnBatchRun = document.getElementById('btn-batch-run');
+const btnBatchPause = document.getElementById('btn-batch-pause');
+const btnBatchResume = document.getElementById('btn-batch-resume');
+const btnBatchCancel = document.getElementById('btn-batch-cancel');
 const btnBatchClear = document.getElementById('btn-batch-clear');
 const historyList = document.getElementById('history-list');
 const historyCount = document.getElementById('history-count');
@@ -251,6 +275,9 @@ const btnReverseYandex = document.getElementById('btn-reverse-yandex');
 const btnReverseTinEye = document.getElementById('btn-reverse-tineye');
 const personSection = document.getElementById('person-section');
 const personForm = document.getElementById('person-form');
+const personFormTitle = document.getElementById('person-form-title');
+const btnPersonSave = document.getElementById('btn-person-save');
+const btnPersonCancelEdit = document.getElementById('btn-person-cancel-edit');
 const personName = document.getElementById('person-name');
 const personType = document.getElementById('person-type');
 const personBirthYear = document.getElementById('person-birth-year');
@@ -276,23 +303,43 @@ const btnPersonRefresh = document.getElementById('btn-person-refresh');
 const btnPersonPlan = document.getElementById('btn-person-plan');
 const btnPersonResolve = document.getElementById('btn-person-resolve');
 const btnPersonSearch = document.getElementById('btn-person-search');
+const btnPersonReport = document.getElementById('btn-person-report');
+const btnPersonGraph = document.getElementById('btn-person-graph');
 const personQueryPlan = document.getElementById('person-query-plan');
 const personMediaList = document.getElementById('person-media-list');
+const btnPersonGalleryExport = document.getElementById('btn-person-gallery-export');
+const personGalleryQuery = document.getElementById('person-gallery-query');
+const personGalleryType = document.getElementById('person-gallery-type');
+const personGalleryStatus = document.getElementById('person-gallery-status');
+const personGallerySort = document.getElementById('person-gallery-sort');
+const personMediaDetailsDrawer = document.getElementById('person-media-details-drawer');
+const personMediaDetailsSummary = document.getElementById('person-media-details-summary');
+const personMediaDetails = document.getElementById('person-media-details');
+const personAnalysisDrawer = document.getElementById('person-analysis-drawer');
+const personAnalysisSummary = document.getElementById('person-analysis-summary');
+const personAnalysisContent = document.getElementById('person-analysis-content');
 const personTimelineList = document.getElementById('person-timeline-list');
 const personRuleForm = document.getElementById('person-rule-form');
 const personRuleValue = document.getElementById('person-rule-value');
+const personRuleType = document.getElementById('person-rule-type');
 const personRuleAction = document.getElementById('person-rule-action');
 const personRuleList = document.getElementById('person-rule-list');
 
 let personProfiles = readLocalArray(['mediagatherer_persons']);
 let selectedPersonId = null;
+let editingPersonId = null;
 let activePersonAliasCandidates = [];
+let activePersonGalleryLinks = [];
+let personSearchGalleryTimer = null;
 
 function updatePersonActions() {
   const disabled = !selectedPersonId;
   if (btnPersonPlan) btnPersonPlan.disabled = disabled;
   if (btnPersonResolve) btnPersonResolve.disabled = disabled;
   if (btnPersonSearch) btnPersonSearch.disabled = disabled;
+  if (btnPersonReport) btnPersonReport.disabled = disabled;
+  if (btnPersonGraph) btnPersonGraph.disabled = disabled;
+  if (btnPersonGalleryExport) btnPersonGalleryExport.disabled = disabled;
   const selected = personProfiles.find(person => person.id === selectedPersonId);
   if (personIncludeNsfw) {
     personIncludeNsfw.disabled = disabled || selected?.adultConfirmed !== true;
@@ -352,23 +399,37 @@ function addConsoleLog(message, type = 'info') {
 }
 
 async function loadRuntimeStatus() {
-  if (!runtimeStatus) return;
   try {
     const response = await fetch(`${API_BASE}/api/health`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     const persistent = data.storage?.persistent !== false;
     runtimePersistentStorage = persistent;
-    runtimeStatus.classList.toggle('warning', !persistent);
-    runtimeStatus.querySelector('span:last-child').textContent = persistent
-      ? 'Stockage durable actif'
-      : 'Stockage Vercel temporaire';
-    runtimeStatus.title = data.storage?.warning || 'API et stockage disponibles';
+    if (runtimeStatus) {
+      runtimeStatus.classList.remove('error');
+      runtimeStatus.classList.toggle('warning', !persistent);
+      runtimeStatus.querySelector('span:last-child').textContent = persistent
+        ? 'Stockage durable actif'
+        : 'Stockage Vercel temporaire';
+      runtimeStatus.title = data.storage?.warning || 'API et stockage disponibles';
+    }
+    return persistent;
   } catch (error) {
-    runtimeStatus.classList.add('error');
-    runtimeStatus.querySelector('span:last-child').textContent = 'Serveur indisponible';
-    runtimeStatus.title = error.message;
+    runtimePersistentStorage = false;
+    if (runtimeStatus) {
+      runtimeStatus.classList.add('error');
+      runtimeStatus.querySelector('span:last-child').textContent = 'Serveur indisponible';
+      runtimeStatus.title = error.message;
+    }
+    return false;
+  } finally {
+    runtimeStatusResolved = true;
   }
+}
+
+function ensureRuntimeStatus() {
+  if (!runtimeStatusPromise) runtimeStatusPromise = loadRuntimeStatus();
+  return runtimeStatusPromise;
 }
 
 btnClearConsole.addEventListener('click', () => {
@@ -400,10 +461,13 @@ function setActiveTab(tabName) {
 }
 
 appTabs.forEach(tab => {
-  tab.addEventListener('click', () => {
+  tab.addEventListener('click', async () => {
     setActiveTab(tab.dataset.tab);
-    if (tab.dataset.tab === 'connections') loadConnections();
-    if (tab.dataset.tab === 'persons') loadPersons();
+    if (tab.dataset.tab === 'connections') await loadConnections();
+    if (tab.dataset.tab === 'persons') {
+      await ensureRuntimeStatus();
+      await loadPersons();
+    }
   });
   tab.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -436,13 +500,15 @@ function renderConnections(providers) {
     const card = document.createElement('form');
     card.className = `connection-card ${provider.configured ? 'configured' : ''}`;
     card.dataset.provider = provider.id;
+    card.dataset.configured = provider.configured ? 'true' : 'false';
     const fieldsHtml = (provider.fields || []).map(field => {
       const presetValue = field.type === 'password' ? '' : String(field.defaultValue || '');
       const placeholder = presetValue ? 'Moteur preconfigure' : (provider.configured ? 'Deja configure' : '');
+      const requiredAttributes = field.required ? ' required aria-required="true"' : '';
       return `
         <label class="connection-field">
           <span>${escapeHtml(field.label)}</span>
-          <input type="${field.type || 'text'}" name="${escapeHtml(field.name)}" value="${escapeHtml(presetValue)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off">
+          <input type="${field.type || 'text'}" name="${escapeHtml(field.name)}" value="${escapeHtml(presetValue)}" data-preset="${escapeHtml(presetValue)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off"${requiredAttributes}>
         </label>
       `;
     }).join('');
@@ -491,27 +557,48 @@ function setConnectionMessage(card, message, type = 'info') {
 }
 
 async function saveConnection(provider, card) {
+  if (!card.reportValidity()) return;
   try {
-    const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(readConnectionForm(card))
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const data = await storeConnectionValues(provider, card);
+    card.dataset.configured = 'true';
+    card.classList.add('configured');
+    const state = card.querySelector('.connection-state');
+    if (state) {
+      state.className = 'connection-state ok';
+      state.textContent = 'Configuré';
+    }
     setConnectionMessage(card, data.note || data.message || 'Configuration recue pour cette session serveur.', data.ok === false ? 'warning' : 'success');
-    await loadConnections();
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
   }
 }
 
+async function storeConnectionValues(provider, card) {
+  const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(readConnectionForm(card))
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+
 async function testConnection(provider, card) {
   try {
+    const inputs = [...card.querySelectorAll('input[name]')];
+    const hasEditedValues = inputs.some(input => input.value.trim() && input.value.trim() !== String(input.dataset.preset || ''));
+    if (hasEditedValues || card.dataset.configured !== 'true') {
+      if (!card.reportValidity()) return;
+      await storeConnectionValues(provider, card);
+      card.dataset.configured = 'true';
+      card.classList.add('configured');
+    }
+    const credentials = readConnectionForm(card);
     const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify(credentials)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
@@ -526,8 +613,15 @@ async function clearConnection(provider, card) {
     const response = await fetch(`${API_BASE}/api/connections/${encodeURIComponent(provider)}`, { method: 'DELETE' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    card.dataset.configured = 'false';
+    card.classList.remove('configured');
+    card.querySelectorAll('input[name]').forEach(input => { input.value = input.dataset.preset || ''; });
+    const state = card.querySelector('.connection-state');
+    if (state) {
+      state.className = 'connection-state idle';
+      state.textContent = 'Non configuré';
+    }
     setConnectionMessage(card, data.note || data.message || 'Identifiants effaces pour cette session serveur.', 'info');
-    await loadConnections();
   } catch (error) {
     setConnectionMessage(card, error.message, 'error');
   }
@@ -558,8 +652,9 @@ function openReverseSearch(engine) {
 
 function prepareReverseSearch(imageUrl) {
   if (reverseImageUrl) reverseImageUrl.value = imageUrl || '';
-  closeLightbox();
+  closeLightbox(false);
   setActiveTab('reverse');
+  reverseImageUrl?.focus();
 }
 
 if (btnReverseGoogle) btnReverseGoogle.addEventListener('click', () => openReverseSearch('google'));
@@ -592,6 +687,55 @@ function readPersonForm() {
   };
 }
 
+function personProfileKey(person = {}) {
+  return String(person.id || `name:${normalizeSearchTerm(person.displayName || person.name)}`);
+}
+
+function mergePersonProfileFallback(serverProfiles = [], fallbackProfiles = []) {
+  const merged = new Map();
+  fallbackProfiles.forEach(person => merged.set(personProfileKey(person), person));
+  serverProfiles.forEach(person => {
+    const key = personProfileKey(person);
+    merged.set(key, { ...(merged.get(key) || {}), ...person });
+  });
+  return [...merged.values()].slice(0, 100);
+}
+
+function resetPersonFormMode() {
+  editingPersonId = null;
+  personForm?.reset();
+  if (personPublicOnly) personPublicOnly.checked = true;
+  if (personSafeMode) personSafeMode.checked = true;
+  if (personAdultConfirmed) personAdultConfirmed.checked = false;
+  if (personFormTitle) personFormTitle.textContent = 'Nouvelle fiche personne';
+  const saveLabel = btnPersonSave?.querySelector('span');
+  if (saveLabel) saveLabel.textContent = 'Créer le profil';
+  btnPersonCancelEdit?.classList.add('hidden');
+}
+
+function editPersonProfile(person) {
+  if (!person || !personForm) return;
+  editingPersonId = person.id;
+  personName.value = person.displayName || person.name || '';
+  personType.value = person.type || 'creator';
+  personBirthYear.value = person.birthYear || '';
+  personAliases.value = (person.aliases || []).join('\n');
+  personUsernames.value = (person.usernames || []).join('\n');
+  personAccounts.value = (person.accounts || []).map(account => typeof account === 'string' ? account : account.url).filter(Boolean).join('\n');
+  personPositive.value = (person.positiveKeywords || []).join('\n');
+  personExclude.value = (person.excludeKeywords || []).join('\n');
+  personNotes.value = person.notes || '';
+  personPublicOnly.checked = person.publicOnly !== false;
+  personSafeMode.checked = person.safeMode !== false;
+  personAdultConfirmed.checked = person.adultConfirmed === true;
+  if (personFormTitle) personFormTitle.textContent = `Modifier ${person.displayName || person.name}`;
+  const saveLabel = btnPersonSave?.querySelector('span');
+  if (saveLabel) saveLabel.textContent = 'Enregistrer les modifications';
+  btnPersonCancelEdit?.classList.remove('hidden');
+  personForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  personName.focus();
+}
+
 function renderPersonList() {
   if (!personList) return;
   if (!personProfiles.length) {
@@ -611,13 +755,17 @@ function renderPersonList() {
 
 async function loadPersons() {
   if (!personList) return;
+  if (!runtimeStatusResolved) await ensureRuntimeStatus();
+  const fallbackProfiles = [...personProfiles];
   personList.innerHTML = '<div class="person-empty">Chargement...</div>';
   try {
     const response = await fetch(`${API_BASE}/api/persons`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     const serverProfiles = data.persons || [];
-    if (serverProfiles.length || runtimePersistentStorage) personProfiles = serverProfiles;
+    personProfiles = runtimePersistentStorage
+      ? serverProfiles
+      : mergePersonProfileFallback(serverProfiles, fallbackProfiles);
     localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
     if (selectedPersonId && !personProfiles.some(person => person.id === selectedPersonId)) selectedPersonId = null;
     if (!selectedPersonId && personProfiles[0]) selectedPersonId = personProfiles[0].id;
@@ -625,8 +773,12 @@ async function loadPersons() {
     renderPersonList();
     if (selectedPersonId) await selectPerson(selectedPersonId, false);
   } catch (error) {
+    personProfiles = fallbackProfiles;
     renderPersonList();
     if (!personProfiles.length) personList.innerHTML = `<div class="person-empty">Erreur Person Finder : ${escapeHtml(error.message)}</div>`;
+    addConsoleLog(`[PERSON] Chargement impossible, profils locaux conservés : ${error.message}`, 'warning');
+  } finally {
+    updatePersonActions();
   }
 }
 
@@ -636,6 +788,7 @@ function renderPersonDetail(person) {
     ...(person.aliases || []).map(value => ({ value, kind: 'display_name' })),
     ...(person.usernames || []).map(value => ({ value: `@${String(value).replace(/^@/, '')}`, kind: 'username' }))
   ];
+  const publicAccounts = (person.accounts || []).map(account => typeof account === 'string' ? { url: account } : account).filter(Boolean);
   personDetail.classList.remove('empty');
   personDetail.innerHTML = `
     <div class="person-detail-head">
@@ -646,19 +799,47 @@ function renderPersonDetail(person) {
       <div class="person-detail-actions">
         <span class="person-safe-badge">${person.publicOnly !== false && person.safeMode !== false ? 'Public only' : 'Bloque'}</span>
         ${person.adultConfirmed ? '<span class="person-safe-badge person-adult-badge">18+ confirmé</span>' : ''}
+        <button type="button" class="btn btn-secondary btn-small" data-person-edit="${escapeHtml(person.id)}"><i data-lucide="pencil"></i><span>Modifier</span></button>
         <button type="button" class="btn btn-danger btn-small" data-person-delete="${escapeHtml(person.id)}"><i data-lucide="trash-2"></i><span>Supprimer</span></button>
       </div>
     </div>
     <div class="person-chip-row">
       ${searchableAliases.map((alias, index) => `<button type="button" class="person-alias-chip" data-person-detail-alias="${index}" title="Rechercher cet alias dans Media Finder">${escapeHtml(alias.value)}</button>`).join('')}
     </div>
+    <div class="person-account-list">
+      ${publicAccounts.map(account => {
+        const url = safeHttpUrl(account.url || '');
+        const label = account.username ? `@${account.username}` : (account.platform || account.url || 'Compte public');
+        return `<div class="person-account-row">
+          ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}<i data-lucide="external-link"></i></a>` : `<span>${escapeHtml(label)}</span>`}
+          ${account.id ? `<button type="button" class="icon-btn" data-person-account-delete="${escapeHtml(account.id)}" title="Supprimer ce compte" aria-label="Supprimer le compte ${escapeHtml(label)}"><i data-lucide="trash-2"></i></button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
     <p class="person-note">${escapeHtml(person.notes || 'Pas de note.')}</p>
   `;
+  personDetail.querySelector('[data-person-edit]')?.addEventListener('click', () => editPersonProfile(person));
   personDetail.querySelector('[data-person-delete]')?.addEventListener('click', () => deletePersonProfile(person.id));
   personDetail.querySelectorAll('[data-person-detail-alias]').forEach(button => {
     button.addEventListener('click', () => searchPersonAliasCandidate(searchableAliases[Number(button.dataset.personDetailAlias)]));
   });
+  personDetail.querySelectorAll('[data-person-account-delete]').forEach(button => {
+    button.addEventListener('click', () => deletePersonAccount(person.id, button.dataset.personAccountDelete));
+  });
   lucide.createIcons();
+}
+
+async function deletePersonAccount(personId, accountId) {
+  if (!personId || !accountId) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(personId)}/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    addConsoleLog('[PERSON] Compte public supprimé.', 'success');
+    await loadPersons();
+  } catch (error) {
+    addConsoleLog(`[PERSON] Suppression du compte impossible : ${error.message}`, 'error');
+  }
 }
 
 function renderPersonAliasCandidates(candidates = []) {
@@ -720,6 +901,7 @@ async function updatePersonAliasCandidate(candidateId, status) {
     await selectPerson(selectedPersonId, false);
   } catch (error) {
     addConsoleLog(`[ALIAS] Validation impossible : ${error.message}`, 'error');
+  } finally {
     row?.querySelectorAll('button').forEach(button => { button.disabled = false; });
   }
 }
@@ -745,39 +927,161 @@ function searchPersonAliasCandidate(candidate) {
   searchForm.requestSubmit();
 }
 
-function renderPersonPlan(queries) {
+function renderPersonPlan(plan) {
   if (!personQueryPlan) return;
-  personQueryPlan.innerHTML = (queries || []).map(query => `<span class="person-query-chip">${escapeHtml(query)}</span>`).join('') || '<span class="person-empty">Aucune requete generee.</span>';
+  const queries = Array.isArray(plan) ? plan : (plan?.queries || []);
+  const sources = Array.isArray(plan?.sources) ? plan.sources : [];
+  personQueryPlan.innerHTML = `
+    ${sources.length ? `<span class="person-query-source-summary">${sources.length} sources: ${escapeHtml(sources.join(', '))}</span>` : ''}
+    ${queries.map(query => `<span class="person-query-chip">${escapeHtml(query)}</span>`).join('') || '<span class="person-empty">Aucune requête générée.</span>'}
+  `;
 }
 
 function renderPersonMedia(links) {
   if (!personMediaList) return;
+  activePersonGalleryLinks = [...(links || [])];
   if (!links.length) {
     personMediaList.innerHTML = '<div class="person-empty">Aucun media lie pour ce profil.</div>';
     return;
   }
   personMediaList.innerHTML = links.map(link => {
     const media = link.media || {};
-    const preview = safeHttpUrl(media.thumbnail || media.url || '');
+    const preview = safeHttpUrl(media.thumbnail || (link.mediaType === 'image' ? media.url : '') || '');
+    const sourceUrl = safeHttpUrl(media.link || media.url || '');
     return `
-      <article class="person-media-row">
-        ${preview ? `<img src="${escapeHtml(preview)}" loading="lazy" referrerpolicy="no-referrer" alt="${escapeHtml(media.title || 'Aperçu média')}">` : '<div class="person-media-placeholder" aria-hidden="true"></div>'}
+      <article class="person-media-row" data-person-media-id="${escapeHtml(link.id)}">
+        ${preview
+          ? `<img src="${escapeHtml(preview)}" loading="lazy" referrerpolicy="no-referrer" alt="${escapeHtml(media.title || 'Aperçu média')}">`
+          : `<div class="person-media-placeholder" aria-label="${link.mediaType === 'video' ? 'Vidéo sans miniature' : 'Média sans miniature'}"><i data-lucide="${link.mediaType === 'video' ? 'video' : 'file'}"></i></div>`}
         <div class="person-media-main">
           <strong>${escapeHtml(media.title || 'Media sans titre')}</strong>
           <span>${escapeHtml(media.source || '')} · score ${Number(link.personScore || media.confidenceScore || 0)} · ${escapeHtml(link.status || 'to_review')}</span>
           <small>${escapeHtml((link.evidence || media.matchReasons || []).slice(0, 3).join(' · '))}</small>
         </div>
         <div class="person-media-actions">
-          <button data-person-validate="${escapeHtml(link.id)}" data-status="confirmed" class="btn btn-secondary btn-small" type="button">OK</button>
-          <button data-person-validate="${escapeHtml(link.id)}" data-status="probable" class="btn btn-secondary btn-small" type="button">Probable</button>
-          <button data-person-validate="${escapeHtml(link.id)}" data-status="false_positive" class="btn btn-secondary btn-small" type="button">Faux</button>
+          <label class="sr-only" for="person-media-status-${escapeHtml(link.id)}">Statut de validation</label>
+          <select id="person-media-status-${escapeHtml(link.id)}" data-person-status="${escapeHtml(link.id)}">
+            ${[
+              ['to_review', 'À vérifier'],
+              ['probable', 'Probable'],
+              ['confirmed', 'Confirmé'],
+              ['saved', 'Sauvegardé'],
+              ['false_positive', 'Faux positif'],
+              ['excluded', 'Exclu']
+            ].map(([value, label]) => `<option value="${value}" ${link.status === value ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+          <button data-person-details="${escapeHtml(link.id)}" class="icon-btn" type="button" title="Voir les preuves" aria-label="Voir les preuves"><i data-lucide="badge-check"></i></button>
+          ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" class="icon-btn" target="_blank" rel="noopener noreferrer" title="Ouvrir la source" aria-label="Ouvrir la source"><i data-lucide="external-link"></i></a>` : ''}
         </div>
       </article>
     `;
   }).join('');
-  personMediaList.querySelectorAll('[data-person-validate]').forEach(button => {
-    button.addEventListener('click', () => validatePersonMedia(button.dataset.personValidate, button.dataset.status));
+  personMediaList.querySelectorAll('[data-person-status]').forEach(select => {
+    select.addEventListener('change', () => validatePersonMedia(select.dataset.personStatus, select.value));
   });
+  personMediaList.querySelectorAll('[data-person-details]').forEach(button => {
+    button.addEventListener('click', () => showPersonMediaDetails(button.dataset.personDetails));
+  });
+  lucide.createIcons();
+}
+
+function personGalleryUrl(personId = selectedPersonId) {
+  const params = new URLSearchParams();
+  if (personGalleryQuery?.value.trim()) params.set('q', personGalleryQuery.value.trim());
+  if (personGalleryType?.value && personGalleryType.value !== 'all') params.set('type', personGalleryType.value);
+  if (personGalleryStatus?.value && personGalleryStatus.value !== 'all') params.set('status', personGalleryStatus.value);
+  if (personGallerySort?.value) params.set('sort', personGallerySort.value);
+  return `${API_BASE}/api/persons/${encodeURIComponent(personId)}/gallery?${params}`;
+}
+
+async function loadPersonGallery(personId = selectedPersonId, options = {}) {
+  if (!personId) return [];
+  try {
+    const response = await fetch(personGalleryUrl(personId));
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (personId === selectedPersonId) renderPersonMedia(data.links || []);
+    return data.links || [];
+  } catch (error) {
+    if (!options.silent) addConsoleLog(`[PERSON] Galerie impossible à charger : ${error.message}`, 'error');
+    return [];
+  }
+}
+
+async function showPersonMediaDetails(linkId) {
+  if (!selectedPersonId || !linkId || !personMediaDetailsDrawer || !personMediaDetails) return;
+  personMediaDetailsDrawer.classList.remove('hidden');
+  personMediaDetailsDrawer.open = true;
+  personMediaDetailsSummary.textContent = 'Chargement...';
+  personMediaDetails.innerHTML = '<div class="person-empty">Chargement des preuves...</div>';
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/media/${encodeURIComponent(linkId)}/details`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const link = data.link || {};
+    const media = link.media || {};
+    const sourceUrl = safeHttpUrl(data.proof?.url || media.link || media.url || '');
+    personMediaDetailsSummary.textContent = media.source || link.status || '';
+    personMediaDetails.innerHTML = `
+      <div class="person-proof-grid">
+        <div><span>Titre</span><strong>${escapeHtml(media.title || 'Sans titre')}</strong></div>
+        <div><span>Statut</span><strong>${escapeHtml(link.status || 'to_review')}</strong></div>
+        <div><span>Score personne</span><strong>${Number(link.personScore || 0)}%</strong></div>
+        <div><span>Requête</span><strong>${escapeHtml(data.proof?.query || link.query || 'Non renseignée')}</strong></div>
+      </div>
+      <div class="person-proof-list">
+        ${(data.proof?.evidence || link.evidence || []).map(reason => `<span><i data-lucide="check"></i>${escapeHtml(reason)}</span>`).join('') || '<span>Aucune preuve textuelle enregistrée.</span>'}
+      </div>
+      ${sourceUrl ? `<a class="btn btn-secondary" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i><span>Ouvrir la source publique</span></a>` : ''}
+    `;
+    lucide.createIcons();
+  } catch (error) {
+    personMediaDetailsSummary.textContent = 'Erreur';
+    personMediaDetails.innerHTML = `<div class="person-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function showPersonAnalysis(kind) {
+  if (!selectedPersonId || !personAnalysisDrawer || !personAnalysisContent) return;
+  personAnalysisDrawer.classList.remove('hidden');
+  personAnalysisDrawer.open = true;
+  personAnalysisSummary.textContent = 'Chargement...';
+  personAnalysisContent.innerHTML = '<div class="person-empty">Analyse en cours...</div>';
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/${kind}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (kind === 'report') {
+      const stats = data.stats || {};
+      personAnalysisSummary.textContent = `${stats.media?.validated || 0}/${stats.media?.total || 0} médias validés`;
+      personAnalysisContent.innerHTML = `
+        <div class="person-proof-grid">
+          <div><span>Médias</span><strong>${Number(stats.media?.total || 0)}</strong></div>
+          <div><span>Validés</span><strong>${Number(stats.media?.validated || 0)}</strong></div>
+          <div><span>À vérifier</span><strong>${Number(stats.media?.needsReview || 0)}</strong></div>
+          <div><span>Alias confirmés</span><strong>${Number(stats.aliases?.confirmed || 0)}</strong></div>
+          <div><span>Comptes confirmés</span><strong>${Number(stats.accounts?.confirmed || 0)}</strong></div>
+          <div><span>Sources</span><strong>${Number(stats.sources?.length || 0)}</strong></div>
+        </div>
+        <div class="person-source-report">${(stats.sources || []).map(source => `<span>${escapeHtml(source.label || source.id)} · ${Number(source.validated || 0)}/${Number(source.total || 0)}</span>`).join('') || '<span>Aucune source.</span>'}</div>
+        <a class="btn btn-secondary" href="${API_BASE}/api/exports/person-report?personId=${encodeURIComponent(selectedPersonId)}&format=json"><i data-lucide="download"></i><span>Exporter le rapport JSON</span></a>
+      `;
+    } else {
+      const counts = (data.nodes || []).reduce((map, node) => {
+        map[node.type] = (map[node.type] || 0) + 1;
+        return map;
+      }, {});
+      personAnalysisSummary.textContent = `${(data.nodes || []).length} nœuds · ${(data.edges || []).length} relations`;
+      personAnalysisContent.innerHTML = `
+        <div class="person-graph-summary">${Object.entries(counts).map(([type, count]) => `<span><strong>${Number(count)}</strong>${escapeHtml(type)}</span>`).join('')}</div>
+        <div class="person-relation-list">${(data.edges || []).slice(0, 60).map(edge => `<span>${escapeHtml(edge.type)} · ${escapeHtml(edge.from)} → ${escapeHtml(edge.to)}</span>`).join('') || '<span>Aucune relation publique.</span>'}</div>
+      `;
+    }
+    lucide.createIcons();
+  } catch (error) {
+    personAnalysisSummary.textContent = 'Erreur';
+    personAnalysisContent.innerHTML = `<div class="person-empty">${escapeHtml(error.message)}</div>`;
+  }
 }
 
 function renderPersonTimeline(events) {
@@ -806,92 +1110,132 @@ function renderPersonRules(rules) {
 }
 
 async function selectPerson(id, rerenderList = true) {
+  if (!id) return;
   selectedPersonId = id;
   updatePersonActions();
   if (rerenderList) renderPersonList();
   const localPerson = personProfiles.find(person => person.id === id);
   if (localPerson) renderPersonDetail(localPerson);
-  const [personRes, planRes, galleryRes, timelineRes, rulesRes, aliasesRes] = await Promise.all([
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`),
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/queries?depth=${encodeURIComponent(personDepth?.value || 'normal')}`),
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/gallery`),
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/timeline`),
-    fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`),
-    fetch(`${API_BASE}/api/aliases/candidates?personId=${encodeURIComponent(id)}`)
-  ]);
-  if (personRes.ok) {
-    const latestPerson = await personRes.json();
-    personProfiles = personProfiles.map(person => person.id === latestPerson.id ? latestPerson : person);
-    localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
-    renderPersonList();
-    renderPersonDetail(latestPerson);
+  personSection?.setAttribute('aria-busy', 'true');
+  try {
+    const [personRes, planRes, galleryRes, timelineRes, rulesRes, aliasesRes] = await Promise.all([
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`),
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/search-plan?depth=${encodeURIComponent(personDepth?.value || 'normal')}`),
+      fetch(personGalleryUrl(id)),
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/timeline`),
+      fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}/validation/rules`),
+      fetch(`${API_BASE}/api/aliases/candidates?personId=${encodeURIComponent(id)}`)
+    ]);
+    if (selectedPersonId !== id) return;
+    if (personRes.ok) {
+      const latestPerson = await personRes.json();
+      personProfiles = personProfiles.map(person => person.id === latestPerson.id ? latestPerson : person);
+      localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+      renderPersonList();
+      renderPersonDetail(latestPerson);
+    }
+    if (planRes.ok) renderPersonPlan(await planRes.json());
+    if (galleryRes.ok) renderPersonMedia((await galleryRes.json()).links || []);
+    if (timelineRes.ok) renderPersonTimeline((await timelineRes.json()).events || []);
+    if (rulesRes.ok) renderPersonRules((await rulesRes.json()).rules || []);
+    if (aliasesRes.ok) renderPersonAliasCandidates((await aliasesRes.json()).candidates || []);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Impossible de charger tous les détails : ${error.message}`, 'error');
+  } finally {
+    personSection?.removeAttribute('aria-busy');
     updatePersonActions();
   }
-  if (planRes.ok) renderPersonPlan((await planRes.json()).queries || []);
-  if (galleryRes.ok) renderPersonMedia((await galleryRes.json()).links || []);
-  if (timelineRes.ok) renderPersonTimeline((await timelineRes.json()).events || []);
-  if (rulesRes.ok) renderPersonRules((await rulesRes.json()).rules || []);
-  if (aliasesRes.ok) renderPersonAliasCandidates((await aliasesRes.json()).candidates || []);
 }
 
 async function savePersonProfile(event) {
   event.preventDefault();
   const payload = readPersonForm();
   if (!payload.name) return;
-  const response = await fetch(`${API_BASE}/api/persons`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) {
-    alert('Impossible de creer le profil Person Finder.');
+  if (!payload.publicOnly || !payload.safeMode) {
+    alert('Public only et Safe mode sont obligatoires pour toute fiche Person Finder.');
+    (!payload.publicOnly ? personPublicOnly : personSafeMode)?.focus();
     return;
   }
-  const person = await response.json();
-  personProfiles = [person, ...personProfiles.filter(item => item.id !== person.id)].slice(0, 100);
-  localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
-  selectedPersonId = person.id;
-  personForm.reset();
-  if (personPublicOnly) personPublicOnly.checked = true;
-  if (personSafeMode) personSafeMode.checked = true;
-  if (personAdultConfirmed) personAdultConfirmed.checked = false;
-  await loadPersons();
+  const targetId = editingPersonId;
+  const method = targetId ? 'PATCH' : 'POST';
+  const endpoint = targetId
+    ? `${API_BASE}/api/persons/${encodeURIComponent(targetId)}`
+    : `${API_BASE}/api/persons`;
+  if (btnPersonSave) btnPersonSave.disabled = true;
+  personForm?.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const person = data;
+    personProfiles = [person, ...personProfiles.filter(item => item.id !== person.id)].slice(0, 100);
+    localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    selectedPersonId = person.id;
+    resetPersonFormMode();
+    addConsoleLog(`[PERSON] Profil ${targetId ? 'modifié' : 'créé'} : ${person.displayName || person.name}.`, 'success');
+    await loadPersons();
+  } catch (error) {
+    addConsoleLog(`[PERSON] Enregistrement impossible : ${error.message}`, 'error');
+    alert(`Impossible d'enregistrer le profil Person Finder : ${error.message}`);
+  } finally {
+    personForm?.removeAttribute('aria-busy');
+    if (btnPersonSave) btnPersonSave.disabled = false;
+  }
 }
 
 async function deletePersonProfile(id) {
   const person = personProfiles.find(item => item.id === id);
   if (!person || !window.confirm(`Supprimer le profil ${person.displayName || person.name} et ses liens associés ?`)) return;
+  personSection?.setAttribute('aria-busy', 'true');
   try {
     const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
   } catch (error) {
     addConsoleLog(`[PERSON] Suppression serveur impossible : ${error.message}`, 'warning');
-  }
-  personProfiles = personProfiles.filter(item => item.id !== id);
-  localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
-  selectedPersonId = personProfiles[0]?.id || null;
-  updatePersonActions();
-  renderPersonList();
-  if (selectedPersonId) await selectPerson(selectedPersonId, false);
-  else if (personDetail) {
-    personDetail.className = 'person-detail empty';
-    personDetail.textContent = 'Selectionne ou cree une fiche personne.';
-    renderPersonMedia([]);
-    renderPersonAliasCandidates([]);
-    renderPersonTimeline([]);
-    renderPersonRules([]);
+  } finally {
+    personProfiles = personProfiles.filter(item => item.id !== id);
+    localStorage.setItem('mediagatherer_persons', JSON.stringify(personProfiles));
+    if (editingPersonId === id) resetPersonFormMode();
+    selectedPersonId = personProfiles[0]?.id || null;
+    updatePersonActions();
+    renderPersonList();
+    if (selectedPersonId) await selectPerson(selectedPersonId, false);
+    else if (personDetail) {
+      personDetail.className = 'person-detail empty';
+      personDetail.textContent = 'Selectionne ou cree une fiche personne.';
+      renderPersonMedia([]);
+      renderPersonAliasCandidates([]);
+      renderPersonTimeline([]);
+      renderPersonRules([]);
+    }
+    personSection?.removeAttribute('aria-busy');
   }
 }
 
 async function previewPersonPlan() {
   if (!selectedPersonId) return;
-  const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?depth=${encodeURIComponent(personDepth?.value || 'normal')}`);
-  if (response.ok) renderPersonPlan((await response.json()).queries || []);
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?depth=${encodeURIComponent(personDepth?.value || 'normal')}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    renderPersonPlan(data);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Plan impossible à charger : ${error.message}`, 'error');
+  }
 }
 
 async function resolvePersonIdentity() {
   if (!selectedPersonId) return;
   const selected = personProfiles.find(person => person.id === selectedPersonId);
+  if (selected?.publicOnly === false || selected?.safeMode === false) {
+    alert('Modifiez cette fiche pour activer Public only et Safe mode avant la résolution.');
+    editPersonProfile(selected);
+    return;
+  }
   const includeNsfw = Boolean(personIncludeNsfw?.checked);
   if (includeNsfw && selected?.adultConfirmed !== true) {
     alert('Confirmez d abord que la fiche concerne une personne adulte.');
@@ -918,77 +1262,219 @@ async function resolvePersonIdentity() {
 async function runPersonSearch() {
   if (!selectedPersonId) return;
   const selected = personProfiles.find(person => person.id === selectedPersonId);
+  if (selected?.publicOnly === false || selected?.safeMode === false) {
+    alert('Modifiez cette fiche pour activer Public only et Safe mode avant toute recherche.');
+    editPersonProfile(selected);
+    return;
+  }
   const includeNsfw = Boolean(personIncludeNsfw?.checked);
   if (includeNsfw && selected?.adultConfirmed !== true) {
     alert('La confirmation adulte est requise sur cette fiche.');
     return;
   }
+  const birthYear = Number(selected?.birthYear || 0);
+  if (includeNsfw && birthYear && birthYear >= new Date().getFullYear() - 18) {
+    alert('Les sources 18+ sont interdites lorsque la majorité est impossible à confirmer avec l’année renseignée.');
+    return;
+  }
   if (personMediaList) personMediaList.innerHTML = '<div class="person-empty">Recherche Person Finder en cours...</div>';
   const depth = personDepth?.value || 'normal';
-  const safeSources = ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'bluesky', 'mastodon', 'reddit'];
-  if (['normal', 'deep', 'archive'].includes(depth)) safeSources.push('gdelt', 'odysee', 'lemmy');
-  if (['deep', 'archive'].includes(depth)) safeSources.push('pixelfed', 'searxng');
-  if (depth === 'archive') safeSources.push('commoncrawl');
   const adultSources = ['stashdb', 'iafd', 'babepedia', 'erome', 'redgifs', 'eporner', 'phunforum', 'planetsuzy', 'bellazon'];
   if (['deep', 'archive'].includes(depth)) adultSources.push('fanvue', 'indexxx', 'boobpedia', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin');
   const identitySources = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
   if (includeNsfw) identitySources.push('stashdb', 'iafd', 'theporndb', 'fanvue', 'indexxx', 'boobpedia');
-  const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      depth,
-      maxQueries: Math.min(Number(personMaxQueries?.value || 10), includeNsfw ? 5 : (depth === 'archive' ? 6 : 10)),
-      minScore: Number(personMinScore?.value || 35),
-      sources: [...safeSources, ...(includeNsfw ? adultSources : [])].join(','),
-      identitySources: identitySources.join(','),
-      adultConfirmed: includeNsfw && selected?.adultConfirmed === true,
-      resolveIdentity: true
-    })
-  });
-  if (!response.ok) {
+  if (btnPersonSearch) btnPersonSearch.disabled = true;
+  personSection?.setAttribute('aria-busy', 'true');
+  try {
+    const planResponse = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search-plan?depth=${encodeURIComponent(depth)}`);
+    const plan = await planResponse.json().catch(() => ({}));
+    if (!planResponse.ok) throw new Error(plan.error || `HTTP ${planResponse.status}`);
+    const sources = [...new Set([...(plan.sources || []), ...(includeNsfw ? adultSources : [])])];
+    renderPersonPlan({ ...plan, sources });
+    clearInterval(personSearchGalleryTimer);
+    personSearchGalleryTimer = setInterval(() => {
+      void loadPersonGallery(selectedPersonId, { silent: true });
+    }, 1500);
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        depth,
+        maxQueries: Math.max(1, Math.min(40, Number(personMaxQueries?.value || 10))),
+        minScore: Number(personMinScore?.value || 35),
+        sources: sources.join(','),
+        identitySources: identitySources.join(','),
+        adultConfirmed: includeNsfw && selected?.adultConfirmed === true,
+        resolveIdentity: true
+      })
+    });
     const data = await response.json().catch(() => ({}));
-    alert(data.error || 'Recherche Person Finder impossible.');
-    return;
+    if (!response.ok) throw new Error(data.error || 'Recherche Person Finder impossible.');
+    addConsoleLog(`[PERSON] ${data.created || 0} médias liés; ${data.completedQueries || 0}/${data.queries?.length || 0} requêtes terminées${data.failedQueries ? `; ${data.failedQueries} échec(s)` : ''}.`, data.failedQueries ? 'warning' : 'success');
+    await selectPerson(selectedPersonId);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Recherche impossible : ${error.message}`, 'error');
+    alert(error.message);
+  } finally {
+    clearInterval(personSearchGalleryTimer);
+    personSearchGalleryTimer = null;
+    personSection?.removeAttribute('aria-busy');
+    updatePersonActions();
   }
-  await selectPerson(selectedPersonId);
 }
 
 async function validatePersonMedia(linkId, status) {
   if (!selectedPersonId) return;
-  await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/media/${encodeURIComponent(linkId)}/validate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status })
-  });
-  await selectPerson(selectedPersonId);
+  personSection?.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/media/${encodeURIComponent(linkId)}/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    await selectPerson(selectedPersonId);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Validation média impossible : ${error.message}`, 'error');
+  } finally {
+    personSection?.removeAttribute('aria-busy');
+    updatePersonActions();
+  }
 }
 
 async function savePersonRule(event) {
   event.preventDefault();
   if (!selectedPersonId || !personRuleValue?.value.trim()) return;
-  await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/validation/rules`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value: personRuleValue.value.trim(), action: personRuleAction?.value || 'exclude' })
-  });
-  personRuleValue.value = '';
-  await selectPerson(selectedPersonId);
+  personRuleForm?.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/validation/rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        value: personRuleValue.value.trim(),
+        type: personRuleType?.value || 'keyword',
+        action: personRuleAction?.value || 'exclude'
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    personRuleValue.value = '';
+    await selectPerson(selectedPersonId);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Règle non enregistrée : ${error.message}`, 'error');
+  } finally {
+    personRuleForm?.removeAttribute('aria-busy');
+    updatePersonActions();
+  }
 }
 
 async function deletePersonRule(ruleId) {
   if (!selectedPersonId) return;
-  await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/validation/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
-  await selectPerson(selectedPersonId);
+  personRuleForm?.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch(`${API_BASE}/api/persons/${encodeURIComponent(selectedPersonId)}/validation/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    await selectPerson(selectedPersonId);
+  } catch (error) {
+    addConsoleLog(`[PERSON] Suppression de règle impossible : ${error.message}`, 'error');
+  } finally {
+    personRuleForm?.removeAttribute('aria-busy');
+    updatePersonActions();
+  }
 }
 
 if (personForm) personForm.addEventListener('submit', savePersonProfile);
+if (btnPersonCancelEdit) btnPersonCancelEdit.addEventListener('click', resetPersonFormMode);
 if (btnPersonRefresh) btnPersonRefresh.addEventListener('click', loadPersons);
 if (btnPersonPlan) btnPersonPlan.addEventListener('click', previewPersonPlan);
 if (btnPersonResolve) btnPersonResolve.addEventListener('click', resolvePersonIdentity);
 if (btnPersonSearch) btnPersonSearch.addEventListener('click', runPersonSearch);
+if (btnPersonReport) btnPersonReport.addEventListener('click', () => showPersonAnalysis('report'));
+if (btnPersonGraph) btnPersonGraph.addEventListener('click', () => showPersonAnalysis('graph'));
+if (btnPersonGalleryExport) btnPersonGalleryExport.addEventListener('click', () => {
+  if (selectedPersonId) window.location.assign(`${API_BASE}/api/exports/person-gallery?personId=${encodeURIComponent(selectedPersonId)}&format=json`);
+});
 if (personDepth) personDepth.addEventListener('change', previewPersonPlan);
 if (personRuleForm) personRuleForm.addEventListener('submit', savePersonRule);
+let personGalleryFilterTimer = null;
+[personGalleryQuery, personGalleryType, personGalleryStatus, personGallerySort].forEach(control => {
+  if (!control) return;
+  control.addEventListener(control === personGalleryQuery ? 'input' : 'change', () => {
+    clearTimeout(personGalleryFilterTimer);
+    personGalleryFilterTimer = setTimeout(() => void loadPersonGallery(), control === personGalleryQuery ? 250 : 0);
+  });
+});
+
+function createSearchAbortError() {
+  return new DOMException('Recherche annulée', 'AbortError');
+}
+
+function isSearchAbort(error, signal) {
+  return signal?.aborted === true || error?.name === 'AbortError';
+}
+
+function isActiveSearch(token, signal) {
+  return token === activeSearchToken && signal?.aborted !== true;
+}
+
+function assertActiveSearch(token, signal) {
+  if (!isActiveSearch(token, signal)) throw createSearchAbortError();
+}
+
+function setSearchRunningState(running) {
+  searchForm?.setAttribute('aria-busy', running ? 'true' : 'false');
+  btnCancelSearch?.classList.toggle('hidden', !running);
+  if (btnSearchSubmit) btnSearchSubmit.title = running ? 'Annuler la recherche active ou lancer une nouvelle recherche' : 'Lancer la recherche';
+}
+
+function beginSearchSession() {
+  activeSearchController?.abort();
+  refreshSearchController?.abort();
+  refreshSearchController = null;
+  const controller = new AbortController();
+  const token = activeSearchToken + 1;
+  activeSearchToken = token;
+  activeSearchController = controller;
+  setSearchRunningState(true);
+  return { controller, token };
+}
+
+function cancelActiveSearch() {
+  const hadActiveSearch = Boolean(activeSearchController && !activeSearchController.signal.aborted);
+  activeSearchToken += 1;
+  activeSearchController?.abort();
+  refreshSearchController?.abort();
+  activeSearchController = null;
+  refreshSearchController = null;
+  setSearchRunningState(false);
+  document.querySelectorAll('.source-status-dot.loading').forEach(dot => {
+    dot.className = 'source-status-dot idle';
+    dot.title = 'Recherche annulée';
+  });
+  if (hadActiveSearch) {
+    addConsoleLog('Recherche annulée. Les résultats déjà reçus sont conservés.', 'warning');
+    applyFilters();
+  }
+}
+
+function abortableDelay(delay, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(createSearchAbortError());
+    const handleAbort = () => {
+      clearTimeout(timeoutId);
+      reject(createSearchAbortError());
+    };
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    }, delay);
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
+}
+
+if (btnCancelSearch) btnCancelSearch.addEventListener('click', cancelActiveSearch);
 
 function getCurrentSearchConfig() {
   const checkedSources = [];
@@ -1054,8 +1540,12 @@ function startAutoRefresh(options = {}) {
 }
 
 async function runRefreshSearch() {
-  if (!lastSearchConfig || refreshInProgress) return;
+  if (!lastSearchConfig || refreshInProgress || activeSearchController) return;
   refreshInProgress = true;
+  const refreshController = new AbortController();
+  refreshSearchController = refreshController;
+  const refreshToken = activeSearchToken;
+  const { signal } = refreshController;
   refreshCycleCount += 1;
 
   const beforeImages = allImages.length;
@@ -1069,22 +1559,28 @@ async function runRefreshSearch() {
     addConsoleLog(`[REFRESH] Cycle ${refreshCycleCount} sur "${config.query}"...`, 'info');
     for (const source of serverSources) {
       try {
-        const response = await fetch(buildSearchUrl(config, source));
+        assertActiveSearch(refreshToken, signal);
+        const response = await fetch(buildSearchUrl(config, source), { signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
+        assertActiveSearch(refreshToken, signal);
         mergeSearchData(data);
         if (data.status?.[source]) logSourceStatus(source, data.status[source]);
       } catch (error) {
+        if (isSearchAbort(error, signal)) throw error;
         addConsoleLog(`[REFRESH:${source.toUpperCase()}] ${error.message}`, 'warning');
       }
     }
 
     if (queryWayback && refreshCycleCount % 3 === 0) {
       addConsoleLog('[REFRESH:WAYBACK] Scan Wayback espacé pour limiter les appels.', 'info');
-      const hostResponse = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(config.query)}&risk=${encodeURIComponent(config.riskMode)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}`);
+      const hostResponse = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(config.query)}&risk=${encodeURIComponent(config.riskMode)}&safe=${config.safeSearch}&adultConfirmed=${config.adultConfirmed === true}`, { signal });
       const hostData = hostResponse.ok ? await hostResponse.json() : { domains: [] };
       const extractedDomains = extractTargetDomains((hostData.domains || []).map(domain => ({ url: `https://${domain}/` })), config.query);
-      const waybackData = await fetchWaybackMachineCDX(config.query, extractedDomains, (partialData) => mergeSearchData(partialData));
+      const waybackData = await fetchWaybackMachineCDX(config.query, extractedDomains, (partialData) => {
+        if (isActiveSearch(refreshToken, signal)) mergeSearchData(partialData);
+      }, signal);
+      assertActiveSearch(refreshToken, signal);
       mergeSearchData(waybackData);
     }
 
@@ -1092,10 +1588,13 @@ async function runRefreshSearch() {
     const addedVideos = allVideos.length - beforeVideos;
     addConsoleLog(`[REFRESH] Fin du cycle : +${Math.max(addedImages, 0)} photos, +${Math.max(addedVideos, 0)} vidéos.`, addedImages || addedVideos ? 'success' : 'info');
   } catch (error) {
-    addConsoleLog(`[REFRESH] Erreur : ${error.message}`, 'error');
+    if (!isSearchAbort(error, signal)) addConsoleLog(`[REFRESH] Erreur : ${error.message}`, 'error');
   } finally {
-    lastSearchConfig.lastRefreshAt = refreshStartedAt;
-    await persistCurrentSearchSnapshot();
+    if (isActiveSearch(refreshToken, signal) && lastSearchConfig?.query === config.query) {
+      lastSearchConfig.lastRefreshAt = refreshStartedAt;
+      await persistCurrentSearchSnapshot();
+    }
+    if (refreshSearchController === refreshController) refreshSearchController = null;
     refreshInProgress = false;
   }
 }
@@ -1281,6 +1780,26 @@ function updateSourceDiagnostics(data) {
       updatedAt: new Date().toISOString()
     };
   });
+}
+
+function recordSourceFetchError(source, error) {
+  sourceDiagnostics[source] = {
+    success: false,
+    skipped: false,
+    adapter: '',
+    note: error?.message || String(error || 'Erreur réseau'),
+    zeroReason: 'fetch-error',
+    imagesCount: 0,
+    videosCount: 0,
+    pagesDiscovered: 0,
+    pagesCrawled: 0,
+    directReachable: false,
+    fallbackUsed: false,
+    available: false,
+    fetchError: true,
+    updatedAt: new Date().toISOString()
+  };
+  renderInsights();
 }
 
 function normalizeAliasKey(value) {
@@ -1669,14 +2188,14 @@ function mergeHistoryEntries(...lists) {
   return rows.slice(0, 200);
 }
 
-async function recordCompletedSearch() {
+async function recordCompletedSearch(config = lastSearchConfig, counts = {}, signal = null) {
   const fallback = {
     id: `local-${Date.now()}`,
-    query: currentSearchQuery,
-    sources: lastSearchConfig?.checkedSources || [],
-    imagesCount: allImages.length,
-    videosCount: allVideos.length,
-    options: lastSearchConfig,
+    query: config?.query || currentSearchQuery,
+    sources: config?.checkedSources || [],
+    imagesCount: Number(counts.imagesCount ?? allImages.length),
+    videosCount: Number(counts.videosCount ?? allVideos.length),
+    options: config,
     createdAt: new Date().toISOString(),
     localOnly: true
   };
@@ -1685,10 +2204,12 @@ async function recordCompletedSearch() {
     const response = await fetch(`${API_BASE}/api/history`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...fallback, id: undefined, localOnly: undefined })
+      body: JSON.stringify({ ...fallback, id: undefined, localOnly: undefined }),
+      signal
     });
     if (response.ok) item = await response.json();
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw createSearchAbortError();
     // The browser copy remains durable for this device.
   }
   searchHistory = mergeHistoryEntries([item], searchHistory);
@@ -1777,6 +2298,68 @@ function renderBatchQueue() {
   lucide.createIcons();
 }
 
+function updateBatchControls() {
+  const active = Boolean(activeBatchJobId) && !['done', 'cancelled'].includes(activeBatchJob?.status);
+  btnBatchRun?.classList.toggle('hidden', active);
+  btnBatchPause?.classList.toggle('hidden', !active || batchPaused);
+  btnBatchResume?.classList.toggle('hidden', !active || !batchPaused);
+  btnBatchCancel?.classList.toggle('hidden', !active);
+  if (btnBatchClear) btnBatchClear.disabled = active;
+}
+
+function syncBatchQueueFromJob(job) {
+  activeBatchJob = job;
+  const results = job?.results || [];
+  const errors = job?.errors || [];
+  batchQueue.forEach((item, index) => {
+    const result = [...results].reverse().find(entry => entry.query === item.query);
+    const error = [...errors].reverse().find(entry => entry.query === item.query);
+    if (result) item.status = `${result.imagesCount} photos · ${result.videosCount} vidéos`;
+    else if (error) item.status = `erreur: ${error.error}`;
+    else if (index < Number(job?.completed || 0)) item.status = 'terminé';
+    else if (job?.status === 'paused') item.status = 'en pause';
+    else if (job?.status === 'cancelled') item.status = 'annulé';
+    else item.status = `en attente · ${Number(job?.completed || 0)}/${Number(job?.total || batchQueue.length)}`;
+  });
+  renderBatchQueue();
+  updateBatchControls();
+}
+
+async function continueBatchJob(initialAction = 'resume') {
+  if (!activeBatchJobId || batchLoopActive || batchPaused || batchCancelled) return;
+  batchLoopActive = true;
+  let action = initialAction;
+  try {
+    while (activeBatchJobId && !batchPaused && !batchCancelled) {
+      const response = await fetch(`${API_BASE}/api/queue/jobs/${encodeURIComponent(activeBatchJobId)}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxItems: 1 })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      syncBatchQueueFromJob(data.job);
+      if (['done', 'cancelled', 'paused'].includes(data.job?.status)) break;
+      action = 'resume';
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+  } catch (error) {
+    batchQueue.forEach(item => {
+      if (/en attente|en cours/.test(item.status || '')) item.status = `erreur: ${error.message}`;
+    });
+    addConsoleLog(`[BATCH] Traitement interrompu : ${error.message}`, 'error');
+    renderBatchQueue();
+  } finally {
+    batchLoopActive = false;
+    if (['done', 'cancelled'].includes(activeBatchJob?.status) || batchCancelled) {
+      activeBatchJobId = null;
+      batchPaused = false;
+      batchCancelled = false;
+    }
+    updateBatchControls();
+  }
+}
+
 async function runBatchQueue() {
   if (batchQueue.length === 0) return;
   const config = getCurrentSearchConfig();
@@ -1790,20 +2373,45 @@ async function runBatchQueue() {
     });
     const job = await createResponse.json();
     if (!createResponse.ok) throw new Error(job.error || `HTTP ${createResponse.status}`);
-    batchQueue.forEach(item => { item.status = 'en cours'; });
-    renderBatchQueue();
-    const startResponse = await fetch(`${API_BASE}/api/queue/jobs/${encodeURIComponent(job.id)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const result = await startResponse.json();
-    if (!startResponse.ok) throw new Error(result.error || `HTTP ${startResponse.status}`);
-    const rows = result.job?.results || [];
-    batchQueue.forEach(item => {
-      const row = rows.find(entry => entry.query === item.query);
-      item.status = row ? `${row.imagesCount} photos · ${row.videosCount} vidéos` : 'terminé sans résultat';
-    });
+    activeBatchJobId = job.id;
+    activeBatchJob = job;
+    batchPaused = false;
+    batchCancelled = false;
+    syncBatchQueueFromJob(job);
+    await continueBatchJob('start');
   } catch (error) {
     batchQueue.forEach(item => { if (item.status === 'en cours' || item.status === 'en attente serveur') item.status = `erreur: ${error.message}`; });
   }
   renderBatchQueue();
+}
+
+async function setBatchJobAction(action) {
+  if (!activeBatchJobId) return;
+  if (action === 'resume') {
+    batchPaused = false;
+    updateBatchControls();
+    await continueBatchJob('resume');
+    return;
+  }
+  if (action === 'pause') batchPaused = true;
+  if (action === 'cancel') batchCancelled = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/queue/jobs/${encodeURIComponent(activeBatchJobId)}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    syncBatchQueueFromJob(data.job);
+    if (action === 'cancel') activeBatchJobId = null;
+  } catch (error) {
+    addConsoleLog(`[BATCH] Action ${action} impossible : ${error.message}`, 'error');
+    if (action === 'pause') batchPaused = false;
+    if (action === 'cancel') batchCancelled = false;
+  } finally {
+    updateBatchControls();
+  }
 }
 
 async function saveMonitor() {
@@ -1887,12 +2495,10 @@ function mergeSearchData(data, options = {}) {
   updateAliases(data);
   allImages = dedupeMedia([...allImages, ...prepareMediaItems(data.images || [])]).sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
   allVideos = dedupeMedia([...allVideos, ...prepareMediaItems(data.videos || [])]).sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-  filteredImages = [...allImages];
-  filteredVideos = [...allVideos];
   statsBar.classList.remove('hidden');
   registerDetectedAccounts(data);
   renderInsights();
-  renderMedia();
+  applyFilters();
   logFilterDiagnostics(data);
   void enrichPerceptualHashes();
   if (!options.skipSnapshot) scheduleSearchSnapshotSave();
@@ -2100,7 +2706,7 @@ function extractTargetDomains(mediaList, query) {
 }
 
 // Fetch Wayback Machine CDX files directly from browser (bypasses sandbox firewall)
-async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = null) {
+async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = null, signal = null) {
   const domainsToQuery = [...new Set(extractedDomains)].slice(0, 12);
 
   if (domainsToQuery.length > 0) {
@@ -2110,8 +2716,9 @@ async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = 
   }
   const domainResults = [];
   for (let i = 0; i < domainsToQuery.length; i += 2) {
+    if (signal?.aborted) throw createSearchAbortError();
     const batch = domainsToQuery.slice(i, i + 2);
-    const batchResults = await Promise.all(batch.map(domain => fetchWaybackDomainCDX(domain, query)));
+    const batchResults = await Promise.all(batch.map(domain => fetchWaybackDomainCDX(domain, query, signal)));
     domainResults.push(...batchResults);
     if (onPartial) {
       const partialImages = dedupeMedia(batchResults.flatMap(result => result.images));
@@ -2121,7 +2728,7 @@ async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = 
       }
     }
   }
-  const archiveResults = await fetchWaybackArchiveSearch(query);
+  const archiveResults = await fetchWaybackArchiveSearch(query, signal);
   const images = dedupeMedia([...domainResults.flatMap(result => result.images), ...archiveResults.images]);
   const videos = dedupeMedia([...domainResults.flatMap(result => result.videos), ...archiveResults.videos]);
   const scannedDomains = domainResults.filter(result => result.scanned).length;
@@ -2129,18 +2736,23 @@ async function fetchWaybackMachineCDX(query, extractedDomains = [], onPartial = 
   return { images, videos, success: scannedDomains > 0 || images.length > 0 || videos.length > 0, scannedDomains, domains: domainsToQuery };
 }
 
-async function fetchWaybackJson(url, timeoutMs = 8000) {
+async function fetchWaybackJson(url, timeoutMs = 8000, parentSignal = null) {
+  if (parentSignal?.aborted) throw createSearchAbortError();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const relayAbort = () => controller.abort();
+  parentSignal?.addEventListener('abort', relayAbort, { once: true });
   try {
     const targetUrl = url.startsWith('/api/') ? `${API_BASE}${url}` : url;
     const response = await fetch(targetUrl, { signal: controller.signal });
     if (!response.ok) return null;
     return await response.json();
   } catch (error) {
+    if (parentSignal?.aborted) throw createSearchAbortError();
     return null;
   } finally {
     clearTimeout(timeoutId);
+    parentSignal?.removeEventListener('abort', relayAbort);
   }
 }
 
@@ -2187,48 +2799,57 @@ function buildWaybackRows(data, domain, type) {
   }).filter(Boolean);
 }
 
-async function discoverWaybackHostsFrontend(query, riskMode) {
+async function discoverWaybackHostsFrontend(query, riskMode, parentSignal = null) {
   const safeSearch = safeSearchToggle ? safeSearchToggle.checked : true;
   const adultConfirmed = adultConfirmedToggle?.checked === true;
+  if (parentSignal?.aborted) throw createSearchAbortError();
   try {
     // Try browser-direct first
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const relayAbort = () => controller.abort();
+    parentSignal?.addEventListener('abort', relayAbort, { once: true });
     addConsoleLog(`[WAYBACK] Recherche directe d'archives pour "${query}"...`, 'info');
-    const res = await fetch(`https://web.archive.org/__wb/search/host?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      const hosts = data?.hosts || [];
-      const domains = hosts.map(host => {
-        const domain = String(host.display_name || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
-        return (domain && domain.includes('.')) ? domain : null;
-      }).filter(Boolean);
-      if (domains.length > 0) {
-        const uniqueDomains = [...new Set(domains)].slice(0, 10);
-        addConsoleLog(`[WAYBACK] Domaines découverts (Direct) : ${uniqueDomains.join(', ')}`, 'success');
-        return uniqueDomains;
+    try {
+      const res = await fetch(`https://web.archive.org/__wb/search/host?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json();
+        const hosts = data?.hosts || [];
+        const domains = hosts.map(host => {
+          const domain = String(host.display_name || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
+          return (domain && domain.includes('.')) ? domain : null;
+        }).filter(Boolean);
+        if (domains.length > 0) {
+          const uniqueDomains = [...new Set(domains)].slice(0, 10);
+          addConsoleLog(`[WAYBACK] Domaines découverts (Direct) : ${uniqueDomains.join(', ')}`, 'success');
+          return uniqueDomains;
+        }
       }
+    } finally {
+      clearTimeout(timeoutId);
+      parentSignal?.removeEventListener('abort', relayAbort);
     }
   } catch (err) {
+    if (parentSignal?.aborted) throw createSearchAbortError();
     console.log("Direct browser host search failed/CORS restricted, falling back to server...", err.message);
   }
   
   // Fallback to server endpoint
   try {
     addConsoleLog(`[WAYBACK] Recherche d'archives via le serveur...`, 'info');
-    const res = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}&safe=${safeSearch}&adultConfirmed=${adultConfirmed}`);
+    const res = await fetch(`${API_BASE}/api/wayback/hosts?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}&safe=${safeSearch}&adultConfirmed=${adultConfirmed}`, { signal: parentSignal });
     if (res.ok) {
       const data = await res.json();
       return data.domains || [];
     }
   } catch (err) {
+    if (parentSignal?.aborted) throw createSearchAbortError();
     console.warn("Server host search failed:", err.message);
   }
   return [];
 }
 
-async function fetchWaybackDomainCDX(domain, query) {
+async function fetchWaybackDomainCDX(domain, query, signal = null) {
   const result = { domain, images: [], videos: [], scanned: false };
   const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
   
@@ -2254,8 +2875,8 @@ async function fetchWaybackDomainCDX(domain, query) {
     const vidUrl = makeUrl(target, 'video', 250);
     
     const [imgData, vidData] = await Promise.all([
-      fetchWaybackJson(imgUrl, 15000),
-      fetchWaybackJson(vidUrl, 15000)
+      fetchWaybackJson(imgUrl, 15000, signal),
+      fetchWaybackJson(vidUrl, 15000, signal)
     ]);
     
     const parsedImages = buildWaybackRows(imgData, domain, 'image');
@@ -2269,13 +2890,14 @@ async function fetchWaybackDomainCDX(domain, query) {
       return result;
     }
   } catch (err) {
+    if (signal?.aborted) throw createSearchAbortError();
     console.log(`Direct browser CDX fetch failed for ${domain}, trying server fallback...`, err.message);
   }
   
   // 2. Fallback to server endpoint
   try {
     addConsoleLog(`[WAYBACK] Scan via serveur pour ${domain}...`, 'info');
-    const data = await fetchWaybackJson(`/api/wayback/cdx?domain=${encodeURIComponent(domain)}&q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 35000);
+    const data = await fetchWaybackJson(`/api/wayback/cdx?domain=${encodeURIComponent(domain)}&q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 35000, signal);
     if (data) {
       result.images.push(...(data.images || []));
       result.videos.push(...(data.videos || []));
@@ -2283,13 +2905,14 @@ async function fetchWaybackDomainCDX(domain, query) {
       addConsoleLog(`[WAYBACK] Scan serveur réussi pour ${domain} : ${result.images.length} images, ${result.videos.length} vidéos.`, 'success');
     }
   } catch (error) {
+    if (signal?.aborted) throw createSearchAbortError();
     console.error(`Wayback CDX failed for ${domain} via both browser and server:`, error.message);
   }
   
   return result;
 }
 
-async function fetchWaybackArchiveSearch(query) {
+async function fetchWaybackArchiveSearch(query, signal = null) {
   const result = { images: [], videos: [] };
   const riskMode = safetyRiskMode ? safetyRiskMode.value : 'cautious';
   addConsoleLog(`[WAYBACK] Recherche collections Archive.org pour "${query}"...`, 'info');
@@ -2297,7 +2920,7 @@ async function fetchWaybackArchiveSearch(query) {
   // 1. Try browser-direct first
   try {
     const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}+AND+(mediatype:image+OR+mediatype:movies)&fl[]=identifier,title,mediatype,mimetype&rows=50&output=json`;
-    const data = await fetchWaybackJson(searchUrl, 10000);
+    const data = await fetchWaybackJson(searchUrl, 10000, signal);
     const docs = data?.response?.docs || [];
     docs.forEach(doc => {
       if (!doc.identifier) return;
@@ -2329,17 +2952,19 @@ async function fetchWaybackArchiveSearch(query) {
       return result;
     }
   } catch (err) {
+    if (signal?.aborted) throw createSearchAbortError();
     console.log("Direct archive.org collection search failed, trying server fallback...", err.message);
   }
   
   // 2. Fallback to server endpoint
   try {
-    const data = await fetchWaybackJson(`/api/archive/search?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 12000);
+    const data = await fetchWaybackJson(`/api/archive/search?q=${encodeURIComponent(query)}&risk=${encodeURIComponent(riskMode)}`, 12000, signal);
     if (data) {
       result.images.push(...(data.images || []));
       result.videos.push(...(data.videos || []));
     }
   } catch (err) {
+    if (signal?.aborted) throw createSearchAbortError();
     console.warn("Server archive collection search failed:", err.message);
   }
   return result;
@@ -2356,7 +2981,6 @@ async function runSearchWithCurrentControls(options = {}) {
   const parentSearchConfig = appendResults && lastSearchConfig
     ? { ...lastSearchConfig, query: parentQuery }
     : null;
-  currentSearchQuery = query;
   
   // Read checked sources
   const checkedSources = [];
@@ -2391,7 +3015,10 @@ async function runSearchWithCurrentControls(options = {}) {
   const typeVal = document.getElementById('filter-type').value;
   const colorVal = '';
   stopAutoRefresh();
-  lastSearchConfig = {
+  const { controller, token } = beginSearchSession();
+  const { signal } = controller;
+  currentSearchQuery = query;
+  const searchConfig = {
     query,
     checkedSources,
     safeSearch,
@@ -2408,9 +3035,11 @@ async function runSearchWithCurrentControls(options = {}) {
     colorVal
   };
   if (appendResults) {
-    lastSearchConfig.append = true;
-    lastSearchConfig.parentQuery = parentQuery;
+    searchConfig.append = true;
+    searchConfig.parentQuery = parentQuery;
   }
+  searchConfigGuards.set(searchConfig, () => isActiveSearch(token, signal));
+  lastSearchConfig = searchConfig;
   
   statusConsoleWrapper.classList.remove('hidden');
   addConsoleLog(`Initialisation de la recherche pour : "${query}"`, 'info');
@@ -2434,6 +3063,7 @@ async function runSearchWithCurrentControls(options = {}) {
   
   // Reset counts only for a replacement search. Alias merge keeps the current workspace.
   if (!appendResults) {
+    setShowingFavorites(false, { log: false, render: false });
     allImages = [];
     allVideos = [];
     filteredImages = [];
@@ -2453,24 +3083,27 @@ async function runSearchWithCurrentControls(options = {}) {
     document.getElementById('source-filter').value = 'all';
   }
 
-  const restoredSnapshot = await restoreSearchSnapshot(lastSearchConfig);
-  if (restoredSnapshot.images || restoredSnapshot.videos) {
-    addConsoleLog(`[CACHE LOCAL] ${restoredSnapshot.images} photos et ${restoredSnapshot.videos} vidéos restaurées pendant la recherche des nouveautés.`, 'success');
-  }
-  
   let serverData = { images: [], videos: [], status: {} };
   let waybackData = { images: [], videos: [], success: false };
   let domainSeedData = { images: [], videos: [] };
   
   try {
+    const restoredSnapshot = await restoreSearchSnapshot(lastSearchConfig);
+    assertActiveSearch(token, signal);
+    if (restoredSnapshot.images || restoredSnapshot.videos) {
+      addConsoleLog(`[CACHE LOCAL] ${restoredSnapshot.images} photos et ${restoredSnapshot.videos} vidéos restaurées pendant la recherche des nouveautés.`, 'success');
+    }
+
     const sourceQueue = [...serverSources];
     const runServerSource = async (source) => {
       try {
-        const response = await fetch(buildSearchUrl(lastSearchConfig, source));
+        assertActiveSearch(token, signal);
+        const response = await fetch(buildSearchUrl(searchConfig, source), { signal });
         if (!response.ok) {
           throw new Error(`Erreur serveur (${response.status})`);
         }
         const data = await response.json();
+        assertActiveSearch(token, signal);
         serverData.images.push(...(data.images || []));
         serverData.videos.push(...(data.videos || []));
         Object.assign(serverData.status, data.status || {});
@@ -2480,41 +3113,49 @@ async function runSearchWithCurrentControls(options = {}) {
         if (data.status?.[source]) {
           logSourceStatus(source, data.status[source]);
         } else {
-          logSourceStatus(source, { success: false, error: 'aucun statut retourné' });
+          const missingStatusError = new Error('Aucun statut retourné');
+          recordSourceFetchError(source, missingStatusError);
+          logSourceStatus(source, { success: false, error: missingStatusError.message });
         }
       } catch (sourceError) {
+        if (isSearchAbort(sourceError, signal)) throw sourceError;
+        recordSourceFetchError(source, sourceError);
         logSourceStatus(source, { success: false, error: sourceError.message });
       }
     };
     const workerCount = Math.min(sourceQueue.length, riskMode === 'balanced' ? 3 : 1);
     const serverTasks = Array.from({ length: workerCount }, async () => {
       while (sourceQueue.length > 0) {
+        assertActiveSearch(token, signal);
         const source = sourceQueue.shift();
         await runServerSource(source);
         if (riskMode !== 'balanced' && sourceQueue.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await abortableDelay(500, signal);
         }
       }
     });
 
     let waybackHostDomains = [];
     if (queryWayback) {
-      waybackHostDomains = await discoverWaybackHostsFrontend(query, riskMode);
+      waybackHostDomains = await discoverWaybackHostsFrontend(query, riskMode, signal);
+      assertActiveSearch(token, signal);
     }
 
     if (queryWayback && serverTasks.length > 0) {
       await Promise.race([
         Promise.allSettled(serverTasks),
-        new Promise(resolve => setTimeout(resolve, 2500))
+        abortableDelay(2500, signal)
       ]);
+      assertActiveSearch(token, signal);
     }
 
     if (queryWayback && (domainSeedData.images.length + domainSeedData.videos.length === 0)) {
       addConsoleLog('[WAYBACK] Découverte de domaines complémentaires...', 'info');
-      const seedResponse = await fetch(buildSearchUrl(lastSearchConfig, 'duckduckgo,wikimedia'));
+      const seedResponse = await fetch(buildSearchUrl(searchConfig, 'duckduckgo,wikimedia'), { signal });
       if (seedResponse.ok) {
         domainSeedData = await seedResponse.json();
       }
+      assertActiveSearch(token, signal);
     }
     
     // 2. Fetch Wayback Machine CDX in frontend
@@ -2532,20 +3173,31 @@ async function runSearchWithCurrentControls(options = {}) {
           ], query)
         : [];
       waybackData = await fetchWaybackMachineCDX(query, extractedDomains, (partialData) => {
-        mergeSearchData(partialData);
-      });
+        if (isActiveSearch(token, signal)) mergeSearchData(partialData);
+      }, signal);
+      assertActiveSearch(token, signal);
       mergeSearchData(waybackData);
     }
 
     await Promise.allSettled(serverTasks);
+    assertActiveSearch(token, signal);
     addConsoleLog('=== BILAN DE L\'ASPIRATION ===', 'info');
     
     if (queryWayback) {
       if (waybackData.success) {
         updateSourceStatusDot('wayback', 'success');
+        updateSourceDiagnostics({ status: { wayback: {
+          success: true,
+          adapter: 'wayback-cdx',
+          imagesCount: waybackData.images.length,
+          videosCount: waybackData.videos.length,
+          pagesDiscovered: waybackData.domains?.length || 0,
+          pagesCrawled: waybackData.scannedDomains || 0
+        } } });
         addConsoleLog(`[WAYBACK] Succès : ${waybackData.images.length} photos, ${waybackData.videos.length} vidéos trouvées.`, 'success');
       } else {
         updateSourceStatusDot('wayback', 'error');
+        recordSourceFetchError('wayback', new Error('Échec de la récupération CDX'));
         addConsoleLog(`[WAYBACK] Échec de la récupération CDX.`, 'error');
       }
     }
@@ -2555,44 +3207,62 @@ async function runSearchWithCurrentControls(options = {}) {
       renderMedia();
     }
 
+    assertActiveSearch(token, signal);
     addConsoleLog(`Aspiration terminée. Total: ${allImages.length} photos, ${allVideos.length} vidéos.`, 'success');
-    await persistCurrentSearchSnapshot();
-    await recordCompletedSearch();
+    await persistCurrentSearchSnapshot(searchConfig);
+    assertActiveSearch(token, signal);
+    await recordCompletedSearch(searchConfig, {
+      imagesCount: allImages.length,
+      videosCount: allVideos.length
+    }, signal);
+    assertActiveSearch(token, signal);
     await refreshSearchHistory();
+    assertActiveSearch(token, signal);
     if (options.monitorId) {
       const monitor = savedMonitors.find(item => item.id === options.monitorId);
       if (monitor) {
         monitor.lastRunAt = new Date().toISOString();
         monitor.lastImages = allImages.length;
         monitor.lastVideos = allVideos.length;
-        monitor.config = lastSearchConfig;
-        await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(monitor.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor) });
+        monitor.config = searchConfig;
+        await fetch(`${API_BASE}/api/monitors/${encodeURIComponent(monitor.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monitor), signal });
         localStorage.setItem('mediagatherer_monitors', JSON.stringify(savedMonitors));
         renderMonitors();
       }
     }
     
   } catch (error) {
+    if (isSearchAbort(error, signal)) return;
     const networkHint = error instanceof TypeError || /NetworkError|Failed to fetch|fetch resource/i.test(error.message || '')
       ? ' Impossible de joindre le serveur local. Lancez "npm start" puis ouvrez http://localhost:3000.'
       : '';
     addConsoleLog(`Erreur lors de la recherche : ${error.message}.${networkHint}`, 'error');
     checkedSources.forEach(src => {
-      updateSourceStatusDot(src, 'error');
+      if (!sourceDiagnostics[src]) {
+        recordSourceFetchError(src, error);
+        updateSourceStatusDot(src, 'error');
+      }
     });
-    if (!appendResults) {
+    if (!appendResults && allImages.length === 0 && allVideos.length === 0) {
       imagesGrid.innerHTML = '';
       videosGrid.innerHTML = '';
       renderEmptyState(imagesGrid, 'image');
       renderEmptyState(videosGrid, 'video');
+    } else {
+      applyFilters();
     }
   } finally {
-    if (appendResults) {
+    const supersededByNewSearch = Boolean(activeSearchController && activeSearchController !== controller);
+    if (appendResults && !supersededByNewSearch) {
       currentSearchQuery = parentQuery;
       searchInput.value = parentQuery;
       if (parentSearchConfig) lastSearchConfig = parentSearchConfig;
       scheduleSearchSnapshotSave(0);
       renderInsights();
+    }
+    if (activeSearchController === controller) {
+      activeSearchController = null;
+      setSearchRunningState(false);
     }
   }
 }
@@ -2756,32 +3426,33 @@ function mediaSourceId(item) {
 // LIVE FILTERING LOGIC
 // ----------------------------------------------------
 // Combined Filter Logic (Text Search + Dedicated Source Dropdown)
+function isVideoMediaItem(item = {}) {
+  return String(item.type || '').toLowerCase() === 'video'
+    || Boolean(item.duration || item.embedUrl || item.playback);
+}
+
+function currentFilterBase() {
+  if (!showingFavorites) return { images: allImages, videos: allVideos };
+  return {
+    images: favorites.filter(item => !isVideoMediaItem(item)),
+    videos: favorites.filter(item => isVideoMediaItem(item))
+  };
+}
+
 function applyFilters() {
   const textTerm = filterInput.value.toLowerCase().trim();
   const sourceTerm = document.getElementById('source-filter').value.toLowerCase().trim();
-  
-  // Filter Images
-  filteredImages = allImages.filter(img => {
-    const matchesText = !textTerm || 
-      (img.title && img.title.toLowerCase().includes(textTerm)) || 
-      (img.source && img.source.toLowerCase().includes(textTerm));
-      
-    const matchesSource = sourceTerm === 'all' || mediaSourceId(img) === sourceTerm;
-      
+  const base = currentFilterBase();
+  const matchesActiveFilters = item => {
+    const searchableText = `${item.title || ''} ${item.source || ''}`.toLowerCase();
+    const matchesText = !textTerm || searchableText.includes(textTerm);
+    const matchesSource = sourceTerm === 'all' || mediaSourceId(item) === sourceTerm;
     return matchesText && matchesSource;
-  });
+  };
 
-  // Filter Videos
-  filteredVideos = allVideos.filter(vid => {
-    const matchesText = !textTerm || 
-      (vid.title && vid.title.toLowerCase().includes(textTerm)) || 
-      (vid.source && vid.source.toLowerCase().includes(textTerm));
-      
-    const matchesSource = sourceTerm === 'all' || mediaSourceId(vid) === sourceTerm;
-      
-    return matchesText && matchesSource;
-  });
-  
+  filteredImages = base.images.filter(matchesActiveFilters);
+  filteredVideos = base.videos.filter(matchesActiveFilters);
+
   renderMedia();
 }
 
@@ -2791,12 +3462,26 @@ document.getElementById('source-filter').addEventListener('change', applyFilters
 // ----------------------------------------------------
 // LIGHTBOX MODAL OPERATION
 // ----------------------------------------------------
+function isOpenModal(modal) {
+  return Boolean(modal && !modal.classList.contains('hidden'));
+}
+
+function validModalTrigger(trigger, modal) {
+  return trigger instanceof HTMLElement && trigger.isConnected && !modal?.contains(trigger);
+}
+
+function restoreModalFocus(trigger) {
+  if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
+}
+
 function openLightbox(img, trigger = document.activeElement) {
   const imageUrl = safeHttpUrl(img.url);
   if (!imageUrl) return;
-  lastModalTrigger = trigger;
+  if (validModalTrigger(trigger, lightbox)) lastLightboxTrigger = trigger;
   lightboxImg.src = imageUrl;
-  lightboxTitle.textContent = img.title || 'Sans titre';
+  const accessibleTitle = img.title || 'Image sans titre';
+  lightboxTitle.textContent = accessibleTitle;
+  lightboxImg.alt = accessibleTitle;
   lightboxSource.textContent = img.source;
   
   if (img.width && img.height) {
@@ -2839,10 +3524,15 @@ function openLightbox(img, trigger = document.activeElement) {
   lightbox.focus();
 }
 
-function closeLightbox() {
+function closeLightbox(restoreFocus = true) {
+  if (!isOpenModal(lightbox)) return false;
   lightbox.classList.add('hidden');
   lightboxImg.src = '';
-  if (lastModalTrigger?.focus) lastModalTrigger.focus();
+  lightboxImg.alt = 'Aperçu de l\'image sélectionnée';
+  const trigger = lastLightboxTrigger;
+  lastLightboxTrigger = null;
+  if (restoreFocus) restoreModalFocus(trigger);
+  return true;
 }
 
 lightboxClose.addEventListener('click', closeLightbox);
@@ -2857,11 +3547,17 @@ lightbox.addEventListener('click', (e) => {
 // ----------------------------------------------------
 function openVideoModal(vid, trigger = document.activeElement) {
   const videoUrl = safeHttpUrl(vid.url);
-  const embedUrl = safeHttpUrl(vid.embedUrl);
+  const candidateEmbedUrl = safeHttpUrl(vid.embedUrl);
+  const trustedEmbedDomains = ['youtube.com', 'youtube-nocookie.com', 'vimeo.com', 'dailymotion.com', 'redgifs.com', 'eporner.com'];
+  let embedUrl = '';
+  try {
+    const hostname = new URL(candidateEmbedUrl).hostname.replace(/^www\./, '');
+    if (trustedEmbedDomains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`))) embedUrl = candidateEmbedUrl;
+  } catch {}
   const sourcePageUrl = safeHttpUrl(vid.link) || videoUrl;
   const directVideo = /\.(?:mp4|webm|m3u8|mov)(?:[?#]|$)/i.test(videoUrl);
   const externalPlayback = vid.playback === 'external' || (videoUrl && !directVideo && !embedUrl);
-  lastModalTrigger = trigger;
+  if (validModalTrigger(trigger, videoModal)) lastVideoModalTrigger = trigger;
   videoTitle.textContent = vid.title || 'Sans titre';
   videoSource.textContent = vid.source;
   videoDuration.textContent = vid.duration || 'Inconnue';
@@ -2874,7 +3570,9 @@ function openVideoModal(vid, trigger = document.activeElement) {
     const iframe = document.createElement('iframe');
     const separator = embedUrl.includes('?') ? '&' : '?';
     iframe.src = `${embedUrl}${separator}autoplay=1`;
+    iframe.title = `Lecture vidéo : ${vid.title || 'vidéo sans titre'}`;
     iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-presentation';
     iframe.allowFullscreen = true;
     videoPlayerContainer.appendChild(iframe);
   } else if (videoUrl && !externalPlayback) {
@@ -2910,27 +3608,31 @@ function openVideoModal(vid, trigger = document.activeElement) {
   
   if (currentVideoIndex <= 0) {
     btnPrev.classList.add('disabled');
+    btnPrev.disabled = true;
   } else {
     btnPrev.classList.remove('disabled');
+    btnPrev.disabled = false;
   }
   
   if (currentVideoIndex === -1 || currentVideoIndex >= filteredVideos.length - 1) {
     btnNext.classList.add('disabled');
+    btnNext.disabled = true;
   } else {
     btnNext.classList.remove('disabled');
+    btnNext.disabled = false;
   }
   
   btnPrev.onclick = (e) => {
     e.stopPropagation();
     if (currentVideoIndex > 0) {
-      openVideoModal(filteredVideos[currentVideoIndex - 1]);
+      openVideoModal(filteredVideos[currentVideoIndex - 1], lastVideoModalTrigger);
     }
   };
   
   btnNext.onclick = (e) => {
     e.stopPropagation();
     if (currentVideoIndex < filteredVideos.length - 1) {
-      openVideoModal(filteredVideos[currentVideoIndex + 1]);
+      openVideoModal(filteredVideos[currentVideoIndex + 1], lastVideoModalTrigger);
     }
   };
   
@@ -2938,10 +3640,14 @@ function openVideoModal(vid, trigger = document.activeElement) {
   videoModal.focus();
 }
 
-function closeVideoModal() {
+function closeVideoModal(restoreFocus = true) {
+  if (!isOpenModal(videoModal)) return false;
   videoModal.classList.add('hidden');
   videoPlayerContainer.innerHTML = ''; // Stop video and audio instantly
-  if (lastModalTrigger?.focus) lastModalTrigger.focus();
+  const trigger = lastVideoModalTrigger;
+  lastVideoModalTrigger = null;
+  if (restoreFocus) restoreModalFocus(trigger);
+  return true;
 }
 
 videoModalClose.addEventListener('click', closeVideoModal);
@@ -2955,10 +3661,9 @@ videoModal.addEventListener('click', (e) => {
 // KEYBOARD CONTROLS (ESCAPE KEY)
 // ----------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeLightbox();
-    closeVideoModal();
-  }
+  if (e.key !== 'Escape') return;
+  if (isOpenModal(videoModal)) closeVideoModal();
+  else if (isOpenModal(lightbox)) closeLightbox();
 });
 
 // ----------------------------------------------------
@@ -2984,7 +3689,7 @@ async function loadCollection() {
   } catch {
     // Keep offline favorites when the local API is unavailable.
   }
-  renderMedia();
+  applyFilters();
 }
 
 async function toggleFavorite(item, btnEl) {
@@ -3016,52 +3721,30 @@ async function toggleFavorite(item, btnEl) {
     btnEl.title = "Ajouter aux favoris";
     addConsoleLog(`Retiré des favoris : "${item.title}"`, 'info');
     
-    // If currently displaying favorites, re-render immediately
-    if (showingFavorites) {
-      filteredImages = favorites.filter(item => (item.type || '').toLowerCase() !== 'video');
-      filteredVideos = favorites.filter(item => (item.type || '').toLowerCase() === 'video');
-      renderMedia();
-    }
   }
   localStorage.setItem('mediagatherer_favorites', JSON.stringify(favorites));
+  if (showingFavorites) applyFilters();
+  lucide.createIcons();
+}
+
+function setShowingFavorites(showFavorites, options = {}) {
+  showingFavorites = Boolean(showFavorites);
+  if (showingFavorites) {
+    btnToggleFav.classList.add('active');
+    btnToggleFav.innerHTML = '<i data-lucide="heart-off"></i> <span>Résultats</span>';
+    statsBar.classList.remove('hidden');
+    if (options.log !== false) addConsoleLog('Affichage de votre collection de favoris avec les filtres actifs.', 'info');
+  } else {
+    btnToggleFav.classList.remove('active');
+    btnToggleFav.innerHTML = '<i data-lucide="heart"></i> <span>Mes Favoris</span>';
+    if (options.log !== false) addConsoleLog('Retour aux résultats de recherche avec les filtres actifs.', 'info');
+  }
+  if (options.render !== false) applyFilters();
   lucide.createIcons();
 }
 
 btnToggleFav.addEventListener('click', () => {
-  showingFavorites = !showingFavorites;
-  if (showingFavorites) {
-    btnToggleFav.classList.add('active');
-    btnToggleFav.innerHTML = '<i data-lucide="heart-off"></i> <span>Résultats</span>';
-    
-    // Load favorites split into images (no duration) and videos (has duration)
-    filteredImages = favorites.filter(item => (item.type || '').toLowerCase() !== 'video');
-    filteredVideos = favorites.filter(item => (item.type || '').toLowerCase() === 'video');
-    
-    statsBar.classList.remove('hidden');
-    addConsoleLog('Affichage de votre collection de favoris.', 'info');
-  } else {
-    btnToggleFav.classList.remove('active');
-    btnToggleFav.innerHTML = '<i data-lucide="heart"></i> <span>Mes Favoris</span>';
-    
-    // Restore search results
-    const filterTerm = filterInput.value.toLowerCase().trim();
-    if (!filterTerm) {
-      filteredImages = [...allImages];
-      filteredVideos = [...allVideos];
-    } else {
-      filteredImages = allImages.filter(img => 
-        (img.title && img.title.toLowerCase().includes(filterTerm)) ||
-        (img.source && img.source.toLowerCase().includes(filterTerm))
-      );
-      filteredVideos = allVideos.filter(vid => 
-        (vid.title && vid.title.toLowerCase().includes(filterTerm)) ||
-        (vid.source && vid.source.toLowerCase().includes(filterTerm))
-      );
-    }
-    addConsoleLog('Retour aux résultats de recherche.', 'info');
-  }
-  renderMedia();
-  lucide.createIcons();
+  setShowingFavorites(!showingFavorites);
 });
 
 // ----------------------------------------------------
@@ -3243,10 +3926,8 @@ btnDownloadZip.addEventListener('click', async () => {
 if (btnExportJson) {
   btnExportJson.addEventListener('click', async () => {
     const format = exportFormat?.value || 'json';
-    const rows = [
-      ...allImages.map(item => ({ ...item, type: 'image', query: currentSearchQuery })),
-      ...allVideos.map(item => ({ ...item, type: 'video', query: currentSearchQuery }))
-    ];
+    const exportImages = filteredImages.map(item => ({ ...item, type: 'image', query: currentSearchQuery }));
+    const exportVideos = filteredVideos.map(item => ({ ...item, type: 'video', query: currentSearchQuery }));
     const safeName = (currentSearchQuery || 'recherche').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
     const extension = format === 'markdown' ? 'md' : format;
     btnExportJson.disabled = true;
@@ -3254,17 +3935,17 @@ if (btnExportJson) {
       const response = await fetch(`${API_BASE}/api/exports/results?format=${encodeURIComponent(format)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: rows.filter(item => item.type === 'image'), videos: rows.filter(item => item.type === 'video') })
+        body: JSON.stringify({ images: exportImages, videos: exportVideos })
       });
       if (!response.ok) throw new Error(`serveur ${response.status}`);
       saveAs(await response.blob(), `mediagatherer_${safeName}.${extension}`);
-      addConsoleLog(`Export ${format.toUpperCase()} généré : ${allImages.length} photos et ${allVideos.length} vidéos.`, 'success');
+      addConsoleLog(`Export ${format.toUpperCase()} filtré : ${exportImages.length} photos et ${exportVideos.length} vidéos.`, 'success');
     } catch (error) {
       if (format !== 'json') {
         addConsoleLog(`Export ${format.toUpperCase()} indisponible sans le serveur : ${error.message}`, 'error');
         return;
       }
-      const payload = { query: currentSearchQuery, generatedAt: new Date().toISOString(), images: allImages, videos: allVideos, accounts: detectedAccounts };
+      const payload = { query: currentSearchQuery, generatedAt: new Date().toISOString(), images: exportImages, videos: exportVideos, accounts: detectedAccounts };
       saveAs(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `mediagatherer_${safeName}.json`);
       addConsoleLog('Export JSON local généré en mode de secours.', 'info');
     } finally {
@@ -3304,9 +3985,12 @@ if (btnBatchLoad) {
 
 if (btnBatchRun) {
   btnBatchRun.addEventListener('click', () => {
-    runBatchQueue();
+    void runBatchQueue();
   });
 }
+if (btnBatchPause) btnBatchPause.addEventListener('click', () => void setBatchJobAction('pause'));
+if (btnBatchResume) btnBatchResume.addEventListener('click', () => void setBatchJobAction('resume'));
+if (btnBatchCancel) btnBatchCancel.addEventListener('click', () => void setBatchJobAction('cancel'));
 
 if (btnBatchClear) {
   btnBatchClear.addEventListener('click', () => {
@@ -3314,6 +3998,7 @@ if (btnBatchClear) {
     renderBatchQueue();
   });
 }
+updateBatchControls();
 
 if (btnHistoryClear) {
   btnHistoryClear.addEventListener('click', async () => {
@@ -3349,12 +4034,15 @@ if (btnMonitorClear) {
 }
 
 renderBatchQueue();
-loadRuntimeStatus();
 refreshSearchHistory();
 loadMonitors();
 loadCollection();
 updatePersonActions();
-loadPersons();
+async function initializeRuntimeAndPersons() {
+  await ensureRuntimeStatus();
+  await loadPersons();
+}
+void initializeRuntimeAndPersons();
 lucide.createIcons();
 
 // ----------------------------------------------------

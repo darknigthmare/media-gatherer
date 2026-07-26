@@ -1,22 +1,120 @@
-name: QA
+name: CI
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+    tags:
+      - "**"
   pull_request:
+  release:
+    types:
+      - published
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
+
 jobs:
-  test:
+  qa-linux:
+    name: QA and audit (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npm run qa
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run QA
+        run: npm run qa
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+  qa-windows:
+    name: QA (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run QA
+        run: npm run qa
+
+  build-exe-windows:
+    name: Build Windows EXE
+    if: ${{ github.event_name == 'release' || github.ref_type == 'tag' }}
+    needs:
+      - qa-linux
+      - qa-windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out release revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build executable
+        run: npm run build:exe
+
+      - name: Verify MZ header and create checksum
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "dist/MediaGatherer.exe"
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            $firstByte = $stream.ReadByte()
+            $secondByte = $stream.ReadByte()
+          } finally {
+            $stream.Dispose()
+          }
+
+          if ($firstByte -ne 0x4D -or $secondByte -ne 0x5A) {
+            throw "dist/MediaGatherer.exe does not have a valid MZ header."
+          }
+
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
+          "$hash  MediaGatherer.exe" |
+            Set-Content -Path "dist/MediaGatherer.exe.sha256" -Encoding ascii
+          Write-Host "Verified MZ header and SHA256: $hash"
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaGatherer-Windows-${{ github.event.release.tag_name || github.ref_name }}
+          path: |
+            dist/MediaGatherer.exe
+            dist/MediaGatherer.exe.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -12,6 +12,7 @@ const dotenv = require('dotenv');
 const dnsModule = require('dns');
 const dns = dnsModule.promises;
 const net = require('net');
+const { AsyncLocalStorage } = require('async_hooks');
 const ENV_PATH = process.pkg ? path.join(path.dirname(process.execPath), '.env') : path.join(__dirname, '.env');
 dotenv.config({ path: ENV_PATH });
 const { version: APP_VERSION } = require('./package.json');
@@ -44,9 +45,15 @@ const {
   parseDanbooruPosts,
   decodeWarcHtml
 } = require('./src/sources/discoveryAdapters');
+const {
+  coomerProfileMatches,
+  resolveCoomerPublicProfile
+} = require('./src/sources/coomerAdapter');
 const { normalizeIdentityValue, mergeIdentityEvidence, applyIdentityEvidenceToPerson, adultSearchGuard } = require('./src/services/identity.service');
 const { hammingDistance, dedupePerceptual } = require('./src/services/perceptual.service');
+const { buildPersonGraph, buildPersonPublicReport } = require('./src/services/personGraph.service');
 const { createRemoteStore } = require('./src/storage/remoteStore');
+const { normalizeBoundedStore } = require('./src/storage/storePolicy');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -55,11 +62,14 @@ const DATA_DIR = process.env.MEDIAGATHERER_DATA_DIR || (process.env.VERCEL ? pat
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const STORE_PATH = path.join(DATA_DIR, 'mediagatherer.store.json');
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CACHE_SCHEMA_VERSION = '2026-07-14-media-12';
+const CACHE_SCHEMA_VERSION = '2026-07-26-media-13';
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
-const MAX_PROXY_BYTES = 100 * 1024 * 1024;
+const MAX_PROXY_BYTES = 32 * 1024 * 1024;
 const IS_VOLATILE_STORAGE = Boolean(process.env.VERCEL && !process.env.MEDIAGATHERER_DATA_DIR);
 const SESSION_CONNECTIONS = new Map();
+const SESSION_CONTEXT = new AsyncLocalStorage();
+const SESSION_CONNECTION_TTL_MS = 2 * 60 * 60 * 1000;
+const MAX_CONNECTION_SESSIONS = 100;
 const SOURCE_HEALTH = new Map();
 const REMOTE_STORE = createRemoteStore({
   url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
@@ -154,7 +164,7 @@ const SOURCE_CRAWL_ADAPTERS = {
     transport: 'eporner-api-v2'
   },
   xnxx: { domains: ['xnxx.com'], pagePatterns: [/\/video-[^/]+\//i], media: ['video'], crawlLimit: 5 },
-  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5 },
+  hqporner: { domains: ['hqporner.com'], pagePatterns: [/\/hdporn\/[^/]+\.html/i], media: ['video'], crawlLimit: 5, trustSearchResults: true },
   nuvid: { domains: ['nuvid.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
   drtuber: { domains: ['drtuber.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 },
   pornone: { domains: ['pornone.com'], pagePatterns: [/\/[^/]+\/[^/]*video-\d+\/\d+\/?$/i], media: ['video'], crawlLimit: 5 },
@@ -224,6 +234,16 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api', (req, res, next) => {
+  const cookieHeader = String(req.headers.cookie || '');
+  const cookieValue = cookieHeader.split(';').map(value => value.trim()).find(value => value.startsWith('mg_session='));
+  const candidate = cookieValue ? cookieValue.slice('mg_session='.length) : '';
+  const sessionId = /^[a-f0-9]{32}$/i.test(candidate) ? candidate : crypto.randomBytes(16).toString('hex');
+  if (req.path.startsWith('/connections')) {
+    res.setHeader('set-cookie', `mg_session=${sessionId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_CONNECTION_TTL_MS / 1000)}${process.env.VERCEL ? '; Secure' : ''}`);
+  }
+  SESSION_CONTEXT.run({ sessionId }, next);
+});
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -282,7 +302,7 @@ function readStore() {
   ensureLocalDirs();
   if (!fs.existsSync(STORE_PATH)) return defaultStore();
   try {
-    return { ...defaultStore(), ...JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) };
+    return normalizeBoundedStore(JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')), defaultStore());
   } catch (error) {
     console.warn('[STORE] Lecture impossible, fallback vide:', error.message);
     return defaultStore();
@@ -291,7 +311,7 @@ function readStore() {
 
 function writeLocalStore(store) {
   ensureLocalDirs();
-  const payload = JSON.stringify({ ...defaultStore(), ...store }, null, 2);
+  const payload = JSON.stringify(normalizeBoundedStore(store, defaultStore()), null, 2);
   const temporaryPath = `${STORE_PATH}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(temporaryPath, payload, 'utf8');
   try {
@@ -303,7 +323,7 @@ function writeLocalStore(store) {
 }
 
 function writeStore(store) {
-  const normalized = { ...defaultStore(), ...store };
+  const normalized = normalizeBoundedStore(store, defaultStore());
   writeLocalStore(normalized);
   if (REMOTE_STORE.enabled) {
     REMOTE_STORE.persist(normalized).catch(error => console.warn('[STORE] Persistance distante impossible:', error.message));
@@ -507,6 +527,7 @@ function sourceDomain(sourceId) {
     iafd: 'iafd.com',
     adultdatabase: 'adultdatabase.com',
     theporndb: 'theporndb.net',
+    coomer: 'site1.coomer.com.co',
     fancentro: 'fancentro.com',
     loyalfans: 'loyalfans.com',
     manyvids: 'manyvids.com',
@@ -578,7 +599,8 @@ function enrichMedia(item, query, sourceId, kind = 'image') {
     description: repairMojibake(item?.description)
   };
   const match = evaluateMediaMatch(normalizedItem, query);
-  const score = Number(normalizedItem.confidenceScore || match.score);
+  const explicitScore = Number(normalizedItem.confidenceScore);
+  const score = Number.isFinite(explicitScore) ? explicitScore : match.score;
   const source = normalizedItem.source || sourceLabel(sourceId);
   const url = normalizedItem.url || normalizedItem.thumbnail || normalizedItem.link;
   const thumbnail = normalizedItem.thumbnail || ((normalizedItem.type || kind) === 'image' && looksLikeImage(url) ? url : '');
@@ -1377,6 +1399,7 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     iafd: `https://www.iafd.com/results.asp?searchtype=comprehensive&searchstring=${encoded}`,
     adultdatabase: `https://adultdatabase.com/search?q=${encoded}`,
     theporndb: `https://theporndb.net/search?q=${encoded}`,
+    coomer: `https://site1.coomer.com.co/artists?q=${encoded}`,
     fancentro: username ? `https://fancentro.com/${username}` : `https://fancentro.com/search?q=${encoded}`,
     loyalfans: username ? `https://www.loyalfans.com/${username}` : `https://www.loyalfans.com/search?q=${encoded}`,
     manyvids: `https://www.manyvids.com/Search/${encoded}/`,
@@ -1462,6 +1485,7 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   const videos = [];
   const discoveredPages = [];
   const accountLinks = [];
+  const transportIdentityAliases = [];
   const notes = [];
   let searchUrls = sourceSearchUrls(sourceId, query, options);
   let directReachable = false;
@@ -1521,6 +1545,25 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
       if (error.status === 429) rateLimitedResponses += 1;
       if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
     }
+  }
+
+  if (adapter.transport === 'coomer-profile-api-v1') {
+    try {
+      const apiResult = await resolveCoomerPublicProfile(query, options, { fetchText });
+      successfulRequests += apiResult.successfulRequests;
+      blockedResponses += apiResult.blockedResponses;
+      rateLimitedResponses += apiResult.rateLimitedResponses;
+      directReachable = apiResult.successfulRequests > 0;
+      discoveredPages.push(...apiResult.identity.accounts.map(url => ({ url, title: `${sourceLabel(sourceId)} ${query}` })));
+      accountLinks.push(...apiResult.identity.accounts);
+      transportIdentityAliases.push(...apiResult.identity.aliases);
+      notes.push(...apiResult.notes.map(note => `api Coomer: ${note}`));
+    } catch (error) {
+      notes.push(`api Coomer: ${error.status ? `HTTP ${error.status}` : error.message}`);
+      if (error.status === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
+    }
+    searchUrls = searchUrls.slice(1);
   }
 
   for (const searchUrl of searchUrls) {
@@ -1600,16 +1643,21 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
     ...uniquePages.filter(item => isProfileLikeSourcePage(item.url, sourceId)).map(item => item.url),
     ...accountLinks
   ]).slice(0, 20);
-  const identityAliases = inferProfileIdentityAliases(query, [...uniqueImages, ...uniqueVideos], accounts);
+  const inferredIdentityAliases = inferProfileIdentityAliases(query, [...uniqueImages, ...uniqueVideos], accounts);
+  const identityAliases = adapter.transport === 'coomer-profile-api-v1'
+    ? mergeIdentityEvidence(query, transportIdentityAliases, {})
+    : inferredIdentityAliases;
   const zeroReason = total
     ? ''
+    : (adapter.transport === 'coomer-profile-api-v1' && accounts.length
+        ? 'identity_metadata_only'
     : (uniquePages.length
         ? 'detail_pages_without_public_media'
         : (rateLimitedResponses
             ? 'rate_limited'
             : (blockedResponses && !directReachable
                 ? 'access_blocked'
-                : (!successfulRequests ? 'source_unreachable' : 'no_matching_public_pages'))));
+                : (!successfulRequests ? 'source_unreachable' : 'no_matching_public_pages')))));
   const profileNote = adapter.publicProfileOnly ? '; profils publics uniquement' : '';
   return {
     images: uniqueImages,
@@ -1637,8 +1685,33 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   };
 }
 
+function cleanupConnectionSessions() {
+  const cutoff = Date.now() - SESSION_CONNECTION_TTL_MS;
+  [...SESSION_CONNECTIONS.entries()].forEach(([sessionId, session]) => {
+    if (Number(session.updatedAt || 0) < cutoff) SESSION_CONNECTIONS.delete(sessionId);
+  });
+  if (SESSION_CONNECTIONS.size <= MAX_CONNECTION_SESSIONS) return;
+  [...SESSION_CONNECTIONS.entries()]
+    .sort((left, right) => Number(left[1].updatedAt || 0) - Number(right[1].updatedAt || 0))
+    .slice(0, SESSION_CONNECTIONS.size - MAX_CONNECTION_SESSIONS)
+    .forEach(([sessionId]) => SESSION_CONNECTIONS.delete(sessionId));
+}
+
+function currentConnectionSession(create = false) {
+  cleanupConnectionSessions();
+  const sessionId = SESSION_CONTEXT.getStore()?.sessionId;
+  if (!sessionId) return null;
+  let session = SESSION_CONNECTIONS.get(sessionId);
+  if (!session && create) {
+    session = { updatedAt: Date.now(), providers: new Map() };
+    SESSION_CONNECTIONS.set(sessionId, session);
+  }
+  if (session) session.updatedAt = Date.now();
+  return session;
+}
+
 function connectionValue(provider, field, envName, fallback = '') {
-  return SESSION_CONNECTIONS.get(provider)?.[field] || process.env[envName] || fallback;
+  return currentConnectionSession()?.providers.get(provider)?.[field] || process.env[envName] || fallback;
 }
 
 function buildGoogleCseUrl(query, options = {}, apiKey = '', cx = DEFAULT_GOOGLE_CX) {
@@ -2441,7 +2514,11 @@ function discoverAliases(query, images = [], videos = [], status = {}) {
 function sourceHealthFromStatus(sourceId, sourceStatus) {
   const total = Number(sourceStatus.imagesCount || 0) + Number(sourceStatus.videosCount || 0);
   let state = 'empty';
-  if (sourceStatus.skipped) state = 'configuration_required';
+  if (sourceStatus.skipped) {
+    state = sourceStatus.zeroReason === 'missing_credentials'
+      ? 'configuration_required'
+      : (sourceStatus.error === 'bloque par SafeSearch' ? 'safe_search_blocked' : 'skipped');
+  }
   else if (!sourceStatus.success) state = sourceStatus.zeroReason || 'error';
   else if (total && (sourceStatus.fallbackUsed || sourceStatus.directReachable === false)) state = 'degraded';
   else if (total) state = 'operational';
@@ -2684,40 +2761,178 @@ function removeAliasCandidateFromPerson(store, candidate) {
   return updatedPerson;
 }
 
+const PERSON_TYPES = new Set(['public_figure', 'creator', 'artist', 'journalist', 'athlete', 'consented_person', 'unknown_public']);
+const PERSON_DEPTHS = new Set(['quick', 'normal', 'deep', 'archive']);
+const PERSON_STATUSES = new Set(['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved']);
+const PERSON_SOURCE_PLANS = {
+  quick: ['duckduckgo', 'bing', 'wikimedia', 'wikidata'],
+  normal: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'bluesky', 'mastodon'],
+  deep: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
+  archive: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo']
+};
+
+function boundedString(value, maxLength = 200) {
+  return String(value == null ? '' : value).trim().slice(0, maxLength);
+}
+
+function boundedStringList(value, maxItems = 50, maxLength = 120) {
+  if (!Array.isArray(value)) return [];
+  return uniq(value.filter(item => ['string', 'number'].includes(typeof item)).map(item => boundedString(item, maxLength))).slice(0, maxItems);
+}
+
+function normalizePersonDepth(value) {
+  const depth = boundedString(value, 20).toLowerCase();
+  return PERSON_DEPTHS.has(depth) ? depth : 'normal';
+}
+
+function normalizePersonBirthYear(value) {
+  if (value == null || value === '') return null;
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1900 && year <= new Date().getFullYear() ? year : null;
+}
+
+function isPersonMinorOrAgeAmbiguous(person = {}) {
+  const birthYear = normalizePersonBirthYear(person.birthYear);
+  if (!birthYear) return false;
+  return birthYear >= new Date().getFullYear() - 18;
+}
+
+function normalizePublicAccount(value = {}, existing = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const url = boundedString(value.url == null ? existing.url : value.url, 1000);
+  const username = boundedString(value.username == null ? existing.username : value.username, 120).replace(/^@+/, '');
+  const platform = boundedString(value.platform == null ? existing.platform : value.platform, 80).toLowerCase();
+  if (!url && !username) return null;
+  if (url && !isSafeHttpUrl(url)) return null;
+  return {
+    id: existing.id || boundedString(value.id, 120) || makeId('account'),
+    platform,
+    username,
+    url,
+    status: ['confirmed', 'to_review', 'rejected'].includes(value.status || existing.status)
+      ? (value.status || existing.status)
+      : 'confirmed',
+    createdAt: existing.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizePublicAccounts(value, existing = []) {
+  if (!Array.isArray(value)) return [];
+  const rows = value.map((account, index) => normalizePublicAccount(account, existing[index] || {})).filter(Boolean);
+  return dedupeBy(rows, account => normalizeSearchTerm(account.url || `${account.platform}:${account.username}`)).slice(0, 50);
+}
+
+function validatePersonPayload(input = {}, current = null) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { error: 'Profil invalide' };
+  const listFields = ['aliases', 'usernames', 'aliasEvidence', 'accounts', 'discoveredAccounts', 'positiveKeywords', 'excludeKeywords'];
+  const invalidListField = listFields.find(field => Object.prototype.hasOwnProperty.call(input, field) && !Array.isArray(input[field]));
+  if (invalidListField) return { error: `${invalidListField} doit etre un tableau` };
+  const booleanFields = ['publicOnly', 'safeMode', 'adultConfirmed'];
+  const invalidBooleanField = booleanFields.find(field => Object.prototype.hasOwnProperty.call(input, field) && typeof input[field] !== 'boolean');
+  if (invalidBooleanField) return { error: `${invalidBooleanField} doit etre un booleen` };
+  if (Object.prototype.hasOwnProperty.call(input, 'type') && !PERSON_TYPES.has(input.type)) return { error: 'Type de personne invalide' };
+  if (Object.prototype.hasOwnProperty.call(input, 'name') && typeof input.name !== 'string') return { error: 'Nom invalide' };
+  if (Object.prototype.hasOwnProperty.call(input, 'displayName') && typeof input.displayName !== 'string') return { error: 'Nom affiche invalide' };
+  const merged = current ? { ...current, ...input } : input;
+  const name = boundedString(merged.name || merged.displayName, 160);
+  const displayName = boundedString(merged.displayName || merged.name, 160);
+  const type = PERSON_TYPES.has(merged.type) ? merged.type : (current?.type || 'unknown_public');
+  const birthYear = normalizePersonBirthYear(merged.birthYear);
+  const accounts = normalizePublicAccounts(merged.accounts, current?.accounts || []);
+  if (!name || !displayName) return { error: 'Nom requis' };
+  if (merged.birthYear != null && merged.birthYear !== '' && birthYear == null) return { error: 'Annee de naissance invalide' };
+  if (Object.prototype.hasOwnProperty.call(input, 'accounts') && accounts.length !== input.accounts.length) {
+    return { error: 'Compte public invalide ou duplique' };
+  }
+  if (merged.publicOnly === false || merged.safeMode === false) return { error: 'Person Finder exige publicOnly et safeMode actifs' };
+  if (merged.adultConfirmed === true && isPersonMinorOrAgeAmbiguous({ birthYear })) {
+    return { error: 'Le mode NSFW est interdit pour une personne mineure ou dont la majorite est ambigue', code: 'minor_or_age_ambiguous' };
+  }
+  return {
+    value: {
+      name,
+      displayName,
+      type,
+      aliases: boundedStringList(merged.aliases, 80, 160),
+      usernames: boundedStringList(merged.usernames, 80, 120).map(username => username.replace(/^@+/, '')),
+      aliasEvidence: Array.isArray(merged.aliasEvidence) ? merged.aliasEvidence.filter(row => row && typeof row === 'object').slice(0, 100) : [],
+      accounts,
+      discoveredAccounts: Array.isArray(merged.discoveredAccounts)
+        ? merged.discoveredAccounts.filter(row => row && typeof row === 'object').slice(0, 100)
+        : (current?.discoveredAccounts || []),
+      positiveKeywords: boundedStringList(merged.positiveKeywords, 50, 120),
+      excludeKeywords: boundedStringList(merged.excludeKeywords, 50, 120),
+      publicOnly: true,
+      safeMode: true,
+      adultConfirmed: merged.adultConfirmed === true,
+      birthYear,
+      notes: boundedString(merged.notes, 5000),
+      consentMode: boundedString(merged.consentMode || 'public_or_consented', 80) || 'public_or_consented'
+    }
+  };
+}
+
+function personSourcesForDepth(depth = 'normal', requestedSources = '') {
+  const normalizedDepth = normalizePersonDepth(depth);
+  const requested = uniq(String(requestedSources || '').split(',')).filter(source => SOURCE_META[source]);
+  return requested.length ? requested : PERSON_SOURCE_PLANS[normalizedDepth].filter(source => SOURCE_META[source]);
+}
+
 function buildPersonQueries(person, depth = 'normal') {
+  const normalizedDepth = normalizePersonDepth(depth);
   const base = uniq([person.displayName, person.name, ...(person.aliases || []), ...(person.usernames || [])]);
   const positives = uniq(person.positiveKeywords || []);
-  const accounts = uniq((person.accounts || []).flatMap(account => [account.url, account.username, account.platform]));
+  const accounts = normalizePublicAccounts(person.accounts || []).filter(account => account.status === 'confirmed');
   const queries = [];
   base.forEach(term => {
     queries.push(`"${term}"`);
-    if (depth !== 'quick') {
+    positives.forEach(keyword => queries.push(`"${term}" ${keyword}`));
+    if (normalizedDepth !== 'quick') {
       queries.push(`"${term}" photo`);
       queries.push(`"${term}" video`);
       queries.push(`"${term}" interview`);
     }
-    positives.forEach(keyword => queries.push(`"${term}" ${keyword}`));
-  });
-  accounts.forEach(term => {
-    if (term) queries.push(String(term));
-  });
-  if (depth === 'archive') {
-    base.forEach(term => {
+    if (['deep', 'archive'].includes(normalizedDepth)) {
+      queries.push(`"${term}" profile`);
+      queries.push(`"${term}" creator`);
+      queries.push(`"${term}" gallery`);
+      queries.push(`"${term}" social`);
+    }
+    if (normalizedDepth === 'archive') {
       queries.push(`"${term}" archive`);
       queries.push(`"${term}" wayback`);
-    });
-  }
+      queries.push(`"${term}" old username`);
+    }
+  });
+  accounts.forEach(account => {
+    if (account.url) {
+      queries.push(account.url);
+      try {
+        queries.push(`site:${new URL(account.url).hostname} "${account.username || person.displayName || person.name}"`);
+      } catch {}
+    }
+    if (account.username) queries.push(`"${account.username}"`);
+  });
   const limits = { quick: 8, normal: 20, deep: 32, archive: 40 };
-  return uniq(queries).slice(0, limits[depth] || 20);
+  return uniq(queries).slice(0, limits[normalizedDepth]);
 }
 
 function scorePersonMedia(person, item) {
-  const text = normalizeSearchTerm([item?.title, item?.description, item?.accountUrl, item?.url, isSearchPageUrl(item?.link) ? '' : item?.link].filter(Boolean).join(' '));
-  const identities = uniq([person.displayName, person.name, ...(person.aliases || []), ...(person.usernames || [])]).map(normalizeSearchTerm).filter(Boolean);
+  const rawText = [item?.title, item?.description, item?.accountUrl, item?.url, isSearchPageUrl(item?.link) ? '' : item?.link].filter(Boolean).join(' ');
+  const text = normalizeSearchTerm(rawText);
+  const confirmedAccounts = normalizePublicAccounts(person.accounts || []).filter(account => account.status === 'confirmed');
+  const identities = uniq([
+    person.displayName,
+    person.name,
+    ...(person.aliases || []),
+    ...(person.usernames || []),
+    ...confirmedAccounts.flatMap(account => [account.username, account.url])
+  ]).map(normalizeSearchTerm).filter(Boolean);
   const positives = uniq(person.positiveKeywords || []).map(normalizeSearchTerm).filter(Boolean);
   const negatives = uniq(person.excludeKeywords || []).map(normalizeSearchTerm).filter(Boolean);
   const evidence = [];
-  let score = Number(item.confidenceScore || 20);
+  let score = Number.isFinite(Number(item.confidenceScore)) ? Number(item.confidenceScore) : 20;
   const identity = identities.find(term => term && text.includes(term));
   if (identity) {
     score = Math.max(score, 88);
@@ -2737,38 +2952,201 @@ function scorePersonMedia(person, item) {
       evidence.push(`mot exclu: ${term}`);
     }
   });
+  const expectedBirthYear = normalizePersonBirthYear(person.birthYear);
+  const birthClaim = rawText.match(/\b(?:born|birth|naissance|nee?|né(?:e)?)\D{0,20}(19\d{2}|20\d{2})\b/i);
+  if (expectedBirthYear && birthClaim) {
+    const claimedBirthYear = Number(birthClaim[1]);
+    if (claimedBirthYear === expectedBirthYear) {
+      score += 8;
+      evidence.push(`annee de naissance coherente: ${expectedBirthYear}`);
+    } else {
+      score -= 55;
+      evidence.push(`annee de naissance contradictoire: ${claimedBirthYear}`);
+    }
+  }
+  const accountMatch = confirmedAccounts.find(account => {
+    const username = normalizeSearchTerm(account.username);
+    const url = normalizeSearchTerm(account.url);
+    return (username && text.includes(username)) || (url && text.includes(url));
+  });
+  if (accountMatch) {
+    score = Math.max(score, 94);
+    evidence.push(`compte public confirme: ${accountMatch.platform || accountMatch.username || accountMatch.url}`);
+  }
   score = Math.max(0, Math.min(100, score));
   return { score, evidence, suggestedStatus: score >= 75 ? 'probable' : 'to_review' };
 }
 
+function personRuleMatches(rule, link) {
+  const needle = normalizeSearchTerm(rule?.value);
+  if (!needle) return false;
+  const media = link?.media || link || {};
+  const fields = {
+    keyword: [media.title, media.description, media.url, media.link, link.query, link.evidence].flat().filter(Boolean).join(' '),
+    domain: [media.url, media.link, media.accountUrl].filter(Boolean).map(value => {
+      try {
+        return new URL(value).hostname;
+      } catch {
+        return '';
+      }
+    }).join(' '),
+    source: [media.source, media.sourceId, media.sourceLabel].filter(Boolean).join(' '),
+    url: [media.url, media.link, media.thumbnail, media.accountUrl].filter(Boolean).join(' '),
+    title: [media.title, media.description].filter(Boolean).join(' '),
+    query: link?.query || '',
+    identity: [media.accountUrl, media.title, ...(link?.evidence || [])].filter(Boolean).join(' '),
+    custom: JSON.stringify(link || {})
+  };
+  return normalizeSearchTerm(fields[rule?.type] || fields.keyword).includes(needle);
+}
+
 function applyPersonRules(store, personId, link) {
-  const text = JSON.stringify(link || {}).toLowerCase();
-  const matchedRules = (store.personValidationRules || []).filter(rule => rule.personId === personId && text.includes(String(rule.value || '').toLowerCase()));
+  const matchedRules = (store.personValidationRules || [])
+    .filter(rule => rule.personId === personId && personRuleMatches(rule, link))
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
   let status = link.status || 'to_review';
+  let personScore = Number.isFinite(Number(link.personScore)) ? Number(link.personScore) : 0;
   matchedRules.forEach(rule => {
     if (rule.action === 'exclude') status = 'excluded';
     if (rule.action === 'false_positive') status = 'false_positive';
     if (rule.action === 'confirm') status = 'confirmed';
     if (rule.action === 'probable') status = 'probable';
+    if (rule.action === 'review') status = 'to_review';
+    if (rule.action === 'boost') personScore = Math.min(100, personScore + Math.max(1, Math.min(30, Number(rule.boost || 10))));
   });
-  return { ...link, status, matchedRules: matchedRules.map(rule => rule.id) };
+  return {
+    ...link,
+    status,
+    personScore,
+    matchedRules: matchedRules.map(rule => rule.id),
+    matchedRuleActions: matchedRules.map(rule => rule.action)
+  };
 }
 
 function publicOnlyPersonGuard(person = {}) {
-  const adultConfirmed = person.adultConfirmed === true;
+  const minorOrAgeAmbiguous = isPersonMinorOrAgeAmbiguous(person);
+  const adultConfirmed = person.adultConfirmed === true && !minorOrAgeAmbiguous;
   return {
     publicOnly: person.publicOnly !== false,
     consentMode: person.consentMode || 'public_or_consented',
     safeMode: person.safeMode !== false,
     adultConfirmed,
-    nsfwAllowed: adultConfirmed && person.publicOnly !== false && person.safeMode !== false,
+    minorOrAgeAmbiguous,
+    nsfwAllowed: adultConfirmed && person.publicOnly !== false && person.safeMode !== false && !minorOrAgeAmbiguous,
     blocked: ['private_accounts', 'login_bypass', 'private_address', 'private_phone', 'live_location', 'minors']
   };
+}
+
+function buildPersonTimeline(store, personId) {
+  const person = (store.persons || []).find(item => item.id === personId);
+  if (!person) return null;
+  const events = [{
+    id: `${person.id}:created`,
+    type: 'profile_created',
+    date: person.createdAt,
+    title: `Profil cree: ${person.displayName || person.name}`,
+    details: { personId: person.id, personType: person.type }
+  }];
+  if (person.updatedAt && person.updatedAt !== person.createdAt) {
+    events.push({
+      id: `${person.id}:updated`,
+      type: 'profile_updated',
+      date: person.updatedAt,
+      title: 'Profil mis a jour',
+      details: { personId: person.id }
+    });
+  }
+  const evidenceRows = new Map((person.aliasEvidence || []).map(row => [
+    `${row.kind || 'display_name'}:${normalizeIdentityValue(row.value)}`,
+    row
+  ]));
+  [...(person.aliases || []), ...(person.usernames || [])].forEach(value => {
+    const kind = (person.usernames || []).includes(value) ? 'username' : 'display_name';
+    const evidence = evidenceRows.get(`${kind}:${normalizeIdentityValue(String(value).replace(/^@/, ''))}`);
+    events.push({
+      id: `${person.id}:alias:${kind}:${stableHash(value)}`,
+      type: 'alias_added',
+      date: evidence?.updatedAt || evidence?.createdAt || person.createdAt,
+      title: `${kind === 'username' ? 'Username' : 'Alias'}: ${value}`,
+      status: evidence?.status || 'confirmed',
+      details: evidence || { value, kind }
+    });
+  });
+  [...(person.accounts || []), ...(person.discoveredAccounts || [])].forEach(account => {
+    events.push({
+      id: `${person.id}:account:${account.id || stableHash(account)}`,
+      type: 'account_added',
+      date: account.updatedAt || account.createdAt || person.createdAt,
+      title: `Compte public: ${account.platform || account.username || account.url}`,
+      status: account.status || 'confirmed',
+      source: account.platform || '',
+      details: account
+    });
+  });
+  (store.personMediaLinks || []).filter(link => link.personId === person.id).forEach(link => {
+    events.push({
+      id: `${link.id}:discovered`,
+      type: 'media_discovered',
+      date: link.createdAt,
+      title: link.media?.title || 'Media trouve',
+      status: link.status,
+      mediaType: link.mediaType,
+      source: link.media?.source || link.media?.sourceId || '',
+      details: { linkId: link.id, query: link.query, evidence: link.evidence || [] }
+    });
+    if (link.validatedAt) {
+      events.push({
+        id: `${link.id}:validated`,
+        type: 'media_validated',
+        date: link.validatedAt,
+        title: `Validation: ${link.media?.title || 'Media'}`,
+        status: link.status,
+        mediaType: link.mediaType,
+        source: link.media?.source || link.media?.sourceId || '',
+        details: { linkId: link.id, note: link.validationNote || '' }
+      });
+    }
+  });
+  (store.personValidationRules || []).filter(rule => rule.personId === person.id).forEach(rule => {
+    events.push({
+      id: `${rule.id}:created`,
+      type: 'rule_created',
+      date: rule.createdAt,
+      title: `Regle ${rule.type}: ${rule.value}`,
+      status: rule.action,
+      details: rule
+    });
+  });
+  return events
+    .filter(event => event.date)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+function filterPersonTimeline(events, query = {}) {
+  let filtered = [...(events || [])];
+  if (query.type && query.type !== 'all') filtered = filtered.filter(event => event.type === query.type);
+  if (query.status && query.status !== 'all') filtered = filtered.filter(event => event.status === query.status);
+  if (query.source && query.source !== 'all') filtered = filtered.filter(event => normalizeSearchTerm(event.source) === normalizeSearchTerm(query.source));
+  if (query.mediaType && query.mediaType !== 'all') filtered = filtered.filter(event => event.mediaType === query.mediaType);
+  if (query.from) filtered = filtered.filter(event => String(event.date) >= String(query.from));
+  if (query.to) filtered = filtered.filter(event => String(event.date) <= String(query.to));
+  if (query.q) {
+    const needle = normalizeSearchTerm(query.q);
+    filtered = filtered.filter(event => normalizeSearchTerm(JSON.stringify(event)).includes(needle));
+  }
+  if (query.sort === 'oldest') filtered.reverse();
+  return filtered;
 }
 
 const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
 
 async function resolveIdentityProfile(person, options = {}) {
+  const guard = publicOnlyPersonGuard(person);
+  if (options.includeNsfw === true && !guard.nsfwAllowed) {
+    const error = new Error(guard.minorOrAgeAmbiguous ? 'NSFW interdit pour un age mineur ou ambigu' : 'Confirmation 18+ requise');
+    error.code = guard.minorOrAgeAmbiguous ? 'minor_or_age_ambiguous' : 'adult_confirmation_required';
+    throw error;
+  }
   const defaults = options.includeNsfw === true ? [...DEFAULT_IDENTITY_SOURCES, 'stashdb', 'iafd', 'theporndb'] : DEFAULT_IDENTITY_SOURCES;
   const requested = uniq(String(options.sources || defaults.join(',')).split(',')).filter(source => SOURCE_META[source]);
   const selected = requested.filter(source => !NSFW_SOURCES.has(source) || (options.includeNsfw === true && person.adultConfirmed === true));
@@ -2806,6 +3184,13 @@ app.get('/api/health', (req, res) => {
     ok: true,
     app: 'MediaGatherer',
     version: APP_VERSION,
+    security: {
+      writeTokenConfigured: Boolean(process.env.APP_WRITE_TOKEN),
+      writeMode: process.env.APP_WRITE_TOKEN ? 'token-protected' : (process.env.VERCEL ? 'shared-public-demo' : 'local-single-user'),
+      connectionCredentials: 'isolated-session-memory',
+      connectionSessionTtlMs: SESSION_CONNECTION_TTL_MS,
+      proxyMaxBytes: MAX_PROXY_BYTES
+    },
     storage: {
       mode: REMOTE_STORE.enabled ? 'upstash-redis-rest' : 'json',
       persistent: REMOTE_STORE.enabled || !IS_VOLATILE_STORAGE,
@@ -2818,6 +3203,12 @@ app.get('/api/health', (req, res) => {
       aliasCandidateCount: store.aliasCandidates.length,
       cacheEntries: Object.keys(store.cache || {}).length
     },
+    sourceRegistry: {
+      total: Object.keys(SOURCE_META).length,
+      nsfw: Object.values(SOURCE_META).filter(source => source.nsfw).length,
+      identity: Object.values(SOURCE_META).filter(source => source.category === 'identity' || source.purpose === 'identity').length,
+      adapters: Object.keys(SOURCE_META).length - Object.values(SOURCE_META).filter(source => !source.adapter).length
+    },
     modules: {
       mediaFinder: true,
       personFinder: true,
@@ -2825,8 +3216,8 @@ app.get('/api/health', (req, res) => {
       collection: true,
       exports: true,
       cache: true,
-      queue: 'synchronous-worker',
-      connections: 'session-or-environment',
+      queue: 'cooperative-step-worker',
+      connections: 'isolated-session-or-environment',
       desktop: 'node-standalone-build'
     }
   });
@@ -3301,9 +3692,16 @@ app.get('/api/proxy', proxyLimiter, async (req, res) => {
     });
     if (upstream.status >= 400) return res.status(upstream.status).json({ error: `Media distant HTTP ${upstream.status}` });
     const contentType = String(upstream.headers['content-type'] || 'application/octet-stream').toLowerCase();
-    if (!/^(image|video)\//.test(contentType) && contentType !== 'application/octet-stream') {
+    const requestedUrl = String(req.query.url || '');
+    const octetStreamLooksLikeMedia = contentType === 'application/octet-stream' && /\.(?:avif|gif|jpe?g|png|webp|bmp|mp4|m4v|mov|webm|ogv)(?:[?#]|$)/i.test(requestedUrl);
+    if (!/^(image|video)\//.test(contentType) && !octetStreamLooksLikeMedia) {
       upstream.data.destroy();
       return res.status(415).json({ error: 'Type media non supporte' });
+    }
+    const announcedBytes = Number(upstream.headers['content-length'] || 0);
+    if (announcedBytes > MAX_PROXY_BYTES) {
+      upstream.data.destroy();
+      return res.status(413).json({ error: 'Media trop volumineux' });
     }
     const maxBytes = MAX_PROXY_BYTES;
     let bytes = 0;
@@ -3350,7 +3748,7 @@ const CONNECTION_PROVIDERS = {
 };
 
 function providerConfigured(id, definition) {
-  if (SESSION_CONNECTIONS.has(id)) return true;
+  if (currentConnectionSession()?.providers.has(id)) return true;
   return definition.env.length > 0 && definition.env.every(name => Boolean(process.env[name]));
 }
 
@@ -3360,7 +3758,8 @@ app.get('/api/connections/providers', (req, res) => {
     label: definition.label,
     configured: providerConfigured(id, definition),
     available: definition.available !== false,
-    storage: SESSION_CONNECTIONS.has(id) ? 'session-memory' : (providerConfigured(id, definition) ? 'environment' : 'none'),
+    storage: currentConnectionSession()?.providers.has(id) ? 'isolated-session-memory' : (providerConfigured(id, definition) ? 'environment' : 'none'),
+    sessionWritable: true,
     unlocks: definition.unlocks,
     fields: definition.fields
   })) });
@@ -3376,8 +3775,8 @@ app.post('/api/connections/:id', (req, res) => {
     if (field.required && !value) return res.status(400).json({ error: `${field.label} requis` });
     credentials[field.name] = value || field.defaultValue || '';
   }
-  SESSION_CONNECTIONS.set(req.params.id, credentials);
-  return res.json({ ok: true, provider: req.params.id, storage: 'session-memory', note: 'Identifiants conserves uniquement dans la memoire de cette instance.' });
+  currentConnectionSession(true).providers.set(req.params.id, credentials);
+  return res.json({ ok: true, provider: req.params.id, storage: 'isolated-session-memory', note: 'Identifiants isoles par session navigateur et conserves uniquement en memoire pendant deux heures.' });
 });
 
 app.post('/api/connections/:id/test', async (req, res) => {
@@ -3464,7 +3863,7 @@ app.post('/api/connections/:id/test', async (req, res) => {
 
 app.delete('/api/connections/:id', (req, res) => {
   if (!CONNECTION_PROVIDERS[req.params.id]) return res.status(404).json({ error: 'Fournisseur inconnu' });
-  const removed = SESSION_CONNECTIONS.delete(req.params.id);
+  const removed = currentConnectionSession()?.providers.delete(req.params.id) || false;
   return res.json({ ok: true, removed, provider: req.params.id });
 });
 
@@ -3623,6 +4022,7 @@ function sourceAdapterContract(source) {
   else if (authRequired) availability = configured ? 'official-api-configured' : 'official-api-configuration-required';
   else if (optionalAuth) availability = configured ? 'official-api-configured-with-public-fallback' : 'public-fallback-available';
   else if (crawlAdapter?.transport === 'eporner-api-v2') availability = 'official-public-api-with-html-fallback';
+  else if (crawlAdapter?.transport === 'coomer-profile-api-v1') availability = 'public-identity-metadata-only';
   else if (crawlAdapter?.transport === 'public-forum-form') availability = 'public-form-with-search-engine-fallbacks';
   else if (crawlAdapter) availability = 'direct-html-with-search-engine-fallbacks';
   else if (/api|feed|images|cse|json/i.test(mode)) availability = 'public-api-or-dedicated-adapter';
@@ -3674,11 +4074,29 @@ app.get('/api/sources/:id/test', async (req, res) => {
   }
   try {
     const requestedTimeout = Number(req.query.timeout) || 9000;
-    const testOptions = { imageLimit: 5, videoLimit: 5, safe: String(req.query.safe || 'true') !== 'false', riskMode: 'cautious', timeout: Math.max(4000, Math.min(requestedTimeout, 15000)) };
+    const testOptions = {
+      imageLimit: 5,
+      videoLimit: 5,
+      safe: String(req.query.safe || 'true') !== 'false',
+      adultConfirmed: String(req.query.adultConfirmed || 'false') === 'true',
+      matchMode: ['strict', 'smart', 'broad'].includes(req.query.mode) ? req.query.mode : 'smart',
+      riskMode: 'cautious',
+      timeout: Math.max(4000, Math.min(requestedTimeout, 15000))
+    };
     const result = SOURCE_CRAWL_ADAPTERS[sourceId]
       ? await scrapeNsfwSource(sourceId, query, testOptions)
       : await scrapeGenericSource(sourceId, query, testOptions);
-    const health = sourceHealthFromStatus(sourceId, result.status);
+    const retainedImages = filterBySearchMode(result.images, testOptions.matchMode);
+    const retainedVideos = filterBySearchMode(result.videos, testOptions.matchMode);
+    const retainedStatus = {
+      ...result.status,
+      rawImagesCount: result.images.length,
+      rawVideosCount: result.videos.length,
+      rejectedByRelevance: result.images.length + result.videos.length - retainedImages.length - retainedVideos.length,
+      imagesCount: retainedImages.length,
+      videosCount: retainedVideos.length
+    };
+    const health = sourceHealthFromStatus(sourceId, retainedStatus);
     mutateStore(store => {
       store.sourceDiagnostics = store.sourceDiagnostics || {};
       store.sourceDiagnostics[sourceId] = health;
@@ -3686,8 +4104,8 @@ app.get('/api/sources/:id/test', async (req, res) => {
     res.json({
       source: SOURCE_META[sourceId],
       query,
-      status: result.status,
-      samples: [...result.images, ...result.videos].slice(0, 10).map(item => ({
+      status: retainedStatus,
+      samples: [...retainedImages, ...retainedVideos].slice(0, 10).map(item => ({
         type: item.type,
         title: item.title,
         description: item.description,
@@ -3754,12 +4172,14 @@ app.post('/api/queue/jobs', (req, res) => {
   res.json(job);
 });
 
-async function processQueueJob(jobId) {
+async function processQueueJob(jobId, maxItems = 1) {
   let job = readStore().queue.find(item => item.id === jobId);
   if (!job) throw Object.assign(new Error('Job introuvable'), { status: 404 });
+  const stepLimit = Math.max(1, Math.min(5, Number(maxItems) || 1));
   mutateStore(store => {
     store.queue = store.queue.map(item => item.id === jobId ? { ...item, status: 'running', startedAt: item.startedAt || new Date().toISOString(), updatedAt: new Date().toISOString() } : item);
   });
+  let processed = 0;
   for (let index = Number(job.completed || 0); index < job.queries.length; index += 1) {
     job = readStore().queue.find(item => item.id === jobId);
     if (!job || ['paused', 'cancelled'].includes(job.status)) break;
@@ -3785,9 +4205,20 @@ async function processQueueJob(jobId) {
         } : item);
       });
     }
+    processed += 1;
+    if (processed >= stepLimit) break;
   }
   mutateStore(store => {
-    store.queue = store.queue.map(item => item.id === jobId && item.status === 'running' ? { ...item, status: 'done', finishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : item);
+    store.queue = store.queue.map(item => {
+      if (item.id !== jobId || item.status !== 'running') return item;
+      const done = Number(item.completed || 0) >= Number(item.total || item.queries?.length || 0);
+      return {
+        ...item,
+        status: done ? 'done' : 'running',
+        finishedAt: done ? new Date().toISOString() : item.finishedAt,
+        updatedAt: new Date().toISOString()
+      };
+    });
   });
   return readStore().queue.find(item => item.id === jobId);
 }
@@ -3799,11 +4230,22 @@ app.post('/api/queue/jobs/:id/:action', async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Job introuvable' });
   if (['start', 'resume', 'retry-errors'].includes(req.params.action)) {
     if (req.params.action === 'retry-errors') {
+      const failedQueries = uniq((existing.errors || []).map(error => error.query));
+      if (!failedQueries.length) return res.json({ ok: true, job: existing, note: 'Aucune erreur a relancer' });
       mutateStore(store => {
-        store.queue = store.queue.map(job => job.id === req.params.id ? { ...job, completed: 0, results: [], errors: [], status: 'pending' } : job);
+        store.queue = store.queue.map(job => job.id === req.params.id ? {
+          ...job,
+          retryOf: job.retryOf || job.id,
+          queries: failedQueries,
+          total: failedQueries.length,
+          completed: 0,
+          errors: [],
+          status: 'pending',
+          updatedAt: new Date().toISOString()
+        } : job);
       });
     }
-    const job = await processQueueJob(req.params.id);
+    const job = await processQueueJob(req.params.id, req.body?.maxItems || 1);
     return res.json({ ok: true, job });
   }
   const targetStatus = req.params.action === 'pause' ? 'paused' : 'cancelled';
@@ -3951,34 +4393,30 @@ app.delete('/api/aliases/candidates/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/persons/options', (req, res) => res.json({ types: ['public_figure', 'creator', 'artist', 'journalist', 'athlete', 'consented_person', 'unknown_public'], statuses: ['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved'], depths: ['quick', 'normal', 'deep', 'archive'] }));
+app.get('/api/persons/options', (req, res) => res.json({ types: [...PERSON_TYPES], statuses: [...PERSON_STATUSES], depths: [...PERSON_DEPTHS] }));
 app.get('/api/persons/stats', (req, res) => {
   const store = readStore();
   res.json({ persons: store.persons.length, mediaLinks: store.personMediaLinks.length, rules: store.personValidationRules.length, aliasCandidates: store.aliasCandidates.length });
 });
-app.get('/api/persons/search/depths', (req, res) => res.json({ depths: ['quick', 'normal', 'deep', 'archive'] }));
+app.get('/api/persons/search/depths', (req, res) => res.json({
+  depths: [...PERSON_DEPTHS].map(depth => ({
+    id: depth,
+    maxQueries: { quick: 8, normal: 20, deep: 32, archive: 40 }[depth],
+    sources: personSourcesForDepth(depth)
+  }))
+}));
 app.get('/api/persons', (req, res) => res.json({ persons: readStore().persons }));
 app.post('/api/persons', (req, res) => {
   const store = readStore();
+  const validation = validatePersonPayload(req.body);
+  if (validation.error) return res.status(400).json({ error: validation.error, code: validation.code });
+  const now = new Date().toISOString();
   const person = {
+    ...validation.value,
     id: makeId('person'),
-    name: String(req.body.name || req.body.displayName || '').trim(),
-    displayName: String(req.body.displayName || req.body.name || '').trim(),
-    type: req.body.type || 'unknown_public',
-    aliases: uniq(req.body.aliases || []),
-    usernames: uniq(req.body.usernames || []),
-    aliasEvidence: Array.isArray(req.body.aliasEvidence) ? req.body.aliasEvidence.slice(0, 100) : [],
-    accounts: Array.isArray(req.body.accounts) ? req.body.accounts : [],
-    positiveKeywords: uniq(req.body.positiveKeywords || []),
-    excludeKeywords: uniq(req.body.excludeKeywords || []),
-    publicOnly: req.body.publicOnly !== false,
-    safeMode: req.body.safeMode !== false,
-    adultConfirmed: req.body.adultConfirmed === true,
-    birthYear: Number.isInteger(Number(req.body.birthYear)) && Number(req.body.birthYear) >= 1900 && Number(req.body.birthYear) <= new Date().getFullYear() ? Number(req.body.birthYear) : null,
-    notes: req.body.notes || '',
-    createdAt: new Date().toISOString()
+    createdAt: now,
+    updatedAt: now
   };
-  if (!person.name) return res.status(400).json({ error: 'Nom requis' });
   store.persons.unshift(person);
   writeStore(store);
   res.json(person);
@@ -3989,12 +4427,26 @@ app.get('/api/persons/:id', (req, res) => {
   res.json({ ...person, guard: publicOnlyPersonGuard(person) });
 });
 app.patch('/api/persons/:id', (req, res) => {
-  if (!readStore().persons.some(person => person.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
+  const current = readStore().persons.find(person => person.id === req.params.id);
+  if (!current) return res.status(404).json({ error: 'Profil introuvable' });
+  const allowedFields = new Set([
+    'name', 'displayName', 'type', 'aliases', 'usernames', 'aliasEvidence', 'accounts', 'discoveredAccounts',
+    'positiveKeywords', 'excludeKeywords', 'publicOnly', 'safeMode', 'adultConfirmed', 'birthYear', 'notes', 'consentMode'
+  ]);
+  const patch = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedFields.has(key)));
+  const validation = validatePersonPayload(patch, current);
+  if (validation.error) return res.status(400).json({ error: validation.error, code: validation.code });
   let updated;
   mutateStore(store => {
     store.persons = store.persons.map(person => {
       if (person.id !== req.params.id) return person;
-      updated = { ...person, ...req.body, id: person.id, updatedAt: new Date().toISOString() };
+      updated = {
+        ...person,
+        ...validation.value,
+        id: person.id,
+        createdAt: person.createdAt,
+        updatedAt: new Date().toISOString()
+      };
       return updated;
     });
   });
@@ -4027,10 +4479,47 @@ app.post('/api/persons/:id/aliases', (req, res) => {
   res.json({ ok: true, candidate, person: store.persons.find(row => row.id === req.params.id) });
 });
 app.post('/api/persons/:id/accounts', (req, res) => {
-  if (!readStore().persons.some(person => person.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
-  if (!req.body?.url && !req.body?.username) return res.status(400).json({ error: 'Compte public requis' });
   const store = readStore();
-  store.persons = store.persons.map(person => person.id === req.params.id ? { ...person, accounts: [...(person.accounts || []), req.body] } : person);
+  const person = store.persons.find(row => row.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  const account = normalizePublicAccount(req.body);
+  if (!account) return res.status(400).json({ error: 'Compte public ou URL HTTP(S) valide requis' });
+  const key = normalizeSearchTerm(account.url || `${account.platform}:${account.username}`);
+  if ((person.accounts || []).some(row => normalizeSearchTerm(row.url || `${row.platform}:${row.username}`) === key)) {
+    return res.status(409).json({ error: 'Compte public deja present' });
+  }
+  store.persons = store.persons.map(row => row.id === req.params.id
+    ? { ...row, accounts: [...(row.accounts || []), account], updatedAt: new Date().toISOString() }
+    : row);
+  writeStore(store);
+  res.json({ ok: true, account });
+});
+app.patch('/api/persons/:id/accounts/:accountId', (req, res) => {
+  const store = readStore();
+  const person = store.persons.find(row => row.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  const current = (person.accounts || []).find(account => account.id === req.params.accountId);
+  if (!current) return res.status(404).json({ error: 'Compte public introuvable' });
+  const account = normalizePublicAccount(req.body, current);
+  if (!account) return res.status(400).json({ error: 'Compte public ou URL HTTP(S) valide requis' });
+  const key = normalizeSearchTerm(account.url || `${account.platform}:${account.username}`);
+  if ((person.accounts || []).some(row => row.id !== current.id && normalizeSearchTerm(row.url || `${row.platform}:${row.username}`) === key)) {
+    return res.status(409).json({ error: 'Compte public deja present' });
+  }
+  store.persons = store.persons.map(row => row.id === req.params.id
+    ? { ...row, accounts: (row.accounts || []).map(item => item.id === current.id ? account : item), updatedAt: new Date().toISOString() }
+    : row);
+  writeStore(store);
+  res.json({ ok: true, account });
+});
+app.delete('/api/persons/:id/accounts/:accountId', (req, res) => {
+  const store = readStore();
+  const person = store.persons.find(row => row.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  if (!(person.accounts || []).some(account => account.id === req.params.accountId)) return res.status(404).json({ error: 'Compte public introuvable' });
+  store.persons = store.persons.map(row => row.id === req.params.id
+    ? { ...row, accounts: (row.accounts || []).filter(account => account.id !== req.params.accountId), updatedAt: new Date().toISOString() }
+    : row);
   writeStore(store);
   res.json({ ok: true });
 });
@@ -4043,57 +4532,104 @@ app.post('/api/persons/:id/identity/resolve', async (req, res) => {
   const person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   if (person.publicOnly === false || person.safeMode === false) return res.status(400).json({ error: 'Person Finder exige publicOnly et safeMode actifs' });
-  if (req.body.includeNsfw === true && person.adultConfirmed !== true) return res.status(403).json({ error: 'Confirmation 18+ requise sur la fiche personne', code: 'adult_confirmation_required' });
-  const result = await resolveIdentityProfile(person, { includeNsfw: req.body.includeNsfw === true, sources: req.body.sources });
-  return res.json(result);
+  const guard = publicOnlyPersonGuard(person);
+  if (req.body.includeNsfw === true && !guard.nsfwAllowed) {
+    return res.status(403).json({
+      error: guard.minorOrAgeAmbiguous ? 'NSFW interdit pour un age mineur ou ambigu' : 'Confirmation 18+ requise sur la fiche personne',
+      code: guard.minorOrAgeAmbiguous ? 'minor_or_age_ambiguous' : 'adult_confirmation_required'
+    });
+  }
+  try {
+    const result = await resolveIdentityProfile(person, { includeNsfw: req.body.includeNsfw === true, sources: req.body.sources });
+    return res.json(result);
+  } catch (error) {
+    return res.status(502).json({ error: error.message, code: error.code || 'identity_resolution_failed' });
+  }
 });
 app.get('/api/persons/:id/search-plan', (req, res) => {
   const person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
-  res.json({ personId: person.id, depth: req.query.depth || 'normal', queries: buildPersonQueries(person, req.query.depth || 'normal'), sources: req.query.sources || 'duckduckgo,bing,wikimedia,reddit,wayback', guard: publicOnlyPersonGuard(person) });
+  const depth = normalizePersonDepth(req.query.depth);
+  const sources = personSourcesForDepth(depth, req.query.sources);
+  res.json({ personId: person.id, depth, queries: buildPersonQueries(person, depth), sources, guard: publicOnlyPersonGuard(person) });
 });
-app.post('/api/persons/:id/search', async (req, res) => {
+app.post('/api/persons/:id/search', searchLimiter, async (req, res) => {
   let person = readStore().persons.find(item => item.id === req.params.id);
   if (!person) return res.status(404).json({ error: 'Profil introuvable' });
   if (person.publicOnly === false || person.safeMode === false) return res.status(400).json({ error: 'Person Finder exige publicOnly et safeMode actifs' });
-  const selectedSourceIds = uniq(String(req.body.sources || 'duckduckgo,bing,wikimedia,wikidata,bluesky,mastodon,reddit').split(',')).filter(source => SOURCE_META[source]);
+  const depth = normalizePersonDepth(req.body.depth);
+  const selectedSourceIds = personSourcesForDepth(depth, req.body.sources);
   const safe = !selectedSourceIds.some(source => NSFW_SOURCES.has(source));
+  if (!safe && isPersonMinorOrAgeAmbiguous(person)) {
+    return res.status(403).json({ error: 'NSFW interdit pour un age mineur ou ambigu', code: 'minor_or_age_ambiguous' });
+  }
   const adultGuard = adultSearchGuard({ safe, selectedSources: selectedSourceIds, nsfwSources: NSFW_SOURCES, adultConfirmed: person.adultConfirmed === true && req.body.adultConfirmed === true });
   if (!adultGuard.allowed) return res.status(403).json({ error: adultGuard.reason, code: 'adult_confirmation_required' });
   let identityResolution = null;
+  let identityResolutionError = null;
   if (req.body.resolveIdentity !== false) {
-    identityResolution = await resolveIdentityProfile(person, { includeNsfw: adultGuard.wantsNsfw, sources: req.body.identitySources });
-    person = identityResolution.person;
+    try {
+      identityResolution = await resolveIdentityProfile(person, { includeNsfw: adultGuard.wantsNsfw, sources: req.body.identitySources });
+      person = identityResolution.person;
+    } catch (error) {
+      identityResolutionError = error.message;
+    }
   }
-  const queries = buildPersonQueries(person, req.body.depth || 'normal').slice(0, Number(req.body.maxQueries || 10));
-  if (req.body.dryRun) return res.json({ dryRun: true, queries });
+  const maxQueries = Math.max(1, Math.min(40, Number(req.body.maxQueries) || { quick: 8, normal: 20, deep: 32, archive: 40 }[depth]));
+  const minScore = Math.max(0, Math.min(100, Number(req.body.minScore) || 30));
+  const queries = buildPersonQueries(person, depth).slice(0, maxQueries);
+  if (req.body.dryRun) return res.json({ dryRun: true, queries, sources: selectedSourceIds, depth, guard: publicOnlyPersonGuard(person) });
   const created = [];
+  const failures = [];
   for (const query of queries) {
-    const payload = await scrapeImageSearchWithFallback(query, selectedSourceIds.join(','), { safe, adultConfirmed: adultGuard.adultConfirmed, matchMode: 'strict', riskMode: 'cautious' });
-    const items = [...payload.images, ...payload.videos];
-    items.forEach(item => {
-      const score = scorePersonMedia(person, item);
-      if (score.score < Number(req.body.minScore || 30)) return;
-      const currentStore = readStore();
-      const link = applyPersonRules(currentStore, person.id, {
-        id: makeId('pmedia'),
-        personId: person.id,
-        media: item,
-        mediaType: inferMediaType(item),
-        status: score.suggestedStatus,
-        personScore: score.score,
-        evidence: score.evidence,
-        query,
-        depth: req.body.depth || 'normal',
-        createdAt: new Date().toISOString()
+    try {
+      const payload = await scrapeImageSearchWithFallback(query, selectedSourceIds.join(','), {
+        safe,
+        adultConfirmed: adultGuard.adultConfirmed,
+        matchMode: 'strict',
+        riskMode: 'cautious'
       });
-      created.push(link);
-    });
+      const currentStore = readStore();
+      const queryLinks = [...payload.images, ...payload.videos].flatMap(item => {
+        const score = scorePersonMedia(person, item);
+        if (score.score < minScore) return [];
+        return [applyPersonRules(currentStore, person.id, {
+          id: makeId('pmedia'),
+          personId: person.id,
+          media: item,
+          mediaType: inferMediaType(item),
+          status: score.suggestedStatus,
+          personScore: score.score,
+          evidence: score.evidence,
+          query,
+          depth,
+          createdAt: new Date().toISOString()
+        })];
+      });
+      created.push(...queryLinks);
+      if (queryLinks.length) {
+        mutateStore(store => {
+          store.personMediaLinks = dedupeBy([...queryLinks, ...store.personMediaLinks], link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
+        });
+      }
+    } catch (error) {
+      failures.push({ query, error: error.message });
+    }
   }
-  mutateStore(store => {
-    store.personMediaLinks = dedupeBy([...created, ...store.personMediaLinks], link => `${link.personId}:${link.media?.visualSignature || link.media?.url}`);
+  const uniqueCreated = dedupeBy(created, link => `${link.personId}:${link.media?.visualSignature || link.media?.url || link.media?.link}`);
+  res.json({
+    personId: person.id,
+    depth,
+    sources: selectedSourceIds,
+    queries,
+    completedQueries: queries.length - failures.length,
+    failedQueries: failures.length,
+    failures,
+    created: uniqueCreated.length,
+    links: uniqueCreated,
+    identityResolution,
+    identityResolutionError
   });
-  res.json({ personId: person.id, queries, created: created.length, links: created, identityResolution });
 });
 app.get('/api/persons/:id/media', (req, res) => {
   const store = readStore();
@@ -4111,18 +4647,28 @@ app.post('/api/persons/:id/media', (req, res) => {
   res.json(link);
 });
 app.patch('/api/persons/:id/media/:linkId', (req, res) => {
-  if (!readStore().personMediaLinks.some(link => link.id === req.params.linkId && link.personId === req.params.id)) return res.status(404).json({ error: 'Media introuvable' });
   const store = readStore();
-  store.personMediaLinks = store.personMediaLinks.map(link => link.id === req.params.linkId && link.personId === req.params.id ? { ...link, ...req.body, id: link.id, personId: link.personId, createdAt: link.createdAt, updatedAt: new Date().toISOString() } : link);
+  const current = store.personMediaLinks.find(link => link.id === req.params.linkId && link.personId === req.params.id);
+  if (!current) return res.status(404).json({ error: 'Media introuvable' });
+  const allowedFields = new Set(['status', 'validationNote', 'personScore', 'evidence', 'mediaType']);
+  const patch = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedFields.has(key)));
+  if (patch.status && !PERSON_STATUSES.has(patch.status)) return res.status(400).json({ error: 'Statut invalide' });
+  if (patch.personScore != null) patch.personScore = Math.max(0, Math.min(100, Number(patch.personScore) || 0));
+  if (patch.validationNote != null) patch.validationNote = boundedString(patch.validationNote, 2000);
+  if (patch.evidence != null) patch.evidence = boundedStringList(patch.evidence, 50, 500);
+  store.personMediaLinks = store.personMediaLinks.map(link => link.id === req.params.linkId && link.personId === req.params.id
+    ? { ...link, ...patch, id: link.id, personId: link.personId, createdAt: link.createdAt, updatedAt: new Date().toISOString() }
+    : link);
   writeStore(store);
-  res.json({ ok: true });
+  res.json({ ok: true, link: store.personMediaLinks.find(link => link.id === req.params.linkId) });
 });
 app.post('/api/persons/:id/media/:linkId/validate', (req, res) => {
   if (!readStore().personMediaLinks.some(link => link.id === req.params.linkId && link.personId === req.params.id)) return res.status(404).json({ error: 'Media introuvable' });
-  const allowedStatuses = new Set(['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved']);
-  if (!allowedStatuses.has(req.body.status)) return res.status(400).json({ error: 'Statut invalide' });
+  if (!PERSON_STATUSES.has(req.body.status)) return res.status(400).json({ error: 'Statut invalide' });
   const store = readStore();
-  store.personMediaLinks = store.personMediaLinks.map(link => link.id === req.params.linkId && link.personId === req.params.id ? { ...link, status: req.body.status || 'to_review', validationNote: req.body.note || '', validatedAt: new Date().toISOString() } : link);
+  store.personMediaLinks = store.personMediaLinks.map(link => link.id === req.params.linkId && link.personId === req.params.id
+    ? { ...link, status: req.body.status || 'to_review', validationNote: boundedString(req.body.note, 2000), validatedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    : link);
   writeStore(store);
   res.json({ ok: true });
 });
@@ -4131,7 +4677,10 @@ app.get('/api/persons/:id/media/:linkId/analyze', (req, res) => {
   const person = store.persons.find(item => item.id === req.params.id);
   const link = store.personMediaLinks.find(item => item.id === req.params.linkId && item.personId === req.params.id);
   if (!person || !link) return res.status(404).json({ error: 'Introuvable' });
-  res.json({ ...scorePersonMedia(person, link.media || link), applicableRules: (store.personValidationRules || []).filter(rule => JSON.stringify(link).toLowerCase().includes(String(rule.value || '').toLowerCase())) });
+  res.json({
+    ...scorePersonMedia(person, link.media || link),
+    applicableRules: (store.personValidationRules || []).filter(rule => rule.personId === person.id && personRuleMatches(rule, link))
+  });
 });
 app.get('/api/persons/gallery/options', (req, res) => res.json({ types: ['image', 'video', 'page'], statuses: ['to_review', 'probable', 'confirmed', 'false_positive', 'excluded', 'saved'] }));
 app.get('/api/persons/:id/gallery', (req, res) => {
@@ -4141,7 +4690,18 @@ app.get('/api/persons/:id/gallery', (req, res) => {
   if (req.query.status && req.query.status !== 'all') links = links.filter(link => link.status === req.query.status);
   if (req.query.type && req.query.type !== 'all') links = links.filter(link => link.mediaType === req.query.type);
   if (req.query.q) links = links.filter(link => mediaText(link.media).includes(String(req.query.q).toLowerCase()));
-  res.json({ links });
+  if (req.query.source && req.query.source !== 'all') links = links.filter(link => normalizeSearchTerm(link.media?.source || link.media?.sourceId) === normalizeSearchTerm(req.query.source));
+  if (req.query.minScore) links = links.filter(link => Number(link.personScore || 0) >= Number(req.query.minScore));
+  if (req.query.thumbnail === 'true') links = links.filter(link => Boolean(link.media?.thumbnail || (link.mediaType === 'image' && link.media?.url)));
+  const sort = req.query.sort || 'newest';
+  links.sort((a, b) => {
+    if (sort === 'oldest') return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+    if (sort === 'score') return Number(b.personScore || 0) - Number(a.personScore || 0);
+    if (sort === 'source') return String(a.media?.source || '').localeCompare(String(b.media?.source || ''));
+    if (sort === 'title') return String(a.media?.title || '').localeCompare(String(b.media?.title || ''));
+    return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  });
+  res.json({ links, total: links.length });
 });
 app.get('/api/persons/:id/gallery/stats', (req, res) => {
   const store = readStore();
@@ -4149,28 +4709,62 @@ app.get('/api/persons/:id/gallery/stats', (req, res) => {
   const links = store.personMediaLinks.filter(link => link.personId === req.params.id);
   res.json({ total: links.length, toReview: links.filter(link => link.status === 'to_review').length, probable: links.filter(link => link.status === 'probable').length, confirmed: links.filter(link => link.status === 'confirmed').length, falsePositive: links.filter(link => link.status === 'false_positive').length });
 });
+app.get('/api/persons/:id/graph', (req, res) => {
+  const store = readStore();
+  const person = store.persons.find(item => item.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  res.json(buildPersonGraph({
+    person,
+    aliasCandidates: store.aliasCandidates,
+    mediaLinks: store.personMediaLinks,
+    validationRules: store.personValidationRules
+  }));
+});
+app.get('/api/persons/:id/report', (req, res) => {
+  const store = readStore();
+  const person = store.persons.find(item => item.id === req.params.id);
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  res.json(buildPersonPublicReport({
+    person,
+    aliasCandidates: store.aliasCandidates,
+    mediaLinks: store.personMediaLinks,
+    validationRules: store.personValidationRules
+  }));
+});
 app.get('/api/persons/:id/media/:linkId/details', (req, res) => {
   const link = readStore().personMediaLinks.find(item => item.id === req.params.linkId && item.personId === req.params.id);
   if (!link) return res.status(404).json({ error: 'Media introuvable' });
   res.json({ link, proof: { query: link.query, evidence: link.evidence || [], source: link.media?.source, url: link.media?.link || link.media?.url } });
 });
-app.get('/api/persons/timeline/options', (req, res) => res.json({ eventTypes: ['profile_created', 'alias_added', 'account_added', 'media_discovered', 'media_validated', 'rule_created'] }));
+app.get('/api/persons/timeline/options', (req, res) => res.json({
+  eventTypes: ['profile_created', 'profile_updated', 'alias_added', 'account_added', 'media_discovered', 'media_validated', 'rule_created'],
+  sorts: ['newest', 'oldest']
+}));
 app.get('/api/persons/:id/timeline', (req, res) => {
   const store = readStore();
-  const person = store.persons.find(item => item.id === req.params.id);
-  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
-  const events = [
-    { id: `${person.id}:created`, type: 'profile_created', date: person.createdAt, title: `Profil cree: ${person.displayName || person.name}` },
-    ...(person.aliases || []).map(alias => ({ id: `${person.id}:alias:${alias}`, type: 'alias_added', date: person.createdAt, title: `Alias: ${alias}` })),
-    ...store.personMediaLinks.filter(link => link.personId === person.id).map(link => ({ id: link.id, type: link.validatedAt ? 'media_validated' : 'media_discovered', date: link.validatedAt || link.createdAt, title: link.media?.title || 'Media trouve', status: link.status, mediaType: link.mediaType }))
-  ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  res.json({ events });
+  const events = buildPersonTimeline(store, req.params.id);
+  if (!events) return res.status(404).json({ error: 'Profil introuvable' });
+  res.json({ events: filterPersonTimeline(events, req.query), total: events.length });
 });
 app.get('/api/persons/:id/timeline/stats', (req, res) => {
   const store = readStore();
-  if (!store.persons.some(person => person.id === req.params.id)) return res.status(404).json({ error: 'Profil introuvable' });
-  const links = store.personMediaLinks.filter(link => link.personId === req.params.id);
-  res.json({ events: links.length + 1, media: links.length, validated: links.filter(link => link.validatedAt).length });
+  const events = buildPersonTimeline(store, req.params.id);
+  if (!events) return res.status(404).json({ error: 'Profil introuvable' });
+  res.json({
+    events: events.length,
+    media: events.filter(event => event.type === 'media_discovered').length,
+    validated: events.filter(event => event.type === 'media_validated').length,
+    aliases: events.filter(event => event.type === 'alias_added').length,
+    accounts: events.filter(event => event.type === 'account_added').length,
+    rules: events.filter(event => event.type === 'rule_created').length
+  });
+});
+app.get('/api/persons/:id/timeline/:eventId', (req, res) => {
+  const events = buildPersonTimeline(readStore(), req.params.id);
+  if (!events) return res.status(404).json({ error: 'Profil introuvable' });
+  const event = events.find(item => item.id === req.params.eventId);
+  if (!event) return res.status(404).json({ error: 'Evenement introuvable' });
+  res.json(event);
 });
 app.get('/api/persons/:id/validation/rules', (req, res) => {
   const store = readStore();
@@ -4185,7 +4779,15 @@ app.post('/api/persons/:id/validation/rules', (req, res) => {
   const value = String(req.body.value || '').trim();
   if (!value) return res.status(400).json({ error: 'Valeur de regle requise' });
   if (!allowedTypes.has(req.body.type || 'keyword') || !allowedActions.has(req.body.action || 'exclude')) return res.status(400).json({ error: 'Regle invalide' });
-  const rule = { id: makeId('rule'), personId: req.params.id, type: req.body.type || 'keyword', action: req.body.action || 'exclude', value, createdAt: new Date().toISOString() };
+  const rule = {
+    id: makeId('rule'),
+    personId: req.params.id,
+    type: req.body.type || 'keyword',
+    action: req.body.action || 'exclude',
+    value: value.slice(0, 500),
+    boost: req.body.action === 'boost' ? Math.max(1, Math.min(30, Number(req.body.boost || 10))) : undefined,
+    createdAt: new Date().toISOString()
+  };
   store.personValidationRules.unshift(rule);
   writeStore(store);
   res.json(rule);
@@ -4219,7 +4821,24 @@ app.get('/api/exports/history', (req, res) => sendExport(res, 'history', readSto
 app.get('/api/exports/persons', (req, res) => sendExport(res, 'persons', readStore().persons, req.query.format || 'json'));
 app.get('/api/exports/aliases', (req, res) => sendExport(res, 'aliases', readStore().aliasCandidates, req.query.format || 'json'));
 app.get('/api/exports/person-gallery', (req, res) => sendExport(res, 'person-gallery', readStore().personMediaLinks.filter(link => !req.query.personId || link.personId === req.query.personId), req.query.format || 'json'));
-app.get('/api/exports/person-timeline', (req, res) => sendExport(res, 'person-timeline', readStore().personMediaLinks.filter(link => !req.query.personId || link.personId === req.query.personId), req.query.format || 'json'));
+app.get('/api/exports/person-timeline', (req, res) => {
+  if (!req.query.personId) return res.status(400).json({ error: 'personId requis' });
+  const events = buildPersonTimeline(readStore(), String(req.query.personId));
+  if (!events) return res.status(404).json({ error: 'Profil introuvable' });
+  return sendExport(res, 'person-timeline', events, req.query.format || 'json');
+});
+app.get('/api/exports/person-report', (req, res) => {
+  const store = readStore();
+  const person = store.persons.find(item => item.id === String(req.query.personId || ''));
+  if (!person) return res.status(404).json({ error: 'Profil introuvable' });
+  const report = buildPersonPublicReport({
+    person,
+    aliasCandidates: store.aliasCandidates,
+    mediaLinks: store.personMediaLinks,
+    validationRules: store.personValidationRules
+  });
+  return sendExport(res, 'person-report', [report], req.query.format || 'json');
+});
 app.get('/api/exports/franchises', (req, res) => sendExport(res, 'franchises', readStore().collection, req.query.format || 'json'));
 
 function desktopDiagnostics() {
@@ -4314,6 +4933,12 @@ app.locals.testables = {
   normalizeWaybackCdxPayload,
   buildPersonQueries,
   scorePersonMedia,
+  validatePersonPayload,
+  isPersonMinorOrAgeAmbiguous,
+  personRuleMatches,
+  applyPersonRules,
+  buildPersonTimeline,
+  filterPersonTimeline,
   adultSearchGuard,
   hammingDistance,
   textMatchesAllQueryTokens,
@@ -4333,6 +4958,7 @@ app.locals.testables = {
   parseGiphyResults,
   parseGelbooruPosts,
   parseDanbooruPosts,
+  coomerProfileMatches,
   decodeWarcHtml,
   selectWikidataEntity,
   selectTmdbPerson,

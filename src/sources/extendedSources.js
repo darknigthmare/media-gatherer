@@ -29,6 +29,7 @@ const EXTENDED_SOURCE_DEFINITIONS = [
   { id: 'iafd', label: 'IAFD', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
   { id: 'adultdatabase', label: 'Adult Database', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
   { id: 'theporndb', label: 'ThePornDB', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity', auth: 'api-key-optional' },
+  { id: 'coomer', label: 'Coomer public profiles', category: 'nsfw', nsfw: true, supports: ['page'], adapter: 'coomer-profile-api-v1', subtype: 'creator-index', purpose: 'identity' },
   { id: 'fancentro', label: 'FanCentro public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'platform', purpose: 'identity' },
   { id: 'loyalfans', label: 'LoyalFans public', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-profile-crawl', subtype: 'platform', purpose: 'identity' },
   { id: 'manyvids', label: 'ManyVids public', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'public-profile-crawl', subtype: 'platform', purpose: 'media' },
@@ -62,6 +63,15 @@ const EXTENDED_SOURCE_ADAPTERS = {
   iafd: { domains: ['iafd.com'], pagePatterns: [/\/person\.rme/i], assetPatterns: [/\/graphics\/headshots\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
   adultdatabase: { domains: ['adultdatabase.com'], pagePatterns: [/\/(?:actor|actress|star|performer|model|profile)s?\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
   theporndb: { domains: ['theporndb.net'], pagePatterns: [/\/(?:performers?|people|scenes?)\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
+  coomer: {
+    domains: ['site1.coomer.com.co'],
+    pagePatterns: [/\/(?:onlyfans|fansly|candfans)\/user\/[^/]+\/?$/i],
+    media: ['page'],
+    crawlLimit: 1,
+    publicProfileOnly: true,
+    identityOnly: true,
+    transport: 'coomer-profile-api-v1'
+  },
   fancentro: { domains: ['fancentro.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/store\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
   loyalfans: { domains: ['loyalfans.com'], pagePatterns: [/\/(?:creator|model|profile)\//i, /^\/[a-z0-9._-]+\/?$/i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true },
   manyvids: { domains: ['manyvids.com'], pagePatterns: [/\/(?:Profile|Video|Store)\//i], media: ['image', 'video', 'page'], crawlLimit: 4, publicProfileOnly: true },

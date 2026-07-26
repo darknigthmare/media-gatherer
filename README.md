@@ -1,15 +1,15 @@
 # MediaGatherer
 
-MediaGatherer est une application locale Node.js/Express de recherche et de classement de medias publics. L'interface regroupe quatre modules independants :
+MediaGatherer est une application locale Node.js/Express de recherche et de classement de medias publics. L'interface regroupe deux applications principales et deux outils :
 
 - **Media Finder** : photos, videos, moteurs, reseaux publics, archives et recherche batch.
+- **Person Finder** : profils publics ou consentis, alias, comptes, galerie, validation, timeline et exclusions.
 - **Connexions API** : moteurs, plateformes sociales, archives et bases d'identite, avec test reel des identifiants personnels.
 - **Recherche inversee** : ouverture des moteurs inverses depuis une image choisie.
-- **Person Finder** : profils publics ou consentis, alias, comptes, galerie, validation, timeline et exclusions.
 
-Le registre contient 96 sources : 22 normales, 15 sociales, 8 d'identite et 51 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
+Le registre contient 97 sources : 22 normales, 15 sociales, 8 d'identite et 52 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
-La version 1.6.1 rend les alias actionnables de bout en bout : nouvelle recherche, ajout aux resultats courants, transfert structure vers Person Finder, validation, rejet durable et preuves accessibles. La version 1.6.0 avait ajoute Common Crawl, SearXNG, Lemmy, GitHub, Odysee, MusicBrainz, GDELT, Podcast Index, Pixelfed, Pexels, GIPHY, Fanvue, cinq plateformes de profils webcam publics, Indexxx, Boobpedia, Gelbooru et Danbooru. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
+La version 1.7.0 ajoute le profil public Coomer en metadonnees uniquement, durcit Person Finder, rend la queue batch progressive, isole les identifiants API par session et ajoute galerie filtree, preuves, graphe, rapport public et timeline exacte. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 
 ## Demarrage local
 
@@ -26,7 +26,7 @@ Ouvrir ensuite [http://localhost:3000](http://localhost:3000).
 
 ```powershell
 npm run qa
-npm audit
+npm audit --omit=dev
 npm run audit:sources -- --base http://127.0.0.1:3000
 ```
 
@@ -66,7 +66,7 @@ Copier les valeurs utiles de `.env.example` dans `.env` :
 - `STASHDB_API_KEY` : votre cle personnelle StashDB; aucune cle partagee n'est fournie.
 - `KV_REST_API_URL` et `KV_REST_API_TOKEN` : stockage Upstash Redis REST durable sur Vercel.
 
-Les identifiants saisis dans l'onglet Connexions restent en memoire de session serveur et ne sont pas exportes.
+Les identifiants saisis dans l'onglet Connexions sont isoles par session navigateur, expires apres deux heures, restent uniquement en memoire serveur et ne sont pas exportes.
 
 ## Recherche et diagnostics
 
@@ -87,11 +87,15 @@ Les identifiants saisis dans l'onglet Connexions restent en memoire de session s
 - Un alias trouve ouvre un panneau d'actions : rechercher, fusionner ses medias avec les resultats visibles, l'envoyer vers une fiche Person Finder ou le rejeter. La confiance, les sources et les preuves restent attachees au candidat.
 - Person Finder separe les alias a verifier, confirmes et rejetes. Un alias confirme devient un terme de recherche direct; un rejet n'est pas reintroduit silencieusement par la resolution d'identite suivante.
 - La resolution d'identite croise Wikidata, les reseaux publics et les hubs de liens avant la recherche Person Finder.
+- Les resultats Person Finder sont conserves requete par requete et apparaissent dans la galerie pendant que la recherche continue.
+- La galerie Person Finder est filtree et defilable, avec statut, ouverture de source et tiroir de preuves.
+- Le graphe relationnel et le rapport n'exposent que les alias, comptes, medias et preuves publics.
+- Coomer interroge uniquement un profil exact et remonte ses metadonnees d'identite; ses publications et medias ne sont pas reextraits.
 - Les empreintes dHash sont calculees apres affichage via le proxy local, sans retarder l'arrivee progressive des resultats.
 
 ## Stockage
 
-En local et dans l'EXE, l'historique, la collection, les profils, le cache, la queue et les veilles sont durables dans `data/mediagatherer.store.json`.
+En local et dans l'EXE, l'historique, la collection, les profils, le cache, la queue et les veilles sont durables dans `data/mediagatherer.store.json`. Les collections sont bornees afin d'eviter une croissance illimitee.
 
 Sur Vercel, le stockage fichier est temporaire. Si `KV_REST_API_URL` et `KV_REST_API_TOKEN` sont configures, l'application hydrate et replique le magasin JSON dans Upstash Redis REST avant de repondre aux mutations. Sans ces variables, l'interface continue d'indiquer le mode volatil.
 
@@ -100,8 +104,9 @@ Sur Vercel, le stockage fichier est temporaire. Si `KV_REST_API_URL` et `KV_REST
 - URLs publiques HTTP(S) uniquement, ports 80/443, redirections revalidees.
 - Blocage des IP locales/privees et de leur resolution DNS.
 - CORS restreint, CSP/Helmet, limites de debit et tailles de reponse bornees.
+- Proxy media limite a 32 Mio et flux binaires generiques refuses sans extension media.
 - Person Finder interdit l'adresse privee, le telephone prive et la localisation temps reel.
-- Les recherches NSFW sont bloquees sans confirmation 18+; une fiche Person Finder doit aussi etre explicitement marquee adulte avant d'interroger ces sources.
+- Les recherches NSFW sont bloquees sans confirmation 18+; Person Finder les interdit aussi lorsqu'une annee de naissance rend la majorite impossible a confirmer.
 - Les sites qui exigent JavaScript, une connexion, une region autorisee ou qui bloquent les robots peuvent rester indisponibles. Le diagnostic doit alors l'indiquer, sans simuler de resultat.
 
-Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_SOURCES_1.6.0_2026-07-15.md](docs/AUDIT_SOURCES_1.6.0_2026-07-15.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).
+Voir aussi [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/AUDIT_COMPLET_1.7.0_2026-07-26.md](docs/AUDIT_COMPLET_1.7.0_2026-07-26.md), [docs/audits/2026-07-26/sources-live-complete.md](docs/audits/2026-07-26/sources-live-complete.md), [docs/MEDIA_FINDER_NSFW_AUDIT.md](docs/MEDIA_FINDER_NSFW_AUDIT.md) et [docs/NSFW_SOURCE_MATRIX_2026-07-14.md](docs/NSFW_SOURCE_MATRIX_2026-07-14.md).

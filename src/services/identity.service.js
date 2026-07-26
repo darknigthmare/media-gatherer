@@ -41,18 +41,21 @@ function applyIdentityEvidenceToPerson(person, aliases = [], accounts = []) {
     .filter(candidate => candidate.status === 'rejected')
     .map(candidate => `${candidate.kind === 'username' ? 'username' : 'display_name'}:${normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''))}`));
   const displayAliases = aliases
-    .filter(alias => alias.kind !== 'username' && Number(alias.confidence || 0) >= 75)
+    .filter(alias => alias.kind !== 'username' && ['confirmed', 'merged'].includes(alias.status))
     .map(alias => alias.value)
     .filter(value => normalizeIdentityValue(value) !== primary)
     .filter(value => !rejectedAliases.has(`display_name:${normalizeIdentityValue(value)}`));
   const usernames = aliases
-    .filter(alias => alias.kind === 'username' && Number(alias.confidence || 0) >= 80)
+    .filter(alias => alias.kind === 'username' && ['confirmed', 'merged'].includes(alias.status))
     .map(alias => alias.value.replace(/^@/, ''))
     .filter(value => normalizeIdentityValue(value) !== primary)
     .filter(value => !rejectedAliases.has(`username:${normalizeIdentityValue(value)}`));
   const existingAccounts = Array.isArray(person.accounts) ? person.accounts : [];
   const accountRows = (accounts || []).filter(Boolean).map(url => typeof url === 'string' ? { url } : url);
-  const accountMap = new Map([...existingAccounts, ...accountRows].map(account => [String(account.url || `${account.platform || ''}:${account.username || ''}`).toLowerCase(), account]));
+  const discoveredAccountMap = new Map([
+    ...(person.discoveredAccounts || []),
+    ...accountRows.map(account => ({ ...account, status: account.status || 'to_review' }))
+  ].map(account => [String(account.url || `${account.platform || ''}:${account.username || ''}`).toLowerCase(), account]));
   const evidenceMap = new Map((person.aliasEvidence || []).map(candidate => [
     `${candidate.kind || 'display_name'}:${normalizeIdentityValue(String(candidate.value || '').replace(/^@/, ''))}`,
     candidate
@@ -82,7 +85,8 @@ function applyIdentityEvidenceToPerson(person, aliases = [], accounts = []) {
     aliases: [...new Set([...(person.aliases || []).filter(value => !rejectedAliases.has(`display_name:${normalizeIdentityValue(value)}`)), ...displayAliases])],
     usernames: [...new Set([...(person.usernames || []).filter(value => !rejectedAliases.has(`username:${normalizeIdentityValue(String(value).replace(/^@/, ''))}`)), ...usernames])],
     aliasEvidence: [...evidenceMap.values()],
-    accounts: [...accountMap.values()],
+    accounts: existingAccounts,
+    discoveredAccounts: [...discoveredAccountMap.values()],
     identityResolvedAt: new Date().toISOString()
   };
 }

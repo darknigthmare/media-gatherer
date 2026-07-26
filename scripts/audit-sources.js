@@ -70,9 +70,21 @@ function classify(row) {
   const reason = String(status.zeroReason || row.error || '').toLowerCase();
   const total = Number(status.imagesCount || 0) + Number(status.videosCount || 0);
   if (row.httpStatus === 429 || /rate.?limit/.test(reason)) return 'rate_limited';
-  if (status.skipped || /missing_credentials|configuration/.test(reason)) return 'configuration_required';
+  if (/missing_credentials|configuration/.test(reason)) return 'configuration_required';
+  if (status.skipped) return 'skipped';
+  if (row.purpose === 'identity' && /identity_metadata_only/.test(reason) && (status.accounts || []).length > 0) return 'operational';
   if (total > 0 && row.quality?.queryRelevantSamples === 0) return 'false_positive';
-  if (total > 0) return status.fallbackUsed || status.directReachable === false || row.quality?.missingThumbnails > 0 ? 'degraded' : 'operational';
+  if (total > 0) {
+    const relevantRatio = row.quality?.sampleCount
+      ? row.quality.queryRelevantSamples / row.quality.sampleCount
+      : 1;
+    return status.fallbackUsed ||
+      status.directReachable === false ||
+      row.quality?.missingThumbnails > 0 ||
+      relevantRatio < 0.7
+      ? 'degraded'
+      : 'operational';
+  }
   if (/access_blocked|http 401|http 403|http 451/.test(reason)) return 'access_blocked';
   if (/no_matching|no_public_media|without_public_media|without_matching_media|empty/.test(reason)) return 'empty';
   if (row.httpStatus >= 500 || /request_failed|source_unreachable|abort|timeout/.test(reason)) return 'error';
@@ -87,7 +99,7 @@ function markdownReport(report) {
     '',
     `Base testee: \`${report.baseUrl}\``,
     '',
-    `Sources: ${report.summary.total}; operational: ${report.summary.operational}; degradees: ${report.summary.degraded}; faux positifs: ${report.summary.false_positive}; vides: ${report.summary.empty}; configuration requise: ${report.summary.configuration_required}; bloquees: ${report.summary.access_blocked}; limitees: ${report.summary.rate_limited}; erreurs: ${report.summary.error}.`,
+    `Sources: ${report.summary.total}; operational: ${report.summary.operational}; degradees: ${report.summary.degraded}; faux positifs: ${report.summary.false_positive}; vides: ${report.summary.empty}; ignorees: ${report.summary.skipped}; configuration requise: ${report.summary.configuration_required}; bloquees: ${report.summary.access_blocked}; limitees: ${report.summary.rate_limited}; erreurs: ${report.summary.error}.`,
     '',
     '| Source | Categorie | Adaptateur | Requete | Etat | HTTP | Photos | Videos | Echantillons pertinents | Miniatures absentes | Pages | Raison |',
     '| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |'
@@ -119,7 +131,7 @@ async function main() {
 
   function writeReport(partial) {
     const completed = results.filter(Boolean);
-    const summary = { total: completed.length, operational: 0, degraded: 0, false_positive: 0, empty: 0, configuration_required: 0, access_blocked: 0, rate_limited: 0, error: 0 };
+    const summary = { total: completed.length, operational: 0, degraded: 0, false_positive: 0, empty: 0, skipped: 0, configuration_required: 0, access_blocked: 0, rate_limited: 0, error: 0 };
     completed.forEach(row => { summary[row.state] = (summary[row.state] || 0) + 1; });
     const report = {
       generatedAt: new Date().toISOString(),
@@ -163,6 +175,7 @@ async function main() {
           authRequired: Boolean(adapter.authRequired),
           configured: adapter.configured,
           supports: source.supports,
+          purpose: source.purpose || 'media',
           adapterMode: adapter.mode || source.adapter,
           implementation: adapter.implementation || '',
           availability: adapter.availability || '',
@@ -191,6 +204,7 @@ async function main() {
           authRequired: Boolean(adapter.authRequired),
           configured: adapter.configured,
           supports: source.supports,
+          purpose: source.purpose || 'media',
           adapterMode: adapter.mode || source.adapter,
           implementation: adapter.implementation || '',
           availability: adapter.availability || '',

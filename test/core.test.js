@@ -15,6 +15,7 @@ const {
   normalizeSearchTerm,
   repairMojibake,
   evaluateMediaMatch,
+  enrichMedia,
   dedupeBestMedia,
   isPrivateIp,
   validatePublicMediaUrl,
@@ -45,6 +46,12 @@ const {
   buildWaybackCdxUrls,
   normalizeWaybackCdxPayload,
   buildPersonQueries,
+  scorePersonMedia,
+  validatePersonPayload,
+  isPersonMinorOrAgeAmbiguous,
+  personRuleMatches,
+  applyPersonRules,
+  buildPersonTimeline,
   adultSearchGuard,
   hammingDistance,
   textMatchesAllQueryTokens,
@@ -64,6 +71,7 @@ const {
   parseGiphyResults,
   parseGelbooruPosts,
   parseDanbooruPosts,
+  coomerProfileMatches,
   decodeWarcHtml,
   selectWikidataEntity,
   selectTmdbPerson,
@@ -94,6 +102,7 @@ test('normalise les accents et exige une preuve textuelle', () => {
   assert.equal(evaluateMediaMatch({ title: 'Sxysindy official gallery' }, 'sxysindy').score, 96);
   assert.equal(evaluateMediaMatch({ title: 'Random image', url: 'https://cdn.test/random.jpg', link: 'https://google.com/search?q=sxysindy' }, 'sxysindy').score, 20);
   assert.equal(evaluateMediaMatch({ title: 'Random filename', trustedContext: true }, 'sxysindy').score, 68);
+  assert.equal(enrichMedia({ title: 'Sxysindy result', confidenceScore: 0 }, 'sxysindy', 'bing').confidenceScore, 0);
 });
 
 test('les adaptateurs API et IAFD rejettent les correspondances partielles', () => {
@@ -233,6 +242,12 @@ test('normalise l API Eporner et conserve la meilleure miniature', () => {
   assert.equal(videos[0].thumbnail, 'https://cdn.example/1280.jpg');
   assert.equal(videos[0].embedUrl, 'https://www.eporner.com/embed/abc123/');
   assert.equal(videos[0].duration, '2:05');
+});
+
+test('valide uniquement les metadonnees de profil publiques Coomer', () => {
+  const profile = { id: 'samplecreator', public_id: 'samplecreator', name: 'Sample Creator', service: 'onlyfans' };
+  assert.equal(coomerProfileMatches(profile, '@samplecreator'), true);
+  assert.equal(coomerProfileMatches(profile, 'anothercreator'), false);
 });
 
 test('enregistre les nouvelles routes de recherche NSFW publiques', () => {
@@ -385,6 +400,7 @@ test('normalise les nouveaux adaptateurs API avec medias et preuves identite', (
   const imgur = parseImgurResults(extendedFixtures.imgur);
   assert.deepEqual(imgur.media.map(item => item.type), ['image', 'video']);
   assert.equal(imgur.media[1].url, 'https://i.imgur.com/clip.mp4');
+  assert.equal(imgur.media[1].thumbnail, 'https://i.imgur.com/cliph.jpg');
 
   const peertube = parsePeerTubeResults(extendedFixtures.peertube, 'https://peertube.example');
   assert.equal(peertube.media[0].thumbnail, 'https://peertube.example/lazy-static/previews/video.jpg');
@@ -440,9 +456,10 @@ test('normalise Pexels, GIPHY et les deux API booru', () => {
   assert.equal(gelbooru.media[0].url, 'https://img.gelbooru.com/a.jpg');
   assert.equal(gelbooru.media[1].type, 'video');
 
-  const danbooru = parseDanbooruPosts([{ id: 2, large_file_url: 'https://cdn.donmai.us/a.jpg', preview_file_url: 'https://cdn.donmai.us/t.jpg', tag_string_character: 'sxysindy', image_width: 1600, image_height: 1200 }, { id: 4, file_url: 'https://cdn.donmai.us/a.mp4', preview_file_url: 'https://cdn.donmai.us/v.jpg', file_ext: 'mp4', tag_string_character: 'sxysindy' }]);
+  const danbooru = parseDanbooruPosts([{ id: 2, large_file_url: 'https://cdn.donmai.us/a.jpg', preview_file_url: 'https://cdn.donmai.us/t.jpg', tag_string_character: 'sxysindy', image_width: 1600, image_height: 1200 }, { id: 4, file_url: 'https://cdn.donmai.us/a.mp4', large_file_url: 'https://cdn.donmai.us/a-large.jpg', preview_file_url: 'https://cdn.donmai.us/v.jpg', file_ext: 'mp4', tag_string_character: 'sxysindy' }]);
   assert.equal(danbooru.media[0].link, 'https://danbooru.donmai.us/posts/2');
   assert.equal(danbooru.media[1].type, 'video');
+  assert.equal(danbooru.media[1].url, 'https://cdn.donmai.us/a.mp4');
 });
 
 test('decode un WARC sans confondre X-Crawler-Content-Encoding avec le corps HTTP', () => {
@@ -521,6 +538,100 @@ test('ne reintroduit pas un alias rejete lors d une nouvelle resolution identite
   }], []);
   assert.ok(!updated.aliases.includes('Nils Sjoberg'));
   assert.equal(updated.aliasEvidence.find(row => row.value === 'Nils Sjoberg').status, 'rejected');
+});
+
+test('conserve les alias et comptes decouverts en candidats tant qu ils ne sont pas confirmes', () => {
+  const updated = applyIdentityEvidenceToPerson({
+    displayName: 'Creator Example',
+    aliases: [],
+    usernames: [],
+    accounts: []
+  }, [{
+    value: 'Creator Alt',
+    kind: 'display_name',
+    confidence: 98,
+    sources: ['wikidata']
+  }, {
+    value: '@creator-alt',
+    kind: 'username',
+    confidence: 96,
+    sources: ['bluesky']
+  }], [{ platform: 'bluesky', username: 'creator-alt', url: 'https://bsky.app/profile/creator-alt' }]);
+  assert.deepEqual(updated.aliases, []);
+  assert.deepEqual(updated.usernames, []);
+  assert.equal(updated.aliasEvidence.length, 2);
+  assert.equal(updated.discoveredAccounts[0].status, 'to_review');
+  assert.deepEqual(updated.accounts, []);
+});
+
+test('valide strictement les profils Person Finder et bloque un age mineur ou ambigu', () => {
+  assert.equal(isPersonMinorOrAgeAmbiguous({ birthYear: new Date().getFullYear() - 18 }), true);
+  assert.equal(isPersonMinorOrAgeAmbiguous({ birthYear: new Date().getFullYear() - 19 }), false);
+  assert.equal(validatePersonPayload({ name: '', publicOnly: true, safeMode: true }).error, 'Nom requis');
+  assert.equal(validatePersonPayload({ name: 'Test', publicOnly: false, safeMode: true }).error, 'Person Finder exige publicOnly et safeMode actifs');
+  assert.equal(validatePersonPayload({
+    name: 'Test',
+    publicOnly: true,
+    safeMode: true,
+    adultConfirmed: true,
+    birthYear: new Date().getFullYear() - 18
+  }).code, 'minor_or_age_ambiguous');
+  const valid = validatePersonPayload({
+    name: 'Test',
+    publicOnly: true,
+    safeMode: true,
+    accounts: [{ platform: 'youtube', username: 'test', url: 'https://youtube.com/@test' }]
+  });
+  assert.equal(valid.error, undefined);
+  assert.equal(valid.value.accounts.length, 1);
+  assert.ok(valid.value.accounts[0].id);
+});
+
+test('applique les types actions et priorites des regles Person Finder', () => {
+  const link = {
+    status: 'to_review',
+    personScore: 60,
+    query: '"Creator" interview',
+    media: {
+      title: 'Creator interview',
+      source: 'YouTube',
+      sourceId: 'youtube',
+      url: 'https://cdn.example.com/video.mp4',
+      link: 'https://youtube.com/watch?v=1'
+    }
+  };
+  assert.equal(personRuleMatches({ type: 'domain', value: 'youtube.com' }, link), true);
+  assert.equal(personRuleMatches({ type: 'source', value: 'youtube' }, link), true);
+  assert.equal(personRuleMatches({ type: 'query', value: 'interview' }, link), true);
+  assert.equal(personRuleMatches({ type: 'title', value: 'unrelated' }, link), false);
+  const store = {
+    personValidationRules: [
+      { id: 'newest', personId: 'p1', type: 'source', value: 'youtube', action: 'review', createdAt: '2026-01-03' },
+      { id: 'boost', personId: 'p1', type: 'domain', value: 'youtube.com', action: 'boost', boost: 15, createdAt: '2026-01-02' },
+      { id: 'oldest', personId: 'p1', type: 'keyword', value: 'creator', action: 'confirm', createdAt: '2026-01-01' }
+    ]
+  };
+  const applied = applyPersonRules(store, 'p1', link);
+  assert.equal(applied.status, 'to_review');
+  assert.equal(applied.personScore, 75);
+  assert.deepEqual(applied.matchedRules, ['oldest', 'boost', 'newest']);
+});
+
+test('score les comptes confirmes et penalise une date de naissance contradictoire', () => {
+  const person = {
+    displayName: 'Alex Example',
+    birthYear: 1990,
+    aliases: [],
+    usernames: [],
+    positiveKeywords: [],
+    excludeKeywords: [],
+    accounts: [{ platform: 'youtube', username: 'alexofficial', url: 'https://youtube.com/@alexofficial', status: 'confirmed' }]
+  };
+  const accountMatch = scorePersonMedia(person, { title: 'alexofficial new video', confidenceScore: 20 });
+  assert.equal(accountMatch.score, 94);
+  const contradiction = scorePersonMedia(person, { title: 'Alex Example', description: 'born in 1982', confidenceScore: 20 });
+  assert.ok(contradiction.score <= 40);
+  assert.ok(contradiction.evidence.some(reason => reason.includes('contradictoire')));
 });
 
 test('calcule la distance de Hamming des empreintes perceptuelles', () => {
@@ -637,17 +748,26 @@ test('expose des contrats API coherents', async () => {
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'github').mode, 'github-users-api');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'gelbooru').mode, 'gelbooru-dapi');
   assert.equal(adapters.adapters.find(adapter => adapter.id === 'fanvue').implementation, 'source-crawl-adapter');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'coomer').mode, 'coomer-profile-api-v1');
+  assert.equal(adapters.adapters.find(adapter => adapter.id === 'coomer').availability, 'public-identity-metadata-only');
 
-  const providers = await fetch(`${baseUrl}/api/connections/providers`).then(response => response.json());
+  const providersResponse = await fetch(`${baseUrl}/api/connections/providers`);
+  const connectionCookie = providersResponse.headers.get('set-cookie').split(';')[0];
+  const providers = await providersResponse.json();
   const google = providers.providers.find(provider => provider.id === 'google');
   assert.equal(google.fields.find(field => field.name === 'cx').defaultValue, '155c4d451e53743c2');
   assert.deepEqual(google.fields.filter(field => field.required).map(field => field.name), ['apiKey']);
   assert.ok(['searxng', 'lemmy', 'pixelfed', 'github', 'podcastindex', 'pexels', 'giphy', 'gelbooru', 'danbooru'].every(id => providers.providers.some(provider => provider.id === id)));
 
-  const googleSave = await fetch(`${baseUrl}/api/connections/google`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'test-key' }) });
+  const googleSave = await fetch(`${baseUrl}/api/connections/google`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: connectionCookie }, body: JSON.stringify({ apiKey: 'test-key' }) });
   assert.equal(googleSave.status, 200);
-  const googleClear = await fetch(`${baseUrl}/api/connections/google`, { method: 'DELETE' });
+  const configuredProviders = await fetch(`${baseUrl}/api/connections/providers`, { headers: { cookie: connectionCookie } }).then(response => response.json());
+  assert.equal(configuredProviders.providers.find(provider => provider.id === 'google').storage, 'isolated-session-memory');
+  const isolatedProviders = await fetch(`${baseUrl}/api/connections/providers`).then(response => response.json());
+  assert.equal(isolatedProviders.providers.find(provider => provider.id === 'google').storage, 'none');
+  const googleClear = await fetch(`${baseUrl}/api/connections/google`, { method: 'DELETE', headers: { cookie: connectionCookie } });
   assert.equal(googleClear.status, 200);
+  assert.equal((await googleClear.json()).removed, true);
 });
 
 test('conserve les preuves et le statut des alias entre Media Finder et Person Finder', async () => {
@@ -715,6 +835,133 @@ test('conserve les preuves et le statut des alias entre Media Finder et Person F
   assert.equal(deletePerson.status, 200);
 });
 
+test('securise le cycle complet profil comptes validation timeline rapport et graphe', async () => {
+  const currentYear = new Date().getFullYear();
+  const rejectedMinor = await fetch(`${baseUrl}/api/persons`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Minor Guard Test',
+      publicOnly: true,
+      safeMode: true,
+      adultConfirmed: true,
+      birthYear: currentYear - 18
+    })
+  });
+  assert.equal(rejectedMinor.status, 400);
+  assert.equal((await rejectedMinor.json()).code, 'minor_or_age_ambiguous');
+
+  const personResponse = await fetch(`${baseUrl}/api/persons`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Person Workflow Test',
+      type: 'creator',
+      publicOnly: true,
+      safeMode: true,
+      birthYear: 1990
+    })
+  });
+  assert.equal(personResponse.status, 200);
+  const person = await personResponse.json();
+
+  const invalidPatch = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ aliases: 'not-an-array' })
+  });
+  assert.equal(invalidPatch.status, 400);
+  const unsafePatch = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ publicOnly: false })
+  });
+  assert.equal(unsafePatch.status, 400);
+
+  const invalidAccount = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/accounts`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: 'javascript:alert(1)' })
+  });
+  assert.equal(invalidAccount.status, 400);
+  const accountResponse = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/accounts`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ platform: 'youtube', username: 'workflow', url: 'https://youtube.com/@workflow' })
+  });
+  assert.equal(accountResponse.status, 200);
+  const account = (await accountResponse.json()).account;
+  assert.ok(account.id);
+  const duplicateAccount = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/accounts`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ platform: 'youtube', username: 'workflow', url: 'https://youtube.com/@workflow' })
+  });
+  assert.equal(duplicateAccount.status, 409);
+  const editedAccount = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/accounts/${encodeURIComponent(account.id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'workflow-edited' })
+  });
+  assert.equal(editedAccount.status, 200);
+
+  const mediaResponse = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/media`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      media: {
+        title: 'Person Workflow Test interview',
+        url: 'https://cdn.example.com/workflow.jpg',
+        link: 'https://youtube.com/watch?v=workflow',
+        source: 'YouTube'
+      },
+      mediaType: 'image',
+      personScore: 91,
+      evidence: ['nom exact']
+    })
+  });
+  assert.equal(mediaResponse.status, 200);
+  const mediaLink = await mediaResponse.json();
+  const validation = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/media/${encodeURIComponent(mediaLink.id)}/validate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'confirmed', note: 'preuve verifiee' })
+  });
+  assert.equal(validation.status, 200);
+
+  const ruleResponse = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/validation/rules`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'source', action: 'boost', value: 'youtube', boost: 12 })
+  });
+  assert.equal(ruleResponse.status, 200);
+  assert.equal((await ruleResponse.json()).boost, 12);
+
+  const timeline = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/timeline`).then(response => response.json());
+  assert.ok(timeline.events.some(event => event.type === 'account_added'));
+  assert.ok(timeline.events.some(event => event.type === 'media_discovered'));
+  assert.ok(timeline.events.some(event => event.type === 'media_validated'));
+  assert.ok(timeline.events.some(event => event.type === 'rule_created'));
+  const timelineStats = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/timeline/stats`).then(response => response.json());
+  assert.equal(timelineStats.media, 1);
+  assert.equal(timelineStats.validated, 1);
+  const timelineExport = await fetch(`${baseUrl}/api/exports/person-timeline?personId=${encodeURIComponent(person.id)}&format=json`);
+  assert.equal(timelineExport.status, 200);
+  assert.match(await timelineExport.text(), /media_discovered/);
+
+  const graph = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/graph`).then(response => response.json());
+  assert.ok(graph.nodes.some(node => node.type === 'person'));
+  assert.ok(graph.nodes.some(node => node.type === 'media'));
+  const report = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/report`).then(response => response.json());
+  assert.equal(report.scope.publicOnly, true);
+  assert.equal(report.stats.media.validated, 1);
+
+  const deleteAccount = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}/accounts/${encodeURIComponent(account.id)}`, { method: 'DELETE' });
+  assert.equal(deleteAccount.status, 200);
+  const deletePerson = await fetch(`${baseUrl}/api/persons/${encodeURIComponent(person.id)}`, { method: 'DELETE' });
+  assert.equal(deletePerson.status, 200);
+});
+
 test('garde les contrats DOM et le registre de sources synchronises', async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
@@ -729,8 +976,8 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
 
   const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
   const sourceIds = sourcePayload.sources.map(source => source.id);
-  const addedSources = ['commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz', 'gdelt', 'podcastindex', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru', 'pixelfed', 'pexels', 'giphy'];
-  assert.equal(sourceIds.length, 96);
+  const addedSources = ['commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz', 'gdelt', 'podcastindex', 'coomer', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru', 'pixelfed', 'pexels', 'giphy'];
+  assert.equal(sourceIds.length, 97);
   assert.ok(['openverse', 'snapchat', 'threads', ...addedSources].every(sourceId => sourceIds.includes(sourceId)));
   assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
   assert.match(client, /createSourceChip\(source\)/);
@@ -749,7 +996,7 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(client, /runSearchWithCurrentControls\(\{ append: true, aliasOf: parentQuery \}\)/);
   assert.match(client, /searchForm\.requestSubmit\(\)/);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
-  assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 51);
+  assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 52);
   assert.equal(new Set(sourceIds).size, sourceIds.length);
 });
 

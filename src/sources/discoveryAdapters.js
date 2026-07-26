@@ -270,8 +270,11 @@ function parseGelbooruPosts(payload = {}) {
 function parseDanbooruPosts(rows = []) {
   return {
     media: rows.map(row => {
-      const original = row.large_file_url || row.file_url || row.source;
-      const video = ['mp4', 'webm', 'mov'].includes(String(row.file_ext || '').toLowerCase()) || /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(original);
+      const declaredVideo = ['mp4', 'webm', 'mov'].includes(String(row.file_ext || '').toLowerCase());
+      const original = declaredVideo
+        ? (row.file_url || row.large_file_url || row.source)
+        : (row.large_file_url || row.file_url || row.source);
+      const video = declaredVideo || /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(original);
       return {
         type: video ? 'video' : 'image',
         url: original,
