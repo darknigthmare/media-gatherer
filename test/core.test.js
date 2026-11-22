@@ -136,6 +136,20 @@ test('rejette les assets UI et les cartes hors sujet sur une page de recherche',
   assert.equal(videos.length, 1);
   assert.match(videos[0].url, /video\/sxysindy/);
   assert.equal(isLikelyUiAsset('https://forum.example/styles/default/xenforo/bell.png', 'Search'), true);
+
+  const falseVideoHtml = `
+    <html><head>
+      <link rel="manifest" href="https://www.nasa.gov/assets/favicons/site.webmanifest">
+      <meta property="og:image" content="https://www.nasa.gov/hero.jpg">
+    </head><body>
+      <a href="https://science.nasa.gov/skywatching/">NASA Skywatching</a>
+      <a href="https://www.nasa.gov/blogs/watch-the-skies/2026/">NASA Watch the skies</a>
+      <a href="https://www.nasa.gov/watch/nasa-launch">NASA Launch Watch</a>
+    </body></html>`;
+  const cleanVideos = extractLinksAsVideos(falseVideoHtml, 'https://www.nasa.gov/', 'NASA', 'duckduckgo', 20, { trustedContext: true });
+  assert.equal(cleanVideos.length, 1);
+  assert.equal(cleanVideos[0].url, 'https://www.nasa.gov/watch/nasa-launch');
+  assert.equal(cleanVideos[0].thumbnail, 'https://www.nasa.gov/hero.jpg');
 });
 
 test('limite un profil Linktree aux medias du profil et remonte les comptes candidats', () => {

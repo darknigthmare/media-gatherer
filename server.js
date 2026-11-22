@@ -1145,22 +1145,24 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
   const $ = cheerio.load(html || '');
   const rows = [];
   const trustedDetailPage = Boolean(options.trustedContext);
+  const pageOgThumbnail = absolutize($('meta[property="og:image"]').attr('content'), baseUrl);
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     const text = $(el).text().trim();
     const hrefPath = String(href || '').split(/[?#]/, 1)[0];
-    if (!href || !/(watch|video|\/v\/|embed|mp4|webm|clip|shorts)/i.test(hrefPath)) return;
+    if (!href || !/(?:^|\/)(?:watch|video|videos|v|embed|clip|clips|shorts)(?:\/|$)|\/video-[^/]+|\.(?:mp4|webm|m3u8|mov)$/i.test(hrefPath)) return;
     let url;
     try {
       url = new URL(href, baseUrl).toString();
     } catch {
       return;
     }
+    if (isLikelyUiAsset(url, text)) return;
     const card = $(el).closest('article, li, figure, [class*="item"], [class*="card"], [class*="thumb"], [class*="result"]');
     const context = [text, card.text(), url].filter(Boolean).join(' ').replace(/\s+/g, ' ');
     if (!textMatchesQuery(context, query)) return;
     const posterElement = card.find('img').first();
-    const thumbnail = absolutize(bestMediaCandidate([posterElement.attr('data-src'), posterElement.attr('srcset'), posterElement.attr('src')]), baseUrl);
+    const thumbnail = absolutize(bestMediaCandidate([posterElement.attr('data-src'), posterElement.attr('srcset'), posterElement.attr('src')]), baseUrl) || pageOgThumbnail;
     rows.push(enrichMedia({ url, link: url, thumbnail, title: text || `${sourceLabel(sourceId)} video`, duration: 'Ouvrir la source', playback: 'external' }, query, sourceId, 'video'));
   });
   $('video[src], source[src], meta[property="og:video"], meta[property="og:video:url"], meta[name="twitter:player"]').each((_, el) => {
@@ -1169,15 +1171,15 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
     const title = $('title').text().trim() || `${sourceLabel(sourceId)} video`;
     const parentVideo = $(el).is('source') ? $(el).closest('video') : $(el);
     const thumbnail = absolutize(parentVideo.attr('poster') || $('meta[property="og:image"]').attr('content'), baseUrl);
-    if (/^https?:\/\//.test(url) && (trustedDetailPage || textMatchesQuery(title, query) || textMatchesQuery(url, query))) {
+    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url, title) && (trustedDetailPage || textMatchesQuery(title, query) || textMatchesQuery(url, query))) {
       rows.push(enrichMedia({ url, link: baseUrl, thumbnail, title, duration: 'Media public', trustedContext: trustedDetailPage }, query, sourceId, 'video'));
     }
   });
-  const videoRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:mp4|webm|m3u8|mov)(?:\?[^"'<>\\\s]*)?/gi;
+  const videoRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:mp4|webm|m3u8|mov)(?=[?#"'<>\\\s]|$)(?:\?[^"'<>\\\s]*)?/gi;
   for (const match of String(html || '').matchAll(videoRegex)) {
     const url = absolutize(match[0].replace(/\\\//g, '/'), baseUrl);
-    if (/^https?:\/\//.test(url) && (trustedDetailPage || textMatchesQuery(url, query))) {
-      rows.push(enrichMedia({ url, link: baseUrl, title: `${sourceLabel(sourceId)} video`, duration: 'Media public', trustedContext: trustedDetailPage }, query, sourceId, 'video'));
+    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url) && (trustedDetailPage || textMatchesQuery(url, query))) {
+      rows.push(enrichMedia({ url, link: baseUrl, thumbnail: pageOgThumbnail, title: `${sourceLabel(sourceId)} video`, duration: 'Media public', trustedContext: trustedDetailPage }, query, sourceId, 'video'));
     }
   }
   return dedupeBy(rows, item => item.url).slice(0, limit);
