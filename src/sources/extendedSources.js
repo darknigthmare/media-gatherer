@@ -44,7 +44,22 @@ const EXTENDED_SOURCE_DEFINITIONS = [
   { id: 'indexxx', label: 'Indexxx', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
   { id: 'boobpedia', label: 'Boobpedia', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'public-metadata-crawl', subtype: 'metadata', purpose: 'identity' },
   { id: 'gelbooru', label: 'Gelbooru', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'gelbooru-dapi', subtype: 'illustration', purpose: 'media', auth: 'api-key-optional' },
-  { id: 'danbooru', label: 'Danbooru', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'danbooru-api', subtype: 'illustration', purpose: 'media', auth: 'api-key-optional' }
+  { id: 'danbooru', label: 'Danbooru', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'danbooru-api', subtype: 'illustration', purpose: 'media', auth: 'api-key-optional' },
+  { id: 'wikipedia', label: 'Wikipedia Public', category: 'identity', supports: ['image', 'page'], adapter: 'wikipedia-api', subtype: 'metadata', purpose: 'identity', defaultSelected: true },
+  { id: 'tvmaze', label: 'TVMaze People', category: 'identity', supports: ['image', 'page'], adapter: 'tvmaze-api', subtype: 'metadata', purpose: 'identity' },
+  { id: 'openlibrary', label: 'Open Library Authors', category: 'identity', supports: ['image', 'page'], adapter: 'openlibrary-api', subtype: 'metadata', purpose: 'identity' },
+  { id: 'nasalibrary', label: 'NASA Media Library', category: 'normal', supports: ['image', 'video', 'page'], adapter: 'nasa-images-api', subtype: 'archive', purpose: 'media' },
+  { id: 'loc', label: 'Library of Congress', category: 'normal', supports: ['image', 'page'], adapter: 'loc-api', subtype: 'archive', purpose: 'media' },
+  { id: 'metmuseum', label: 'Metropolitan Museum', category: 'normal', supports: ['image', 'page'], adapter: 'metmuseum-api', subtype: 'archive', purpose: 'media' },
+  { id: 'safebooru', label: 'Safebooru', category: 'normal', supports: ['image', 'page'], adapter: 'safebooru-dapi', subtype: 'illustration', purpose: 'media' },
+  { id: 'yandere', label: 'Yande.re', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'yandere-api', subtype: 'illustration', purpose: 'media' },
+  { id: 'konachan', label: 'Konachan', category: 'nsfw', nsfw: true, supports: ['image', 'page'], adapter: 'konachan-api', subtype: 'illustration', purpose: 'media' },
+  { id: 'yandex', label: 'Yandex Images', category: 'normal', supports: ['image', 'page'], adapter: 'yandex-images', subtype: 'search-engine', purpose: 'media' },
+  { id: 'bingvideos', label: 'Bing Videos', category: 'normal', supports: ['video', 'page'], adapter: 'bing-videos', subtype: 'search-engine', purpose: 'media', defaultSelected: true },
+  { id: 'civitai', label: 'Civitai Community', category: 'normal', supports: ['image', 'video', 'page'], adapter: 'civitai-api', subtype: 'community', purpose: 'media' },
+  { id: 'redtube', label: 'RedTube', category: 'nsfw', nsfw: true, supports: ['video'], adapter: 'redtube-api', subtype: 'platform', purpose: 'media' },
+  { id: 'e621', label: 'e621 Community', category: 'nsfw', nsfw: true, supports: ['image', 'video', 'page'], adapter: 'e621-api', subtype: 'illustration', purpose: 'media' },
+  { id: 'porntrex', label: 'PornTrex', category: 'nsfw', nsfw: true, supports: ['video'], adapter: 'source-crawl', subtype: 'platform', purpose: 'media' }
 ];
 
 const EXTENDED_SOURCE_ADAPTERS = {
@@ -84,7 +99,8 @@ const EXTENDED_SOURCE_ADAPTERS = {
   camsoda: { domains: ['camsoda.com'], pagePatterns: [/^\/[a-z0-9._-]+\/?$/i, /\/(?:model|profile)\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
   livejasmin: { domains: ['livejasmin.com'], pagePatterns: [/\/(?:en\/)?chat\/[a-z0-9._-]+/i, /\/(?:model|performer)\//i], media: ['image', 'page'], crawlLimit: 3, publicProfileOnly: true, identityOnly: true },
   indexxx: { domains: ['indexxx.com'], pagePatterns: [/\/(?:m|model|performer|pornstar)\//i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
-  boobpedia: { domains: ['boobpedia.com'], pagePatterns: [/\/boobs\/(?:index\.php\?title=)?[^/?#]+/i, /\/index\.php\?title=/i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true }
+  boobpedia: { domains: ['boobpedia.com'], pagePatterns: [/\/boobs\/(?:index\.php\?title=)?[^/?#]+/i, /\/index\.php\?title=/i], media: ['image', 'page'], crawlLimit: 4, publicProfileOnly: true, identityOnly: true },
+  porntrex: { domains: ['porntrex.com'], pagePatterns: [/\/video\/\d+\//i], media: ['video'], crawlLimit: 5 }
 };
 
 module.exports = {

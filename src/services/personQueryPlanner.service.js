@@ -1,16 +1,16 @@
 const PERSON_DEPTHS = new Set(['quick', 'normal', 'deep', 'archive']);
 const PERSON_SOURCE_PLANS = Object.freeze({
-  quick: ['duckduckgo', 'bing', 'wikimedia', 'wikidata'],
-  normal: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon'],
-  deep: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
-  archive: ['duckduckgo', 'bing', 'wikimedia', 'wikidata', 'youtube', 'reddit', 'telegram', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo']
+  quick: ['duckduckgo', 'bing', 'yandex', 'wikimedia', 'wikidata', 'wikipedia'],
+  normal: ['duckduckgo', 'bing', 'bingvideos', 'yandex', 'wikimedia', 'wikidata', 'wikipedia', 'tvmaze', 'openlibrary', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon'],
+  deep: ['duckduckgo', 'bing', 'bingvideos', 'yandex', 'wikimedia', 'wikidata', 'wikipedia', 'tvmaze', 'openlibrary', 'youtube', 'reddit', 'telegram', 'bluesky', 'mastodon', 'github', 'tumblr', 'internetarchive', 'wayback'],
+  archive: ['duckduckgo', 'bing', 'yandex', 'wikimedia', 'wikidata', 'wikipedia', 'youtube', 'reddit', 'telegram', 'internetarchive', 'wayback', 'commoncrawl', 'arquivo', 'loc']
 });
 const DEFAULT_QUERY_LIMITS = Object.freeze({ quick: 8, normal: 20, deep: 32, archive: 40 });
 const ARCHIVE_SOURCES = new Set(['wayback', 'commoncrawl', 'arquivo', 'internetarchive']);
-const SEARCH_ENGINES = new Set(['duckduckgo', 'bing', 'google', 'brave', 'searxng']);
+const SEARCH_ENGINES = new Set(['duckduckgo', 'bing', 'bingvideos', 'yandex', 'google', 'brave', 'searxng']);
 const EXACT_USERNAME_SOURCES = new Set(['telegram', 'github', 'coomer']);
 const METADATA_SOURCES = new Set([
-  'wikidata', 'tmdb', 'musicbrainz', 'stashdb', 'iafd', 'adultdatabase',
+  'wikidata', 'wikipedia', 'tvmaze', 'openlibrary', 'tmdb', 'musicbrainz', 'stashdb', 'iafd', 'adultdatabase',
   'theporndb', 'indexxx', 'boobpedia', 'babepedia', 'freeones'
 ]);
 

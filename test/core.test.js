@@ -71,6 +71,21 @@ const {
   parseGiphyResults,
   parseGelbooruPosts,
   parseDanbooruPosts,
+  parseWikipediaResults,
+  parseTvmazePeople,
+  parseOpenLibraryAuthors,
+  parseNasaLibraryResults,
+  parseLocResults,
+  parseMetMuseumObject,
+  parseSafebooruPosts,
+  parseMoebooruPosts,
+  parseRedgifsApiResults,
+  parseYandexImageResults,
+  parseBingVideoResults,
+  parseCivitaiResults,
+  parseRedtubeApiResults,
+  parseE621Posts,
+  isLikelyFileHosterUrl,
   coomerProfileMatches,
   decodeWarcHtml,
   selectWikidataEntity,
@@ -1011,8 +1026,14 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
 
   const sourcePayload = await fetch(`${baseUrl}/api/sources`).then(response => response.json());
   const sourceIds = sourcePayload.sources.map(source => source.id);
-  const addedSources = ['commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz', 'gdelt', 'podcastindex', 'coomer', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru', 'pixelfed', 'pexels', 'giphy'];
-  assert.equal(sourceIds.length, 97);
+  const addedSources = [
+    'commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz', 'gdelt', 'podcastindex', 'coomer',
+    'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru',
+    'pixelfed', 'pexels', 'giphy',
+    'wikipedia', 'tvmaze', 'openlibrary', 'nasalibrary', 'loc', 'metmuseum', 'safebooru', 'yandere', 'konachan',
+    'yandex', 'bingvideos', 'civitai', 'redtube', 'e621', 'porntrex'
+  ];
+  assert.equal(sourceIds.length, 112);
   assert.ok(['openverse', 'snapchat', 'threads', ...addedSources].every(sourceId => sourceIds.includes(sourceId)));
   assert.match(client, /fetch\(`\$\{API_BASE\}\/api\/sources`\)/);
   assert.match(client, /createSourceChip\(source\)/);
@@ -1031,7 +1052,7 @@ test('garde les contrats DOM et le registre de sources synchronises', async () =
   assert.match(client, /runSearchWithCurrentControls\(\{ append: true, aliasOf: parentQuery \}\)/);
   assert.match(client, /searchForm\.requestSubmit\(\)/);
   assert.ok(sourcePayload.sources.every(source => ['normal', 'social', 'identity', 'nsfw'].includes(source.category)));
-  assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 52);
+  assert.equal(sourcePayload.sources.filter(source => source.category === 'nsfw').length, 57);
   assert.equal(new Set(sourceIds).size, sourceIds.length);
 });
 
@@ -1110,4 +1131,169 @@ test('exporte les resultats en CSV et Markdown', async () => {
   const markdown = await fetch(`${baseUrl}/api/exports/results?format=markdown`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
   assert.equal(markdown.status, 200);
   assert.match(await markdown.text(), /Sxysindy photo/);
+});
+
+test('normalise les 9 nouvelles sources catalogue public et l API RedGIFs v2', () => {
+  const wiki = parseWikipediaResults({
+    query: {
+      pages: {
+        8091: {
+          title: 'Douglas Adams',
+          index: 1,
+          extract: 'English author and satirist.',
+          fullurl: 'https://en.wikipedia.org/wiki/Douglas_Adams',
+          original: { source: 'https://upload.wikimedia.org/douglas.jpg', width: 1000, height: 1200 },
+          thumbnail: { source: 'https://upload.wikimedia.org/douglas_600.jpg', width: 600, height: 720 }
+        }
+      }
+    }
+  }, 'Douglas Adams');
+  assert.equal(wiki.media.length, 1);
+  assert.equal(wiki.media[0].originalConfirmed, true);
+  assert.equal(wiki.aliases[0].value, 'Douglas Adams');
+
+  const tvmaze = parseTvmazePeople([{
+    score: 1,
+    person: {
+      id: 46432,
+      name: 'Tom Hanks',
+      url: 'https://www.tvmaze.com/people/46432/tom-hanks',
+      birthday: '1956-07-09',
+      image: { original: 'https://static.tvmaze.com/orig.jpg', medium: 'https://static.tvmaze.com/med.jpg' }
+    }
+  }], 'Tom Hanks');
+  assert.equal(tvmaze.media.length, 1);
+  assert.equal(tvmaze.media[0].url, 'https://static.tvmaze.com/orig.jpg');
+
+  const openlib = parseOpenLibraryAuthors({
+    docs: [{
+      key: 'OL272947A',
+      name: 'Douglas Adams',
+      alternate_names: ['Douglas Noël Adams', 'Adams, Douglas'],
+      birth_date: '11 March 1952'
+    }]
+  }, 'Douglas Adams');
+  assert.equal(openlib.media.length, 1);
+  assert.ok(openlib.aliases.some(a => a.value === 'Douglas Noël Adams'));
+  assert.ok(!openlib.aliases.some(a => a.value === 'Adams, Douglas'));
+
+  const nasa = parseNasaLibraryResults({
+    collection: {
+      items: [{
+        data: [{ nasa_id: 'AS11-40-5874', title: 'Apollo 11 Moonwalk', media_type: 'image', description: 'NASA Apollo mission' }],
+        links: [{ rel: 'preview', href: 'https://images-assets.nasa.gov/image/AS11-40-5874/thumb.jpg' }]
+      }]
+    }
+  }, 'Apollo');
+  assert.equal(nasa.media.length, 1);
+  assert.match(nasa.media[0].link, /images\.nasa\.gov\/details\/AS11-40-5874/);
+
+  const loc = parseLocResults({
+    results: [{
+      title: 'NASA Launch Pad',
+      url: 'https://www.loc.gov/item/123/',
+      image_url: ['https://tile.loc.gov/small.jpg#w=150', 'https://tile.loc.gov/large.jpg#w=1024'],
+      description: ['Archival NASA photograph']
+    }]
+  }, 'NASA');
+  assert.equal(loc.media.length, 1);
+  assert.equal(loc.media[0].url, 'https://tile.loc.gov/large.jpg');
+
+  const met = parseMetMuseumObject({
+    objectID: 436524,
+    title: 'Sunflowers',
+    artistDisplayName: 'Vincent van Gogh',
+    primaryImage: 'https://images.metmuseum.org/orig.jpg',
+    primaryImageSmall: 'https://images.metmuseum.org/small.jpg',
+    objectURL: 'https://www.metmuseum.org/art/collection/search/436524'
+  }, 'sunflowers');
+  assert.equal(met.originalConfirmed, true);
+  assert.equal(met.url, 'https://images.metmuseum.org/orig.jpg');
+
+  const safebooru = parseSafebooruPosts([{ id: 10, tags: 'landscape sky', file_url: 'https://safebooru.org/images/1/a.png', preview_url: 'https://safebooru.org/thumbnails/1/a.jpg', width: 1200, height: 800 }]);
+  assert.equal(safebooru.media.length, 1);
+
+  const moe = parseMoebooruPosts([{ id: 99, tags: 'landscape clouds', file_url: 'https://files.yande.re/image/99.jpg', preview_url: 'https://assets.yande.re/prev/99.jpg', width: 1920, height: 1080, rating: 's' }], 'yande.re');
+  assert.equal(moe.media.length, 1);
+  assert.equal(moe.media[0].link, 'https://yande.re/post/show/99');
+
+  const redgifs = parseRedgifsApiResults({
+    gifs: [
+      { id: 'unrelated1', userName: 'other', tags: ['unrelated'], urls: { hd: 'https://media.redgifs.com/other.mp4', poster: 'https://media.redgifs.com/other.jpg' } },
+      { id: 'match1', userName: 'miakhalifa', tags: ['Mia Khalifa'], duration: 14, width: 720, height: 1280, urls: { hd: 'https://media.redgifs.com/match1.mp4', poster: 'https://media.redgifs.com/match1.jpg', html: 'https://www.redgifs.com/ifr/match1' } }
+    ]
+  }, 'mia khalifa', 5);
+  assert.equal(redgifs.media.length, 1);
+  assert.equal(redgifs.media[0].url, 'https://media.redgifs.com/match1.mp4');
+  assert.equal(redgifs.media[0].embedUrl, 'https://www.redgifs.com/ifr/match1');
+
+  assert.equal(isLikelyFileHosterUrl('https://k2s.cc/file/abc/video.mp4'), true);
+  assert.equal(isLikelyFileHosterUrl('https://filejoker.net/xyz/video.mp4'), true);
+  assert.equal(isLikelyFileHosterUrl('https://cdn.example.com/video.mp4'), false);
+
+  const pt = parsePeerTubeResults({
+    data: [{
+      uuid: 'abc',
+      name: 'NASA Mars Rover',
+      url: 'https://tube.example.org/w/abc',
+      previewPath: '/lazy-static/previews/abc.jpg'
+    }]
+  }, 'https://sepiasearch.org');
+  assert.equal(pt.media[0].thumbnail, 'https://tube.example.org/lazy-static/previews/abc.jpg');
+
+  const yandexState = JSON.stringify({
+    initialState: {
+      serpList: {
+        items: {
+          entities: {
+            e1: {
+              viewerData: {
+                preview: [{ url: 'https://cdn.example/nasa-small.jpg', w: 400, h: 300 }],
+                dups: [{ url: 'https://cdn.example/nasa-hd.jpg', w: 1920, h: 1080 }],
+                thumb: { url: '//avatars.mds.yandex.net/i?id=abc' }
+              },
+              snippet: { title: 'NASA Telescope', url: 'https://science.nasa.gov/article' }
+            }
+          }
+        }
+      }
+    }
+  }).replace(/"/g, '&quot;');
+  const yandex = parseYandexImageResults(`<div data-state="${yandexState}"></div>`, 'NASA', 10);
+  assert.equal(yandex.media.length, 1);
+  assert.equal(yandex.media[0].url, 'https://cdn.example/nasa-hd.jpg');
+  assert.equal(yandex.media[0].width, 1920);
+
+  const bvHtml = `<div class="mc_vtvc"><div vrhm='{"murl":"https://www.tiktok.com/@nasa/video/123","du":"01:40","purl":"/videos/riverview?churl=https%3A%2F%2Fwww.tiktok.com%2F%40nasa"}'></div><div class="mc_vtvc_title">NASA Launch</div><img src="https://tse1.mm.bing.net/thumb.jpg"></div>`;
+  const bv = parseBingVideoResults(bvHtml, 'NASA', 10);
+  assert.equal(bv.media.length, 1);
+  assert.equal(bv.media[0].duration, '01:40');
+  assert.deepEqual(bv.accounts, ['https://www.tiktok.com/@nasa']);
+
+  const civ = parseCivitaiResults({
+    items: [{
+      id: 128,
+      name: 'Cyberpunk Art',
+      creator: { username: 'cyberartist' },
+      tags: ['cyberpunk'],
+      modelVersions: [{ images: [{ url: 'https://image.civitai.com/original=true/1.jpeg', nsfwLevel: 1, width: 1024, height: 1024, type: 'image' }] }]
+    }]
+  }, 'cyberpunk', false);
+  assert.equal(civ.media.length, 1);
+  assert.equal(civ.media[0].originalConfirmed, true);
+
+  const rt = parseRedtubeApiResults({
+    videos: [{ video: { video_id: '42', title: 'Mia Khalifa sample', url: 'https://www.redtube.com/42', embed_url: 'https://embed.redtube.com/?id=42', duration: '10:00', default_thumb: 'https://cdn.rdt/42.jpg' } }]
+  }, 'mia khalifa', 5);
+  assert.equal(rt.media.length, 1);
+  assert.equal(rt.media[0].embedUrl, 'https://embed.redtube.com/?id=42');
+
+  const e6 = parseE621Posts([{
+    id: 77,
+    tags: ['landscape', 'sky'],
+    rating: 's',
+    files: { meta: { ext: 'mp4', duration: 12 }, original: { url: 'https://static1.e621.net/77.mp4', width: 1920, height: 1080 }, preview: { jpg: 'https://static1.e621.net/77.jpg' } }
+  }]);
+  assert.equal(e6.media.length, 1);
+  assert.equal(e6.media[0].type, 'video');
 });

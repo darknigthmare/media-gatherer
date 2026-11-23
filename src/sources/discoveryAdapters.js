@@ -340,7 +340,8 @@ async function latestCommonCrawlCollection(deps) {
 }
 
 async function runCommonCrawl(query, deps) {
-  const candidates = (await deps.discoverArchivePages(query, 4)).filter(page => /^https?:\/\//i.test(page.url));
+  const deadline = Date.now() + 14000;
+  const candidates = (await deps.discoverArchivePages(query, 2)).filter(page => /^https?:\/\//i.test(page.url));
   if (!candidates.length) return { images: [], videos: [], status: statusFor('commoncrawl-warc', [], [], { note: 'Aucune URL publique a rechercher dans Common Crawl', zeroReason: 'no_candidate_urls', pagesDiscovered: 0 }) };
   let collection;
   try {
@@ -365,16 +366,18 @@ async function runCommonCrawl(query, deps) {
   const failures = [];
   let captures = 0;
   let pagesCrawled = 0;
-  for (const page of candidates.slice(0, 3)) {
+  for (const page of candidates.slice(0, 2)) {
+    if (Date.now() >= deadline) break;
     try {
       const params = new URLSearchParams({ url: page.url, output: 'json', limit: '1', collapse: 'digest' });
       params.append('filter', 'status:200');
       params.append('filter', 'mime:text/html');
-      const indexPayload = await deps.fetchText(`${collection.endpoint}?${params.toString()}`, { timeout: 10000 });
+      const indexPayload = await deps.fetchText(`${collection.endpoint}?${params.toString()}`, { timeout: 5000 });
       const capture = parseCdxLines(indexPayload).at(-1);
       if (!capture?.filename || !capture?.offset || !capture?.length) continue;
       captures += 1;
-      const compressed = await deps.fetchBinaryRange(`https://data.commoncrawl.org/${capture.filename}`, Number(capture.offset), Number(capture.length), { timeout: 12000 });
+      if (Date.now() >= deadline) break;
+      const compressed = await deps.fetchBinaryRange(`https://data.commoncrawl.org/${capture.filename}`, Number(capture.offset), Number(capture.length), { timeout: 6000 });
       const html = decodeWarcHtml(compressed);
       if (!html) {
         failures.push({ url: page.url, error: 'WARC sans reponse HTML extractible' });
@@ -467,13 +470,39 @@ async function runOdysee(query, deps) {
 }
 
 async function runMusicBrainz(query, deps) {
-  const headers = { accept: 'application/json', 'user-agent': deps.userAgent };
-  const search = await deps.fetchText(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(query)}&limit=8&fmt=json`, { headers });
-  const artists = (search.artists || []).filter(artist => matchesQuery(`${artist.name || ''} ${(artist.aliases || []).map(alias => alias.name).join(' ')}`, query));
+  const headers = {
+    accept: 'application/json',
+    'user-agent': 'MediaGatherer/1.9.0 (https://github.com/darknigthmare/media-gatherer)'
+  };
+  let search;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      search = await deps.fetchText(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(query)}&limit=8&fmt=json`, { headers, timeout: 10000 });
+      break;
+    } catch (error) {
+      const busy = error.status === 503 || error.status === 429 || /503|429/.test(String(error.message || ''));
+      if (busy && attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 650));
+        continue;
+      }
+      return {
+        images: [],
+        videos: [],
+        status: statusFor('musicbrainz-api', [], [], {
+          success: false,
+          available: !busy,
+          directReachable: false,
+          zeroReason: busy ? 'rate_limited' : 'source_unreachable',
+          note: busy ? 'MusicBrainz temporairement sature (HTTP 503/429)' : `MusicBrainz indisponible: ${error.message}`
+        })
+      };
+    }
+  }
+  const artists = (search?.artists || []).filter(artist => matchesQuery(`${artist.name || ''} ${(artist.aliases || []).map(alias => alias.name).join(' ')}`, query));
   const selected = artists.sort((a, b) => Number(b.score || 0) - Number(a.score || 0))[0];
   if (!selected) return { images: [], videos: [], status: statusFor('musicbrainz-api', [], [], { note: 'Aucun artiste MusicBrainz correspondant' }) };
   let details = selected;
-  try { details = await deps.fetchText(`https://musicbrainz.org/ws/2/artist/${encodeURIComponent(selected.id)}?inc=aliases+url-rels&fmt=json`, { headers }); } catch { details = selected; }
+  try { details = await deps.fetchText(`https://musicbrainz.org/ws/2/artist/${encodeURIComponent(selected.id)}?inc=aliases+url-rels&fmt=json`, { headers, timeout: 10000 }); } catch { details = selected; }
   const link = `https://musicbrainz.org/artist/${selected.id}`;
   const aliases = [{ value: details.name || selected.name, kind: 'display_name', confidence: 96, evidence: [link] }];
   for (const alias of details.aliases || selected.aliases || []) if (alias.name) aliases.push({ value: alias.name, kind: 'display_name', confidence: alias.primary ? 94 : 86, evidence: [link] });
@@ -633,8 +662,45 @@ async function runDanbooru(query, deps) {
   const apiKey = deps.connectionValue('danbooru', 'apiKey', 'DANBOORU_API_KEY');
   if (login) params.set('login', login);
   if (apiKey) params.set('api_key', apiKey);
-  const payload = await deps.fetchText(`https://danbooru.donmai.us/posts.json?${params}`, { headers: { accept: 'application/json' } });
-  const parsed = parseDanbooruPosts(Array.isArray(payload) ? payload : []);
+  let payload;
+  try {
+    payload = await deps.fetchText(`https://danbooru.donmai.us/posts.json?${params}`, {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'MediaGatherer/1.9.0 (https://github.com/darknigthmare/media-gatherer)'
+      }
+    });
+  } catch (error) {
+    if ([401, 403, 451].includes(error.status) || /HTTP 403/i.test(String(error.message || ''))) {
+      return {
+        images: [],
+        videos: [],
+        status: statusFor('danbooru-api', [], [], {
+          success: false,
+          available: false,
+          directReachable: false,
+          zeroReason: login && apiKey ? 'invalid_credentials' : 'access_blocked',
+          note: login && apiKey ? `Danbooru refuse les identifiants personnels: ${error.message}` : `Danbooru bloque actuellement les requetes automatisees (${error.message})`
+        })
+      };
+    }
+    throw error;
+  }
+  if (!Array.isArray(payload)) {
+    const blocked = /(?:<html|captcha|cloudflare|just a moment)/i.test(String(payload || ''));
+    return {
+      images: [],
+      videos: [],
+      status: statusFor('danbooru-api', [], [], {
+        success: false,
+        available: false,
+        directReachable: false,
+        zeroReason: blocked ? 'access_blocked' : 'source_unreachable',
+        note: blocked ? 'Danbooru a renvoye une page anti-bot' : 'Danbooru a renvoye une reponse non JSON'
+      })
+    };
+  }
+  const parsed = parseDanbooruPosts(payload);
   const normalized = normalizeRaw(parsed, query, 'danbooru', deps);
   return { ...normalized, status: statusFor('danbooru-api', normalized.images, normalized.videos, { note: apiKey ? 'Danbooru API avec cle personnelle' : 'Danbooru API publique' }) };
 }

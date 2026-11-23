@@ -14,7 +14,22 @@ const EXACT_CANARIES = Object.freeze({
   arquivo: { query: 'nasa.gov', inputType: 'domain', expected: 'archive_record_or_media' },
   coomer: { query: 'amouranth', inputType: 'username', expected: 'public_identity_metadata' },
   gelbooru: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
-  danbooru: { query: 'landscape', inputType: 'tag', expected: 'public_media' }
+  danbooru: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
+  wikipedia: { query: 'Douglas Adams', inputType: 'display_name', expected: 'identity_metadata' },
+  tvmaze: { query: 'Tom Hanks', inputType: 'display_name', expected: 'identity_metadata' },
+  openlibrary: { query: 'Douglas Adams', inputType: 'display_name', expected: 'identity_metadata' },
+  nasalibrary: { query: 'Apollo', inputType: 'keyword', expected: 'public_media' },
+  loc: { query: 'NASA', inputType: 'keyword', expected: 'public_media' },
+  metmuseum: { query: 'sunflowers', inputType: 'keyword', expected: 'public_media' },
+  safebooru: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
+  yandere: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
+  konachan: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
+  yandex: { query: 'NASA', inputType: 'keyword', expected: 'public_media' },
+  bingvideos: { query: 'NASA', inputType: 'keyword', expected: 'public_media' },
+  civitai: { query: 'cyberpunk', inputType: 'keyword', expected: 'public_media' },
+  redtube: { query: 'mia khalifa', inputType: 'keyword', expected: 'public_media' },
+  e621: { query: 'landscape', inputType: 'tag', expected: 'public_media' },
+  porntrex: { query: 'mia khalifa', inputType: 'keyword', expected: 'public_media' }
 });
 
 function defaultCanary(source = {}) {

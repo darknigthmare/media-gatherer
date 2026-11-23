@@ -1,4 +1,4 @@
-﻿// ----------------------------------------------------
+// ----------------------------------------------------
 // STATE VARIABLES
 // ----------------------------------------------------
 function readLocalArray(keys) {
@@ -1474,9 +1474,9 @@ async function runPersonSearch() {
   }
   if (personMediaList) personMediaList.innerHTML = '<div class="person-empty">Recherche Person Finder en cours...</div>';
   const depth = personDepth?.value || 'normal';
-  const adultSources = ['stashdb', 'iafd', 'babepedia', 'erome', 'redgifs', 'eporner', 'phunforum', 'planetsuzy', 'bellazon'];
+  const adultSources = ['stashdb', 'iafd', 'babepedia', 'erome', 'redgifs', 'redtube', 'eporner', 'porntrex', 'phunforum', 'planetsuzy', 'bellazon'];
   if (['deep', 'archive'].includes(depth)) adultSources.push('fanvue', 'indexxx', 'boobpedia', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin');
-  const identitySources = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
+  const identitySources = ['wikidata', 'wikipedia', 'tvmaze', 'openlibrary', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
   if (includeNsfw) identitySources.push('stashdb', 'iafd', 'theporndb', 'fanvue', 'indexxx', 'boobpedia');
   if (btnPersonSearch) btnPersonSearch.disabled = true;
   personSection?.setAttribute('aria-busy', 'true');
@@ -3942,7 +3942,7 @@ lightbox.addEventListener('click', (e) => {
 function openVideoModal(vid, trigger = document.activeElement) {
   const videoUrl = safeHttpUrl(vid.url);
   const candidateEmbedUrl = safeHttpUrl(vid.embedUrl);
-  const trustedEmbedDomains = ['youtube.com', 'youtube-nocookie.com', 'vimeo.com', 'dailymotion.com', 'redgifs.com', 'eporner.com'];
+  const trustedEmbedDomains = ['youtube.com', 'youtube-nocookie.com', 'vimeo.com', 'dailymotion.com', 'redgifs.com', 'eporner.com', 'redtube.com'];
   let embedUrl = '';
   try {
     const hostname = new URL(candidateEmbedUrl).hostname.replace(/^www\./, '');
@@ -4633,7 +4633,7 @@ function activateNsfwPreset() {
   if (searchMatchMode) searchMatchMode.value = 'smart';
   if (mediaKindMode) mediaKindMode.value = 'both';
   setNsfwVisibility();
-  const preferred = new Set(['erome', 'redgifs', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru']);
+  const preferred = new Set(['erome', 'redgifs', 'redtube', 'porntrex', 'e621', 'imagebam', 'imagefap', 'pornpics', 'babepedia', 'camwhores', 'pornzog', 'xhamster', 'xvideos', 'spankbang', 'pornhub', 'youporn', 'tube8', 'tnaflix', 'motherless', 'eporner', 'xnxx', 'hqporner', 'nuvid', 'drtuber', 'pornone', 'youjizz', 'phunforum', 'planetsuzy', 'bellazon', 'fanvue', 'chaturbate', 'stripchat', 'camsoda', 'livejasmin', 'indexxx', 'boobpedia', 'gelbooru', 'danbooru', 'yandere', 'konachan']);
   document.querySelectorAll('.sources-list input[type="checkbox"]').forEach(input => {
     if (getSourceGroup(input.value) === 'nsfw') input.checked = preferred.has(input.value);
   });

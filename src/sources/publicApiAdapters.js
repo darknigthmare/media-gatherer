@@ -214,12 +214,18 @@ function parsePeerTubeResults(payload = {}, instanceUrl) {
   const media = [];
   for (const video of payload.data || []) {
     const link = video.url || `${instanceUrl}/w/${video.uuid || video.shortUUID}`;
-    const thumbnail = video.previewPath || video.thumbnailPath;
+    let originBase = instanceUrl;
+    try { originBase = new URL(link).origin; } catch {}
+    const thumbnail = video.previewUrl || video.thumbnailUrl || video.previewPath || video.thumbnailPath;
+    let resolvedThumb = '';
+    if (thumbnail) {
+      try { resolvedThumb = new URL(thumbnail, originBase).toString(); } catch { resolvedThumb = ''; }
+    }
     media.push({
       type: 'video',
       url: link,
       link,
-      thumbnail: thumbnail ? new URL(thumbnail, instanceUrl).toString() : '',
+      thumbnail: resolvedThumb,
       title: video.name,
       description: video.description || video.shortDescription || '',
       durationSeconds: video.duration,
@@ -384,8 +390,13 @@ async function runTmdb(query, deps) {
 }
 
 async function runInternetArchive(query, deps) {
-  const archiveQuery = `(${query}) AND mediatype:(movies OR image)`;
-  const search = await deps.fetchText(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(archiveQuery)}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=mediatype&rows=6&page=1&output=json`);
+  const fields = 'fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=mediatype&fl%5B%5D=creator&fl%5B%5D=collection';
+  const focusedQuery = `(title:(${query}) OR description:(${query}) OR subject:(${query}) OR creator:(${query})) AND mediatype:(movies OR image)`;
+  let search = await deps.fetchText(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(focusedQuery)}&${fields}&rows=6&page=1&output=json`);
+  if (!(search?.response?.docs || []).length) {
+    const archiveQuery = `(${query}) AND mediatype:(movies OR image)`;
+    search = await deps.fetchText(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(archiveQuery)}&${fields}&rows=6&page=1&output=json`);
+  }
   const raw = { media: [] };
   const pageSamples = [];
   for (const doc of search.response?.docs || []) {
@@ -395,10 +406,15 @@ async function runInternetArchive(query, deps) {
     pageSamples.push({ url: link, title: doc.title || identifier });
     const metadata = await deps.fetchText(`https://archive.org/metadata/${encodeURIComponent(identifier)}`);
     const files = (metadata.files || []).filter(file => file.name && Number(file.size || 0) <= 150 * 1024 * 1024);
+    const metaContext = [
+      Array.isArray(doc.description) ? doc.description.join(' ') : (doc.description || ''),
+      Array.isArray(doc.creator) ? doc.creator.join(', ') : (doc.creator || ''),
+      Array.isArray(doc.collection) ? doc.collection.join(', ') : (doc.collection || '')
+    ].filter(Boolean).join(' - ');
     for (const file of files) {
       const encodedName = String(file.name).split('/').map(encodeURIComponent).join('/');
       const url = `https://archive.org/download/${encodeURIComponent(identifier)}/${encodedName}`;
-      const common = { link, title: doc.title || file.title || file.name, description: doc.description || '', width: file.width, height: file.height, trustedContext: true };
+      const common = { link, title: doc.title || file.title || file.name, description: metaContext, width: file.width, height: file.height, trustedContext: true };
       if (/\.(?:jpe?g|png|gif|webp)$/i.test(file.name) && !/(?:thumb|spectrogram|waveform|__ia_thumb)/i.test(file.name)) raw.media.push({ ...common, type: 'image', url, thumbnail: url });
       if (/\.(?:mp4|webm|ogv|mov)$/i.test(file.name) && !/(?:thumb|sample|trailer)/i.test(file.name)) raw.media.push({ ...common, type: 'video', url, thumbnail: `https://archive.org/services/img/${encodeURIComponent(identifier)}`, playback: 'direct' });
       if (raw.media.length >= deps.imageLimit + deps.videoLimit) break;
@@ -495,14 +511,32 @@ async function runExtendedApiSource(sourceId, query, options = {}, deps = {}) {
   }
 
   if (sourceId === 'peertube') {
-    const instanceValue = deps.connectionValue('peertube', 'instance', 'PEERTUBE_INSTANCE') || 'https://peertube.tv';
-    const instance = /^https?:\/\//i.test(instanceValue) ? instanceValue.replace(/\/+$/, '') : `https://${instanceValue.replace(/\/+$/, '')}`;
-    const payload = await deps.fetchText(`${instance}/api/v1/search/videos?search=${encodeURIComponent(query)}&count=${Math.min(scoped.videoLimit, 25)}&start=0&sort=-match`);
-    const raw = parsePeerTubeResults(payload, instance);
-    raw.media = raw.media.filter(item => textMatchesAllQueryTokens(`${item.title || ''} ${item.description || ''} ${item.accountUrl || ''} ${item.link || ''}`, query));
+    const configuredInstance = deps.connectionValue('peertube', 'instance', 'PEERTUBE_INSTANCE');
+    const endpoints = configuredInstance
+      ? [
+          /^https?:\/\//i.test(configuredInstance) ? configuredInstance.replace(/\/+$/, '') : `https://${configuredInstance.replace(/\/+$/, '')}`,
+          'https://sepiasearch.org'
+        ]
+      : ['https://sepiasearch.org', 'https://peertube.tv'];
+    let usedInstance = endpoints[0];
+    let raw = { media: [] };
+    for (const base of unique(endpoints)) {
+      try {
+        const payload = await deps.fetchText(`${base}/api/v1/search/videos?search=${encodeURIComponent(query)}&count=${Math.min(scoped.videoLimit, 25)}&start=0&sort=-match`, { timeout: 10000 });
+        const candidate = parsePeerTubeResults(payload, base);
+        candidate.media = candidate.media.filter(item => textMatchesAllQueryTokens(`${item.title || ''} ${item.description || ''} ${item.accountUrl || ''} ${item.link || ''}`, query));
+        if (candidate.media.length) {
+          raw = candidate;
+          usedInstance = base;
+          break;
+        }
+      } catch {
+        // Try next public PeerTube index/instance.
+      }
+    }
     const normalized = normalizeRaw(raw, query, sourceId, scoped);
     normalized.videos = normalized.videos.map(item => ({ ...item, duration: deps.formatDuration(item.durationSeconds) }));
-    return { ...normalized, status: statusFor(sourceId, 'peertube-api', normalized.images, normalized.videos, { note: `API publique ${new URL(instance).hostname}` }) };
+    return { ...normalized, status: statusFor(sourceId, 'peertube-api', normalized.images, normalized.videos, { note: `API publique ${new URL(usedInstance).hostname}` }) };
   }
 
   if (sourceId === 'twitch') {

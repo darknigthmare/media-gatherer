@@ -7,7 +7,7 @@ MediaGatherer est une application locale Node.js/Express de recherche et de clas
 - **Connexions API** : moteurs, plateformes sociales, archives et bases d'identite, avec test reel des identifiants personnels.
 - **Recherche inversee** : ouverture des moteurs inverses depuis une image choisie.
 
-Le registre contient 97 sources : 22 normales, 15 sociales, 8 d'identite et 52 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
+Le registre contient 112 sources : 29 normales, 15 sociales, 11 d'identite et 57 NSFW publiques. Il ne contourne ni connexion, ni compte prive, ni paywall.
 
 La version 1.8.0 ajoute un plan Person Finder specialise par source, une couverture reelle par alias/username/compte, un canari public pour chacune des 97 sources, une surveillance hebdomadaire des contrats, quatre etats honnetes de qualite media et une veille automatique locale avec diff. Le registre, le planificateur, l'execution Person Finder, la qualite et les veilles sont maintenant des modules distincts du serveur. Le moteur Google Programmable Search `155c4d451e53743c2` reste le CX public par defaut et requiert une cle `GOOGLE_API_KEY` personnelle.
 

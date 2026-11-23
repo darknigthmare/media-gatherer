@@ -2,8 +2,8 @@ const { CORE_SOURCE_DEFINITIONS } = require('./coreSources');
 const { EXTENDED_SOURCE_DEFINITIONS, EXTENDED_SOURCE_ADAPTERS } = require('./extendedSources');
 
 const DEFAULT_SELECTED_SOURCES = new Set([
-  'duckduckgo', 'bing', 'flickr', 'wikimedia', 'youtube', 'reddit',
-  'wayback', 'vimeo', 'dailymotion', 'wikidata', 'internetarchive', 'bluesky'
+  'duckduckgo', 'bing', 'bingvideos', 'flickr', 'wikimedia', 'youtube', 'reddit',
+  'wayback', 'vimeo', 'dailymotion', 'wikidata', 'wikipedia', 'internetarchive', 'bluesky'
 ]);
 
 const SOURCE_IDS = [
@@ -65,7 +65,7 @@ const SOURCE_CRAWL_ADAPTERS = {
   freeonesforum: { domains: ['freeones.com'], pagePatterns: [/\/forums\//i, /\/threads\//i], media: ['image', 'page'] },
   babesource: { domains: ['babesource.com'], pagePatterns: [/\/(?:model|babe|gallery|video)\//i], media: ['image', 'video'] },
   erome: { domains: ['erome.com'], pagePatterns: [/\/a\//i, /\/i\//i], media: ['image', 'video'], crawlLimit: 8 },
-  redgifs: { domains: ['redgifs.com'], pagePatterns: [/\/watch\//i, /\/gifs\//i], media: ['video'], crawlLimit: 8 },
+  redgifs: { domains: ['redgifs.com'], pagePatterns: [/\/watch\//i, /\/gifs\//i], media: ['video'], crawlLimit: 8, transport: 'redgifs-api-v2' },
   imagebam: { domains: ['imagebam.com'], pagePatterns: [/\/(?:gallery|image)\//i], media: ['image'], crawlLimit: 8 },
   imagefap: { domains: ['imagefap.com'], pagePatterns: [/\/(?:gallery|photo|pictures)\//i], media: ['image'], crawlLimit: 8 },
   pornpics: { domains: ['pornpics.com'], pagePatterns: [/\/(?:galleries|gallery|photos?)\//i], media: ['image'], crawlLimit: 8 },

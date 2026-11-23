@@ -134,7 +134,7 @@ test('chaque source possede un canari public et un contrat hors ligne valide', (
   assert.ok(canaries.every(row => row.query && row.inputType && row.expected && row.publicOnly));
   const report = auditSourceContracts();
   assert.equal(report.ok, true, report.errors.join(', '));
-  assert.equal(report.totals.canaries, 97);
+  assert.equal(report.totals.canaries, 112);
 });
 
 test('compare deux audits et signale une regression sans confondre une recuperation', () => {

@@ -52,6 +52,26 @@ const {
   decodeWarcHtml
 } = require('./src/sources/discoveryAdapters');
 const {
+  runPublicCatalogSource,
+  runRedgifsApi,
+  fetchYandexImageSearch,
+  fetchBingVideoSearch,
+  parseWikipediaResults,
+  parseTvmazePeople,
+  parseOpenLibraryAuthors,
+  parseNasaLibraryResults,
+  parseLocResults,
+  parseMetMuseumObject,
+  parseSafebooruPosts,
+  parseMoebooruPosts,
+  parseRedgifsApiResults,
+  parseYandexImageResults,
+  parseBingVideoResults,
+  parseCivitaiResults,
+  parseRedtubeApiResults,
+  parseE621Posts
+} = require('./src/sources/publicCatalogAdapters');
+const {
   coomerProfileMatches,
   resolveCoomerPublicProfile
 } = require('./src/sources/coomerAdapter');
@@ -582,7 +602,22 @@ function sourceDomain(sourceId) {
     indexxx: 'indexxx.com',
     boobpedia: 'boobpedia.com',
     gelbooru: 'gelbooru.com',
-    danbooru: 'danbooru.donmai.us'
+    danbooru: 'danbooru.donmai.us',
+    wikipedia: 'en.wikipedia.org',
+    tvmaze: 'tvmaze.com',
+    openlibrary: 'openlibrary.org',
+    nasalibrary: 'images.nasa.gov',
+    loc: 'loc.gov',
+    metmuseum: 'metmuseum.org',
+    safebooru: 'safebooru.org',
+    yandere: 'yande.re',
+    konachan: 'konachan.com',
+    yandex: 'yandex.com',
+    bingvideos: 'bing.com',
+    civitai: 'civitai.com',
+    redtube: 'redtube.com',
+    e621: 'e621.net',
+    porntrex: 'porntrex.com'
   };
   return domains[sourceId] || `${sourceId}.com`;
 }
@@ -1141,6 +1176,15 @@ function extractImagesFromHtml(html, baseUrl, query, sourceId, limit = 35, optio
   return dedupeBy(rows, item => item.url).slice(0, limit);
 }
 
+function isLikelyFileHosterUrl(rawUrl) {
+  try {
+    const host = new URL(String(rawUrl || '')).hostname.replace(/^www\./, '').toLowerCase();
+    return ['k2s.cc', 'keep2share.cc', 'filejoker.net', 'tezfiles.com', 'rapidgator.net', 'rg.to', 'nitroflare.com', 'alfafile.net', 'turbobit.net', 'uploaded.net', 'ddownload.com', 'katfile.com', 'mexa.sh', 'fikper.com'].some(domain => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+}
+
 function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, options = {}) {
   const $ = cheerio.load(html || '');
   const rows = [];
@@ -1157,7 +1201,7 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
     } catch {
       return;
     }
-    if (isLikelyUiAsset(url, text)) return;
+    if (isLikelyUiAsset(url, text) || isLikelyFileHosterUrl(url)) return;
     const card = $(el).closest('article, li, figure, [class*="item"], [class*="card"], [class*="thumb"], [class*="result"]');
     const context = [text, card.text(), url].filter(Boolean).join(' ').replace(/\s+/g, ' ');
     if (!textMatchesQuery(context, query)) return;
@@ -1171,14 +1215,14 @@ function extractLinksAsVideos(html, baseUrl, query, sourceId, limit = 20, option
     const title = $('title').text().trim() || `${sourceLabel(sourceId)} video`;
     const parentVideo = $(el).is('source') ? $(el).closest('video') : $(el);
     const thumbnail = absolutize(parentVideo.attr('poster') || $('meta[property="og:image"]').attr('content'), baseUrl);
-    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url, title) && (trustedDetailPage || textMatchesQuery(title, query) || textMatchesQuery(url, query))) {
+    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url, title) && !isLikelyFileHosterUrl(url) && (trustedDetailPage || textMatchesQuery(title, query) || textMatchesQuery(url, query))) {
       rows.push(enrichMedia({ url, link: baseUrl, thumbnail, title, duration: 'Media public', trustedContext: trustedDetailPage }, query, sourceId, 'video'));
     }
   });
   const videoRegex = /https?:\\?\/\\?\/[^"'<>\\\s]+?\.(?:mp4|webm|m3u8|mov)(?=[?#"'<>\\\s]|$)(?:\?[^"'<>\\\s]*)?/gi;
   for (const match of String(html || '').matchAll(videoRegex)) {
     const url = absolutize(match[0].replace(/\\\//g, '/'), baseUrl);
-    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url) && (trustedDetailPage || textMatchesQuery(url, query))) {
+    if (/^https?:\/\//.test(url) && !isLikelyUiAsset(url) && !isLikelyFileHosterUrl(url) && (trustedDetailPage || textMatchesQuery(url, query))) {
       rows.push(enrichMedia({ url, link: baseUrl, thumbnail: pageOgThumbnail, title: `${sourceLabel(sourceId)} video`, duration: 'Media public', trustedContext: trustedDetailPage }, query, sourceId, 'video'));
     }
   }
@@ -1478,13 +1522,28 @@ function sourceSearchUrls(sourceId, query, options = {}) {
     indexxx: `https://www.indexxx.com/m/${dashSlug}/`,
     boobpedia: `https://www.boobpedia.com/boobs/${wikiSlug}`,
     gelbooru: `https://gelbooru.com/index.php?page=post&s=list&tags=${encoded}`,
-    danbooru: `https://danbooru.donmai.us/posts?tags=${encoded}`
+    danbooru: `https://danbooru.donmai.us/posts?tags=${encoded}`,
+    wikipedia: `https://en.wikipedia.org/w/index.php?search=${encoded}`,
+    tvmaze: `https://www.tvmaze.com/search?q=${encoded}`,
+    openlibrary: `https://openlibrary.org/search/authors?q=${encoded}`,
+    nasalibrary: `https://images.nasa.gov/search?q=${encoded}`,
+    loc: `https://www.loc.gov/photos/?q=${encoded}`,
+    metmuseum: `https://www.metmuseum.org/art/collection/search?q=${encoded}`,
+    safebooru: `https://safebooru.org/index.php?page=post&s=list&tags=${encoded}`,
+    yandere: `https://yande.re/post?tags=${encoded}`,
+    konachan: `https://konachan.com/post?tags=${encoded}`,
+    yandex: `https://yandex.com/images/search?text=${encoded}&family=${safe ? 'yes' : 'no'}`,
+    bingvideos: `https://www.bing.com/videos/search?q=${encoded}&adlt=${safe ? 'strict' : 'off'}`,
+    civitai: `https://civitai.com/search/models?query=${encoded}`,
+    redtube: `https://www.redtube.com/?search=${encoded}`,
+    e621: `https://e621.net/posts?tags=${encoded}`,
+    porntrex: `https://www.porntrex.com/search/${dashSlug}/`
   };
   const configuredDirect = direct[sourceId] || `https://${sourceDomain(sourceId)}/search/${encoded}`;
   const urls = Array.isArray(configuredDirect) ? [...configuredDirect] : [configuredDirect];
-  if (NSFW_SOURCES.has(sourceId) || ['social', 'identity'].includes(SOURCE_META[sourceId]?.category)) {
+  if (NSFW_SOURCES.has(sourceId) || ['social', 'identity'].includes(SOURCE_META[sourceId]?.category) || sourceId === 'vimeo') {
     const domain = sourceDomain(sourceId);
-    urls.push(`https://duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
+    urls.push(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:${domain}`)}`);
     urls.push(`https://www.bing.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
     if (connectionValue('brave', 'apiKey', 'BRAVE_API_KEY')) {
       urls.push(`https://search.brave.com/search?q=${encodeURIComponent(`${query} site:${domain}`)}`);
@@ -1611,6 +1670,46 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
     }
   }
 
+  if (adapter.transport === 'redgifs-api-v2') {
+    try {
+      const apiResult = await runRedgifsApi(query, options, {
+        fetchText,
+        enrichMedia,
+        dedupeBestMedia,
+        formatDuration
+      });
+      if (apiResult.videos.length) {
+        return {
+          images: [],
+          videos: apiResult.videos,
+          status: {
+            success: true,
+            available: true,
+            directReachable: true,
+            fallbackUsed: false,
+            adapter: 'redgifs-api-v2',
+            note: `${apiResult.videos.length} videos via API publique RedGIFs (${apiResult.totalAvailable} correspondances annoncees)`,
+            imagesCount: 0,
+            videosCount: apiResult.videos.length,
+            pagesDiscovered: apiResult.videos.length,
+            pagesCrawled: 0,
+            pages: apiResult.videos.map(item => item.link).slice(0, 10),
+            accounts: apiResult.accounts || [],
+            identityAliases: apiResult.aliases || [],
+            zeroReason: ''
+          }
+        };
+      }
+      notes.push(`api.redgifs.com: 0 resultat correspondant`);
+      directReachable = true;
+      successfulRequests += 1;
+    } catch (error) {
+      notes.push(`api.redgifs.com: ${error.code || error.message}`);
+      if (error.status === 429) rateLimitedResponses += 1;
+      if ([401, 403, 451].includes(error.status)) blockedResponses += 1;
+    }
+  }
+
   if (adapter.transport === 'coomer-profile-api-v1') {
     try {
       const apiResult = await resolveCoomerPublicProfile(query, options, { fetchText });
@@ -1664,7 +1763,13 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
     }
   }
 
-  const uniquePages = dedupeBy(discoveredPages, item => item.url).slice(0, adapter.crawlLimit || 6);
+  const rankedPages = dedupeBy(discoveredPages, item => item.url)
+    .sort((left, right) => {
+      const leftMatch = textMatchesQuery(`${left.title || ''} ${left.url || ''}`, query) ? 1 : 0;
+      const rightMatch = textMatchesQuery(`${right.title || ''} ${right.url || ''}`, query) ? 1 : 0;
+      return rightMatch - leftMatch;
+    });
+  const uniquePages = rankedPages.slice(0, adapter.crawlLimit || 6);
   let crawled = 0;
   for (const pageMeta of uniquePages) {
     try {
@@ -1685,14 +1790,16 @@ async function scrapeNsfwSource(sourceId, query, options = {}) {
   }
 
   let indexedFallbackCount = 0;
-  if (images.length + videos.length === 0 && !directReachable) {
+  if (images.length + videos.length === 0 && (!directReachable || uniquePages.length === 0)) {
     try {
       const indexed = await scrapeIndexedMediaFallback(sourceId, query, options);
       images.push(...indexed.images);
       videos.push(...indexed.videos);
+      if (indexed.accounts?.length) accountLinks.push(...indexed.accounts);
       indexedFallbackCount = indexed.images.length + indexed.videos.length;
       fallbackReachable = fallbackReachable || indexed.httpStatus < 400;
-      notes.push(`bing.com/images: HTTP ${indexed.httpStatus}; ${indexedFallbackCount} media indexe`);
+      const engineLabel = indexed.enginesUsed?.length ? indexed.enginesUsed.join('+') : 'bing.com/images';
+      notes.push(`${engineLabel}: HTTP ${indexed.httpStatus}; ${indexedFallbackCount} media indexe`);
     } catch (error) {
       notes.push(`bing.com/images: ${error.code || error.message}`);
     }
@@ -1856,45 +1963,90 @@ async function fetchBingImageSearch(fetchQuery, matchQuery, options = {}, limit 
 
 async function scrapeIndexedMediaFallback(sourceId, query, options = {}) {
   const adapter = SOURCE_CRAWL_ADAPTERS[sourceId];
+  const sourceMeta = SOURCE_META[sourceId];
+  const supportsVideo = Boolean(adapter?.media?.includes('video') || sourceMeta?.supports?.includes('video'));
+  const supportsImage = Boolean(!adapter?.media?.length || adapter.media.includes('image') || sourceMeta?.supports?.includes('image'));
   const domain = sourceDomain(sourceId);
   const limit = Math.max(1, Math.min(Number(options.imageLimit || 5), 10));
+  const videoLimit = Math.max(1, Math.min(Number(options.videoLimit || 5), 10));
   const scopedQuery = `${query} site:${domain}`;
-  const search = await fetchBingImageSearch(scopedQuery, query, options, limit * 3);
-  if (search.statusCode >= 400) return { images: [], videos: [], httpStatus: search.statusCode };
   const images = [];
   const videos = [];
-  const rows = search.images
-    .filter(item => hostMatchesSource(item.link, sourceId));
-  for (const row of rows) {
-    const videoPage = Boolean(adapter?.media?.includes('video')) &&
-      (!adapter.media.includes('image') || looksLikeVideo(row.link));
-    if (videoPage) {
-      videos.push(enrichMedia({
-        url: row.link,
-        link: row.link,
-        thumbnail: row.thumbnail || row.url,
-        title: row.title,
-        duration: 'Ouvrir la source',
-        playback: 'external',
-        indexedFallback: true
-      }, query, sourceId, 'video'));
-    } else {
-      images.push(enrichMedia({
-        url: row.url,
-        link: row.link,
-        thumbnail: row.thumbnail || row.url,
-        title: row.title,
-        width: row.width,
-        height: row.height,
-        indexedFallback: true
-      }, query, sourceId, 'image'));
+  const accounts = [];
+  let httpStatus = 200;
+  let asyncUsed = false;
+  const enginesUsed = [];
+
+  try {
+    const search = await fetchBingImageSearch(scopedQuery, query, options, limit * 3);
+    httpStatus = search.statusCode;
+    asyncUsed = search.asyncUsed;
+    if (search.statusCode < 400) {
+      const rows = search.images.filter(item => hostMatchesSource(item.link, sourceId));
+      if (rows.length) enginesUsed.push('bing-images');
+      for (const row of rows) {
+        const videoPage = supportsVideo && (!supportsImage || looksLikeVideo(row.link));
+        if (videoPage) {
+          videos.push(enrichMedia({
+            url: row.link,
+            link: row.link,
+            thumbnail: row.thumbnail || row.url,
+            title: row.title,
+            duration: 'Ouvrir la source',
+            playback: 'external',
+            indexedFallback: true
+          }, query, sourceId, 'video'));
+        } else {
+          images.push(enrichMedia({
+            url: row.url,
+            link: row.link,
+            thumbnail: row.thumbnail || row.url,
+            title: row.title,
+            width: row.width,
+            height: row.height,
+            indexedFallback: true
+          }, query, sourceId, 'image'));
+        }
+      }
+    }
+  } catch {
+    // Continue with secondary engines below.
+  }
+
+  if (supportsVideo && videos.length < videoLimit) {
+    try {
+      const vidSearch = await fetchBingVideoSearch(scopedQuery, query, options, videoLimit * 3, fetchPage);
+      const matchedVideos = (vidSearch.media || []).filter(item => hostMatchesSource(item.url, sourceId));
+      if (matchedVideos.length) enginesUsed.push('bing-videos');
+      for (const item of matchedVideos) {
+        if (item.accountUrl) accounts.push(item.accountUrl);
+        videos.push(enrichMedia({ ...item, indexedFallback: true }, query, sourceId, 'video'));
+      }
+    } catch {
+      // Optional secondary video engine.
     }
   }
+
+  if (supportsImage && images.length === 0) {
+    try {
+      const yandexSearch = await fetchYandexImageSearch(scopedQuery, query, options, limit * 2, fetchPage);
+      const matchedImages = (yandexSearch.media || []).filter(item => hostMatchesSource(item.link, sourceId));
+      if (matchedImages.length) enginesUsed.push('yandex-images');
+      for (const item of matchedImages) {
+        images.push(enrichMedia({ ...item, indexedFallback: true }, query, sourceId, 'image'));
+      }
+    } catch {
+      // Optional secondary image engine.
+    }
+  }
+
   return {
     images: dedupeBestMedia(images).slice(0, limit),
-    videos: dedupeBestMedia(videos).slice(0, Math.max(1, Math.min(Number(options.videoLimit || 5), 10))),
-    httpStatus: search.statusCode,
-    asyncUsed: search.asyncUsed
+    videos: dedupeBestMedia(videos).slice(0, videoLimit),
+    accounts: uniq(accounts),
+    enginesUsed,
+    httpStatus,
+    asyncUsed
   };
 }
 
@@ -2102,6 +2254,16 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
       }
     };
   }
+  const catalog = await runPublicCatalogSource(sourceId, query, options, {
+    fetchText,
+    fetchPage,
+    enrichMedia,
+    dedupeBestMedia,
+    formatDuration,
+    imageLimit,
+    videoLimit
+  });
+  if (catalog) return catalog;
   const discovery = await runDiscoverySource(sourceId, query, options, {
     fetchText,
     postJson,
@@ -2277,28 +2439,34 @@ async function scrapeDedicatedPublicSource(sourceId, query, options = {}) {
   }
 
   if (sourceId === 'bing') {
-    const search = await fetchBingImageSearch(query, query, options, imageLimit);
+    const [search, videoSearch] = await Promise.all([
+      fetchBingImageSearch(query, query, options, imageLimit),
+      options.mediaKind === 'photos'
+        ? Promise.resolve({ media: [], accounts: [], pageSamples: [], statusCode: 200 })
+        : fetchBingVideoSearch(query, query, options, videoLimit, fetchPage).catch(() => ({ media: [], accounts: [], pageSamples: [], statusCode: 0 }))
+    ]);
     const images = search.images;
+    const directVideos = (videoSearch.media || []).map(item => enrichMedia(item, query, 'bing', 'video'));
     let fallback = { images: [], videos: [], pagesDiscovered: 0, pagesCrawled: 0 };
-    if (!images.length) {
+    if (!images.length && !directVideos.length) {
       try { fallback = await scrapeBingHtmlFallback(query, options); } catch { /* Diagnostic below remains explicit. */ }
     }
     const combinedImages = dedupeBestMedia([...images, ...fallback.images]).slice(0, imageLimit);
-    const combinedVideos = dedupeBestMedia(fallback.videos).slice(0, videoLimit);
+    const combinedVideos = dedupeBestMedia([...directVideos, ...fallback.videos]).slice(0, videoLimit);
     const total = combinedImages.length + combinedVideos.length;
     return {
       images: combinedImages,
       videos: combinedVideos,
       status: {
-        success: search.statusCode < 400,
-        adapter: search.asyncUsed ? 'bing-images-async' : (fallback.pagesDiscovered ? 'bing-images+web-fallback' : 'bing-images'),
+        success: search.statusCode < 400 || directVideos.length > 0,
+        adapter: directVideos.length ? 'bing-images+videos' : (search.asyncUsed ? 'bing-images-async' : (fallback.pagesDiscovered ? 'bing-images+web-fallback' : 'bing-images')),
         imagesCount: combinedImages.length,
         videosCount: combinedVideos.length,
         pagesDiscovered: fallback.pagesDiscovered,
         pagesCrawled: fallback.pagesCrawled,
         discoveredPageSamples: fallback.pageSamples || [],
-        accounts: fallback.pageSamples || [],
-        note: [`Bing Images HTTP ${search.statusCode}`, search.asyncStatus ? `chargement async HTTP ${search.asyncStatus}` : '', fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : ''].filter(Boolean).join('; '),
+        accounts: uniq([...(videoSearch.accounts || []), ...(fallback.pageSamples || [])]).slice(0, 20),
+        note: [`Bing Images HTTP ${search.statusCode}`, directVideos.length ? `Bing Videos: ${directVideos.length}` : '', search.asyncStatus ? `chargement async HTTP ${search.asyncStatus}` : '', fallback.pagesDiscovered ? `${fallback.pagesDiscovered} pages web, ${fallback.pagesCrawled} ouvertes` : ''].filter(Boolean).join('; '),
         zeroReason: total ? '' : (fallback.pagesDiscovered ? 'public_pages_without_matching_media' : 'no_matching_public_media')
       }
     };
@@ -2378,14 +2546,16 @@ async function scrapeGenericSource(sourceId, query, options = {}) {
   images.push(...crawled.images);
   videos.push(...crawled.videos, ...discoveredVideoPageCandidates(uniquePages, query, sourceId));
   let indexedFallbackCount = 0;
-  if (images.length + videos.length < 3 && ['social', 'identity'].includes(SOURCE_META[sourceId]?.category)) {
+  if (images.length + videos.length < 3 && (['social', 'identity'].includes(SOURCE_META[sourceId]?.category) || sourceId === 'vimeo')) {
     try {
       const indexed = await scrapeIndexedMediaFallback(sourceId, query, options);
       images.push(...indexed.images);
       videos.push(...indexed.videos);
+      if (indexed.accounts?.length) accountLinks.push(...indexed.accounts);
       indexedFallbackCount = indexed.images.length + indexed.videos.length;
       fallbackReachable = fallbackReachable || indexed.httpStatus < 400;
-      notes.push(`bing.com/images: HTTP ${indexed.httpStatus}; ${indexedFallbackCount} media indexe`);
+      const engineLabel = indexed.enginesUsed?.length ? indexed.enginesUsed.join('+') : 'bing.com/images';
+      notes.push(`${engineLabel}: HTTP ${indexed.httpStatus}; ${indexedFallbackCount} media indexe`);
     } catch (error) {
       notes.push(`bing.com/images: ${error.code || error.message}`);
     }
@@ -3196,7 +3366,7 @@ function filterPersonTimeline(events, query = {}) {
   return filtered;
 }
 
-const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
+const DEFAULT_IDENTITY_SOURCES = ['wikidata', 'wikipedia', 'tvmaze', 'openlibrary', 'github', 'musicbrainz', 'bluesky', 'mastodon', 'linktree', 'beacons', 'allmylinks', 'carrd'];
 
 async function resolveIdentityProfile(person, options = {}) {
   const guard = publicOnlyPersonGuard(person);
@@ -4068,7 +4238,9 @@ function sourceAdapterContract(source) {
     'telegram',
     'wikidata', 'tmdb', 'openverse', 'internetarchive', 'arquivo', 'imgur', 'peertube', 'bluesky', 'mastodon',
     'tumblr', 'twitch', 'stashdb', 'commoncrawl', 'searxng', 'lemmy', 'github', 'odysee', 'musicbrainz',
-    'gdelt', 'podcastindex', 'pixelfed', 'pexels', 'giphy', 'gelbooru', 'danbooru'
+    'gdelt', 'podcastindex', 'pixelfed', 'pexels', 'giphy', 'gelbooru', 'danbooru',
+    'wikipedia', 'tvmaze', 'openlibrary', 'nasalibrary', 'loc', 'metmuseum', 'safebooru', 'yandere', 'konachan',
+    'yandex', 'bingvideos', 'civitai', 'redtube', 'e621'
   ]);
   const provider = CONNECTION_PROVIDERS[source.id];
   const optionalAuth = /optional/i.test(source.auth || '');
@@ -4079,7 +4251,7 @@ function sourceAdapterContract(source) {
   if (source.id === 'wayback') availability = 'frontend-streaming-with-server-cdx';
   else if (authRequired) availability = configured ? 'official-api-configured' : 'official-api-configuration-required';
   else if (optionalAuth) availability = configured ? 'official-api-configured-with-public-fallback' : 'public-fallback-available';
-  else if (crawlAdapter?.transport === 'eporner-api-v2') availability = 'official-public-api-with-html-fallback';
+  else if (crawlAdapter?.transport === 'eporner-api-v2' || crawlAdapter?.transport === 'redgifs-api-v2') availability = 'official-public-api-with-html-fallback';
   else if (crawlAdapter?.transport === 'coomer-profile-api-v1') availability = 'public-identity-metadata-only';
   else if (source.id === 'telegram') availability = 'bounded-public-channel-web';
   else if (crawlAdapter?.transport === 'public-forum-form') availability = 'public-form-with-search-engine-fallbacks';
@@ -5088,6 +5260,21 @@ app.locals.testables = {
   parseGiphyResults,
   parseGelbooruPosts,
   parseDanbooruPosts,
+  parseWikipediaResults,
+  parseTvmazePeople,
+  parseOpenLibraryAuthors,
+  parseNasaLibraryResults,
+  parseLocResults,
+  parseMetMuseumObject,
+  parseSafebooruPosts,
+  parseMoebooruPosts,
+  parseRedgifsApiResults,
+  parseYandexImageResults,
+  parseBingVideoResults,
+  parseCivitaiResults,
+  parseRedtubeApiResults,
+  parseE621Posts,
+  isLikelyFileHosterUrl,
   coomerProfileMatches,
   decodeWarcHtml,
   selectWikidataEntity,
